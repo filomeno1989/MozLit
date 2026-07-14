@@ -1,0 +1,88 @@
+'use client';
+
+import { useState } from 'react';
+import { apiFetch } from '@/lib/api';
+import { useAppStore } from '@/store/app';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { BookOpen, LogIn } from 'lucide-react';
+
+export default function LoginPage() {
+  const { navigate, setAuth } = useAppStore();
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    try {
+      const data = await apiFetch<{ user: typeof import('@/store/app').User; token: string }>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, senha }),
+      });
+      setAuth(data.user, data.token);
+      navigate('home');
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-md mx-auto px-4 py-16">
+      <Card className="border-border/50">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-3 p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 w-fit">
+            <BookOpen className="h-6 w-6 text-amber-700 dark:text-amber-400" />
+          </div>
+          <CardTitle className="text-xl">Entrar no MozLit</CardTitle>
+          <CardDescription>Acesse sua conta para ler e publicar obras.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
+            )}
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="senha">Senha</Label>
+              <Input
+                id="senha"
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+            </div>
+            <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={loading}>
+              <LogIn className="h-4 w-4 mr-1" /> {loading ? 'Entrando...' : 'Entrar'}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              Não tem conta?{' '}
+              <button type="button" onClick={() => navigate('register')} className="text-amber-700 dark:text-amber-400 hover:underline font-medium">
+                Criar conta
+              </button>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

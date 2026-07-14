@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senha_hash   String
+  role         String   @default("LEITOR") // ADMIN, ESCRITOR, LEITOR
+  saldo_carteira Float  @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  books        Book[]
+  transactions Transaction[]
+  libraryItems LibraryItem[]
+}
+
+model Book {
+  id         String   @id @default(cuid())
+  titulo     String
+  sinopse    String
+  capa_url   String   @default("/placeholder-cover.svg")
+  preco_total Float   @default(0)
+  categoria  String   @default("Ficção")
+  status     String   @default("RASCUNHO") // RASCUNHO, PUBLICADO
+  autorId    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  autor      User     @relation(fields: [autorId], references: [id])
+  chapters   Chapter[]
+}
+
+model Chapter {
+  id             String   @id @default(cuid())
+  titulo         String
+  conteudo       String
+  preco_capitulo Float    @default(0)
+  is_free        Boolean  @default(false)
+  ordem          Int      @default(0)
+  livroId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  livro          Book     @relation(fields: [livroId], references: [id], onDelete: Cascade)
+  libraryItems   LibraryItem[]
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  tipo      String   // MPESA, NIB, COMPRA
+  valor     Float
+  status    String   @default("PENDENTE") // PENDENTE, CONCLUIDO, FALHADO
+  descricao String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model LibraryItem {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String?
+  chapterId String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+  chapter   Chapter? @relation(fields: [chapterId], references: [id])
+
+  @@unique([userId, chapterId])
+}
