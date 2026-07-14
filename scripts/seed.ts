@@ -17,28 +17,41 @@ async function seed() {
   const leitorPass = await bcrypt.hash('leitor123', 12);
 
   const admin = await prisma.user.create({
-    data: { nome: 'Admin MozLit', email: 'admin@mozlit.mz', senha_hash: adminPass, role: 'ADMIN', saldo_carteira: 0 },
+    data: { nome: 'Admin MozLit', email: 'admin@mozlit.mz', senha_hash: adminPass, role: 'ADMIN', saldo_carteira: 0, biografia: 'Administrador da plataforma MozLit.', avatar_url: '' },
   });
 
   const escritor1 = await prisma.user.create({
-    data: { nome: 'Mia Couto', email: 'mia@mozlit.mz', senha_hash: escritorPass, role: 'ESCRITOR', saldo_carteira: 250 },
+    data: {
+      nome: 'Mia Couto', email: 'mia@mozlit.mz', senha_hash: escritorPass, role: 'ESCRITOR', saldo_carteira: 250,
+      biografia: 'Escritor moçambicano, autor de Terra Sonâmbula e Sleepwalking Land. As minhas histórias nascem da terra, do mar e da memória do meu povo.',
+      avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
+    },
   });
 
   const escritor2 = await prisma.user.create({
-    data: { nome: 'Paulina Chiziane', email: 'paulina@mozlit.mz', senha_hash: escritorPass, role: 'ESCRITOR', saldo_carteira: 180 },
+    data: {
+      nome: 'Paulina Chiziane', email: 'paulina@mozlit.mz', senha_hash: escritorPass, role: 'ESCRITOR', saldo_carteira: 180,
+      biografia: 'Primeira mulher moçambicana a publicar um romance. As minhas narrativas dão voz às mulheres de Moçambique e às suas lutas silenciosas.',
+      avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&h=150&fit=crop&crop=face',
+    },
   });
 
   const escritor3 = await prisma.user.create({
-    data: { nome: 'João Paulo Borges Coelho', email: 'joao@mozlit.mz', senha_hash: escritorPass, role: 'ESCRITOR', saldo_carteira: 90 },
+    data: {
+      nome: 'João Paulo Borges Coelho', email: 'joao@mozlit.mz', senha_hash: escritorPass, role: 'ESCRITOR', saldo_carteira: 90,
+      biografia: 'Historiador e romancista. As minhas obras exploram a relação entre a história oficial e as memórias individuais no contexto moçambicano.',
+      avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
+    },
   });
 
   const leitor = await prisma.user.create({
-    data: { nome: 'Maria Moçambicana', email: 'maria@mozlit.mz', senha_hash: leitorPass, role: 'LEITOR', saldo_carteira: 500 },
+    data: { nome: 'Maria Moçambicana', email: 'maria@mozlit.mz', senha_hash: leitorPass, role: 'LEITOR', saldo_carteira: 500, biografia: '' },
   });
 
   const book1 = await prisma.book.create({
     data: {
       titulo: 'Terra Sonâmbula', categoria: 'Ficção', status: 'PUBLICADO', preco_total: 75, autorId: escritor1.id,
+      capa_url: 'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop',
       sinopse: 'Numa terra devastada pela guerra, um menino e um velho caminham juntos. Muidinga, o menino, carrega consigo um caderno com histórias que poderão revelar o seu passado e o seu nome. Uma viagem poética através da memória e da resistência moçambicana.',
     },
   });
@@ -67,6 +80,7 @@ async function seed() {
   const book2 = await prisma.book.create({
     data: {
       titulo: 'Ventos do Apocalipse', categoria: 'Romance', status: 'PUBLICADO', preco_total: 60, autorId: escritor2.id,
+      capa_url: 'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=400&h=600&fit=crop',
       sinopse: 'Na cidade de Maputo, vidas entrelaçam-se num mosaico de amor, perda e esperança. Paulina Chiziane tece uma narrativa poderosa sobre as mulheres moçambicanas e as suas lutas silenciosas num mundo em transformação.',
     },
   });
@@ -88,6 +102,7 @@ async function seed() {
   const book3 = await prisma.book.create({
     data: {
       titulo: 'Crónica da Rua 513', categoria: 'Contos', status: 'PUBLICADO', preco_total: 50, autorId: escritor3.id,
+      capa_url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=400&h=600&fit=crop',
       sinopse: 'Um retrato íntimo da vida urbana em Maputo durante os anos de transição. Borges Coelho narra as histórias de uma rua onde cabem todas as Mozambiques — a que sonha, a que sofre, a que resiste.',
     },
   });
@@ -109,6 +124,7 @@ async function seed() {
   const book4 = await prisma.book.create({
     data: {
       titulo: 'Poemas do Índico', categoria: 'Poesia', status: 'PUBLICADO', preco_total: 40, autorId: escritor1.id,
+      capa_url: 'https://images.unsplash.com/photo-1476275466078-4007374efbbe?w=400&h=600&fit=crop',
       sinopse: 'Uma colectânea de poemas inspirados no Oceano Índico, nas tradições orais e na paisagem costeira de Moçambique. Versos que capturam a essência do povo moçambicano e a sua ligação profunda com o mar.',
     },
   });
@@ -127,9 +143,14 @@ async function seed() {
     },
   });
 
-  // Reader has chapter 1 of book 1
+  // Reader has chapter 1 of book 1 (free chapter)
   await prisma.libraryItem.create({
-    data: { userId: leitor.id, chapterId: ch1.id, bookId: book1.id },
+    data: { userId: leitor.id, chapterId: ch1.id, bookId: book1.id, tipo: 'CAPITULO' },
+  });
+
+  // Reader owns book 3 (Crónica da Rua 513) completely
+  await prisma.libraryItem.create({
+    data: { userId: leitor.id, bookId: book3.id, tipo: 'LIVRO_COMPLETO' },
   });
 
   console.log('Seed completed!');
@@ -137,6 +158,7 @@ async function seed() {
   console.log('Admin: admin@mozlit.mz / admin123');
   console.log('Escritor: mia@mozlit.mz / escritor123');
   console.log('Escritor: paulina@mozlit.mz / escritor123');
+  console.log('Escritor: joao@mozlit.mz / escritor123');
   console.log('Leitor: maria@mozlit.mz / leitor123');
 
   await prisma.$disconnect();

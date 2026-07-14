@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/app';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, ArrowRight } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 
 const CATEGORIAS = ['Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio'];
 
@@ -17,26 +17,45 @@ interface Book {
   capa_url: string;
   categoria: string;
   status: string;
+  preco_total: number;
   autor: { id: string; nome: string };
 }
 
 function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
+  const hasRealCover = book.capa_url && book.capa_url !== '/placeholder-cover.svg';
+
   return (
     <Card
       className="group cursor-pointer overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1 border-border/50"
       onClick={onClick}
     >
       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-amber-800/20 via-amber-700/10 to-transparent" />
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-          <BookOpen className="h-10 w-10 text-amber-700/60 dark:text-amber-500/60 mb-3" />
-          <h3 className="font-semibold text-sm leading-tight line-clamp-3">{book.titulo}</h3>
-        </div>
+        {hasRealCover ? (
+          <img
+            src={book.capa_url}
+            alt={book.titulo}
+            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-b from-amber-800/20 via-amber-700/10 to-transparent" />
+        )}
+        {!hasRealCover && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+            <BookOpen className="h-10 w-10 text-amber-700/60 dark:text-amber-500/60 mb-3" />
+            <h3 className="font-semibold text-sm leading-tight line-clamp-3">{book.titulo}</h3>
+          </div>
+        )}
         <Badge className="absolute top-2 right-2 bg-amber-600 text-white text-xs">
           {book.categoria}
         </Badge>
+        {book.preco_total > 0 && (
+          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-medium">
+            {book.preco_total.toFixed(2)} MZN
+          </div>
+        )}
       </div>
       <CardContent className="p-3">
+        {hasRealCover && <p className="font-semibold text-sm truncate mb-0.5">{book.titulo}</p>}
         <p className="text-xs text-muted-foreground">por {book.autor.nome}</p>
         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{book.sinopse}</p>
       </CardContent>

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         autor: {
-          select: { id: true, nome: true },
+          select: { id: true, nome: true, biografia: true, avatar_url: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { titulo, sinopse, categoria, capa_url } = body;
+    const { titulo, sinopse, categoria, capa_url, preco_total } = body;
 
     if (!titulo || !sinopse) {
       return NextResponse.json(
@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
         sinopse,
         categoria: categoria || 'Ficção',
         capa_url: capa_url || '/placeholder-cover.svg',
+        preco_total: preco_total ?? 0,
         status: 'RASCUNHO',
         autorId: payload.userId,
       },

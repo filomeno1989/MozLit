@@ -20,6 +20,8 @@ export interface User {
   email: string;
   role: string;
   saldo_carteira: number;
+  biografia?: string;
+  avatar_url?: string;
 }
 
 interface AppState {

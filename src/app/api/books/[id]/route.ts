@@ -13,7 +13,7 @@ export async function GET(
       where: { id },
       include: {
         autor: {
-          select: { id: true, nome: true },
+          select: { id: true, nome: true, biografia: true, avatar_url: true },
         },
         chapters: {
           select: {
@@ -109,7 +109,7 @@ export async function PATCH(
       },
       include: {
         autor: {
-          select: { id: true, nome: true },
+          select: { id: true, nome: true, biografia: true, avatar_url: true },
         },
       },
     });

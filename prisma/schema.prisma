@@ -14,6 +14,8 @@ model User {
   senha_hash   String
   role         String   @default("LEITOR") // ADMIN, ESCRITOR, LEITOR
   saldo_carteira Float  @default(0)
+  biografia    String   @default("")
+  avatar_url   String   @default("")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -73,6 +75,7 @@ model LibraryItem {
   userId    String
   bookId    String?
   chapterId String?
+  tipo      String   @default("CAPITULO") // CAPITULO, LIVRO_COMPLETO
   createdAt DateTime @default(now())
 
   user      User     @relation(fields: [userId], references: [id])

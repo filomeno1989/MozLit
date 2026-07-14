@@ -24,13 +24,10 @@ export async function GET(request: NextRequest) {
 
     const totalLivros = livros.length;
     const totalCapitulos = livros.reduce((sum, l) => sum + l.chapters.length, 0);
-    const totalGanhos = livros.reduce((sum, l) => {
-      return sum + l.chapters.filter(c => !c.is_free).reduce((s, c) => s + c.preco_capitulo, 0);
-    }, 0);
 
     const user = await db.user.findUnique({
       where: { id: payload.userId },
-      select: { saldo_carteira: true, nome: true },
+      select: { saldo_carteira: true, nome: true, biografia: true, avatar_url: true },
     });
 
     const transactions = await db.transaction.findMany({
@@ -44,7 +41,9 @@ export async function GET(request: NextRequest) {
       id: l.id,
       titulo: l.titulo,
       categoria: l.categoria,
+      capa_url: l.capa_url,
       status: l.status,
+      preco_total: l.preco_total,
       totalCapitulos: l.chapters.length,
       capitulosPagos: l.chapters.filter(c => !c.is_free).length,
       receitaEstimada: l.chapters.filter(c => !c.is_free).reduce((s, c) => s + c.preco_capitulo, 0),
@@ -55,6 +54,8 @@ export async function GET(request: NextRequest) {
       totalGanhos: user?.saldo_carteira ?? 0,
       totalLivros,
       totalCapitulos,
+      biografia: user?.biografia ?? '',
+      avatar_url: user?.avatar_url ?? '',
       livros: livrosFormatados,
       transacoes: transactions,
     });

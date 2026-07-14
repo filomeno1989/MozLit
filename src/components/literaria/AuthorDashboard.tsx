@@ -11,17 +11,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, BookOpen, Eye, Pencil, Trash2, TrendingUp, DollarSign, FileText } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save } from 'lucide-react';
 
 interface DashboardData {
   totalGanhos: number;
   totalLivros: number;
   totalCapitulos: number;
+  biografia: string;
+  avatar_url: string;
   livros: Array<{
     id: string;
     titulo: string;
     categoria: string;
+    capa_url: string;
     status: string;
+    preco_total: number;
     totalCapitulos: number;
     capitulosPagos: number;
     receitaEstimada: number;
@@ -33,7 +37,11 @@ interface DashboardData {
 interface BookWithChapters {
   id: string;
   titulo: string;
+  capa_url: string;
+  preco_total: number;
   status: string;
+  sinopse: string;
+  categoria: string;
   chapters: Array<{ id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }>;
 }
 
@@ -45,6 +53,14 @@ export default function AuthorDashboard() {
   const [showChapterDialog, setShowChapterDialog] = useState(false);
   const [newChapter, setNewChapter] = useState({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
 
+  // Edit book dialog
+  const [editingBook, setEditingBook] = useState<BookWithChapters | null>(null);
+  const [editForm, setEditForm] = useState({ titulo: '', sinopse: '', capa_url: '', preco_total: '' });
+
+  // Profile dialog
+  const [showProfileDialog, setShowProfileDialog] = useState(false);
+  const [profileForm, setProfileForm] = useState({ biografia: '', avatar_url: '' });
+
   useEffect(() => {
     if (token) loadDashboard();
   }, [token]);
@@ -54,6 +70,7 @@ export default function AuthorDashboard() {
     try {
       const d = await apiFetch<DashboardData>('/api/author');
       setData(d);
+      setProfileForm({ biografia: d.biografia ?? '', avatar_url: d.avatar_url ?? '' });
     } catch {
       setData(null);
     } finally {
@@ -117,6 +134,58 @@ export default function AuthorDashboard() {
     }
   }
 
+  function openEditBook(livro: DashboardData['livros'][0]) {
+    setEditForm({
+      titulo: livro.titulo,
+      sinopse: '', // Will load from full book detail
+      capa_url: livro.capa_url || '',
+      preco_total: livro.preco_total?.toString() ?? '0',
+    });
+    // Load full book data for editing
+    apiFetch<BookWithChapters>(`/api/books/${livro.id}`).then((b) => {
+      setEditingBook(b);
+      setEditForm({
+        titulo: b.titulo,
+        sinopse: b.sinopse,
+        capa_url: b.capa_url || '',
+        preco_total: b.preco_total?.toString() ?? '0',
+      });
+    }).catch(() => alert('Erro ao carregar dados do livro'));
+  }
+
+  async function saveEditBook() {
+    if (!editingBook) return;
+    try {
+      await apiFetch(`/api/books/${editingBook.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          titulo: editForm.titulo,
+          sinopse: editForm.sinopse,
+          capa_url: editForm.capa_url || undefined,
+          preco_total: parseFloat(editForm.preco_total) || 0,
+          categoria: editingBook.categoria,
+        }),
+      });
+      setEditingBook(null);
+      loadDashboard();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
+  async function saveProfile() {
+    try {
+      await apiFetch('/api/author/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(profileForm),
+      });
+      setShowProfileDialog(false);
+      loadDashboard();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -137,12 +206,17 @@ export default function AuthorDashboard() {
           <h1 className="text-2xl font-bold">Painel do Autor</h1>
           <p className="text-sm text-muted-foreground">Gerencie suas obras e acompanhe seus ganhos</p>
         </div>
-        <Button
-          className="bg-amber-600 hover:bg-amber-700 text-white"
-          onClick={() => navigate('new-book')}
-        >
-          <Plus className="h-4 w-4 mr-1" /> Nova Obra
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowProfileDialog(true)}>
+            <User className="h-4 w-4 mr-1" /> Meu Perfil
+          </Button>
+          <Button
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+            onClick={() => navigate('new-book')}
+          >
+            <Plus className="h-4 w-4 mr-1" /> Nova Obra
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -194,20 +268,39 @@ export default function AuthorDashboard() {
             <div className="space-y-3">
               {data.livros.map((livro) => (
                 <div key={livro.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-border/50 gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium text-sm truncate">{livro.titulo}</h3>
-                      <Badge variant={livro.status === 'PUBLICADO' ? 'default' : 'secondary'} className="text-xs shrink-0">
-                        {livro.status === 'PUBLICADO' ? 'Publicado' : 'Rascunho'}
-                      </Badge>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Book cover thumbnail */}
+                    {livro.capa_url && livro.capa_url !== '/placeholder-cover.svg' ? (
+                      <img
+                        src={livro.capa_url}
+                        alt={livro.titulo}
+                        className="w-10 h-14 rounded object-cover shrink-0 border border-border/30"
+                      />
+                    ) : (
+                      <div className="w-10 h-14 rounded bg-muted flex items-center justify-center shrink-0">
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-sm truncate">{livro.titulo}</h3>
+                        <Badge variant={livro.status === 'PUBLICADO' ? 'default' : 'secondary'} className="text-xs shrink-0">
+                          {livro.status === 'PUBLICADO' ? 'Publicado' : 'Rascunho'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {livro.categoria} — {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
+                        {livro.preco_total > 0 && ` — Completo: ${livro.preco_total.toFixed(2)} MZN`}
+                        {' — '}Receita: {livro.receitaEstimada.toFixed(2)} MZN
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {livro.categoria} — {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos) — Receita: {livro.receitaEstimada.toFixed(2)} MZN
-                    </p>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0 sm:ml-2">
                     <Button size="sm" variant="ghost" onClick={() => loadBookChapters(livro.id)}>
                       <FileText className="h-3.5 w-3.5 mr-1" /> Capítulos
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => openEditBook(livro)}>
+                      <Pencil className="h-3.5 w-3.5" />
                     </Button>
                     {livro.status !== 'PUBLICADO' && (
                       <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}>
@@ -306,6 +399,125 @@ export default function AuthorDashboard() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Book Dialog */}
+      <Dialog open={!!editingBook} onOpenChange={(open) => !open && setEditingBook(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Obra</DialogTitle>
+          </DialogHeader>
+          {editingBook && (
+            <div className="space-y-4">
+              <div>
+                <Label>Título</Label>
+                <Input
+                  value={editForm.titulo}
+                  onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Sinopse</Label>
+                <Textarea
+                  value={editForm.sinopse}
+                  onChange={(e) => setEditForm({ ...editForm, sinopse: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div>
+                <Label>
+                  <span className="flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    URL da Capa
+                  </span>
+                </Label>
+                <Input
+                  type="url"
+                  value={editForm.capa_url}
+                  onChange={(e) => setEditForm({ ...editForm, capa_url: e.target.value })}
+                  placeholder="https://exemplo.com/capa.jpg"
+                />
+                {editForm.capa_url && (
+                  <div className="mt-2 w-20 aspect-[3/4] rounded-lg overflow-hidden border border-border/50">
+                    <img
+                      src={editForm.capa_url}
+                      alt="Pré-visualização"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                )}
+              </div>
+              <div>
+                <Label>Preço do Livro Completo (MZN)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editForm.preco_total}
+                  onChange={(e) => setEditForm({ ...editForm, preco_total: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  0 = apenas venda por capítulo avulso
+                </p>
+              </div>
+              <Button onClick={saveEditBook} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+                <Save className="h-4 w-4 mr-1" /> Salvar Alterações
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Dialog */}
+      <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Meu Perfil de Autor</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Biografia</Label>
+              <Textarea
+                value={profileForm.biografia}
+                onChange={(e) => setProfileForm({ ...profileForm, biografia: e.target.value })}
+                placeholder="Escreva algo sobre você e sua obra literária..."
+                rows={4}
+                maxLength={500}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {profileForm.biografia.length}/500 caracteres
+              </p>
+            </div>
+            <div>
+              <Label>
+                <span className="flex items-center gap-1.5">
+                  <ImageIcon className="h-3.5 w-3.5" />
+                  URL do Avatar
+                </span>
+              </Label>
+              <Input
+                type="url"
+                value={profileForm.avatar_url}
+                onChange={(e) => setProfileForm({ ...profileForm, avatar_url: e.target.value })}
+                placeholder="https://exemplo.com/avatar.jpg"
+              />
+              {profileForm.avatar_url && (
+                <div className="mt-2">
+                  <img
+                    src={profileForm.avatar_url}
+                    alt="Avatar"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-amber-200 dark:border-amber-800"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+            </div>
+            <Button onClick={saveProfile} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
+              <Save className="h-4 w-4 mr-1" /> Salvar Perfil
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

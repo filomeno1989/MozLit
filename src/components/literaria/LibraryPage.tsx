@@ -5,24 +5,35 @@ import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, Library as LibraryIcon } from 'lucide-react';
+import { BookOpen, Library as LibraryIcon, BookMarked, ChevronRight } from 'lucide-react';
 
-interface LibraryItem {
+interface ChapterLibItem {
   id: string;
   chapterId: string | null;
   bookId: string | null;
+  tipo: string;
   createdAt: string;
   chapter: {
     id: string;
     titulo: string;
+    ordem: number;
     livro: { id: string; titulo: string; capa_url: string };
   } | null;
 }
 
+interface FullBookInfo {
+  bookId: string;
+  titulo: string;
+  capa_url: string;
+}
+
 export default function LibraryPage() {
   const { navigate, user, token } = useAppStore();
-  const [items, setItems] = useState<LibraryItem[]>([]);
+  const [allItems, setAllItems] = useState<ChapterLibItem[]>([]);
+  const [fullBookIds, setFullBookIds] = useState<string[]>([]);
+  const [fullBooks, setFullBooks] = useState<FullBookInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,10 +43,30 @@ export default function LibraryPage() {
   async function loadLibrary() {
     setLoading(true);
     try {
-      const data = await apiFetch<LibraryItem[]>('/api/library');
-      setItems(data);
+      const res = await apiFetch<{ items: ChapterLibItem[]; fullBookIds: string[] }>('/api/library');
+      setAllItems(res.items);
+      setFullBookIds(res.fullBookIds);
+
+      // Fetch details for full books
+      if (res.fullBookIds.length > 0) {
+        const bookDetails = await Promise.all(
+          res.fullBookIds.map(async (bid) => {
+            try {
+              const book = await apiFetch<{ id: string; titulo: string; capa_url: string }>(`/api/books/${bid}`);
+              return { bookId: book.id, titulo: book.titulo, capa_url: book.capa_url };
+            } catch {
+              return null;
+            }
+          })
+        );
+        setFullBooks(bookDetails.filter(Boolean) as FullBookInfo[]);
+      } else {
+        setFullBooks([]);
+      }
     } catch {
-      setItems([]);
+      setAllItems([]);
+      setFullBookIds([]);
+      setFullBooks([]);
     } finally {
       setLoading(false);
     }
@@ -52,42 +83,117 @@ export default function LibraryPage() {
     );
   }
 
+  const hasFullBooks = fullBooks.length > 0;
+  // Individual chapters not covered by a full book
+  const individualChapters = allItems.filter(
+    (item) => item.chapter && !fullBookIds.includes(item.chapter.livro.id)
+  );
+
+  const isEmpty = !hasFullBooks && individualChapters.length === 0;
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Minha Biblioteca</h1>
 
-      {items.length === 0 ? (
+      {isEmpty ? (
         <div className="text-center py-16">
           <LibraryIcon className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
           <p className="text-muted-foreground mb-2">Sua biblioteca está vazia.</p>
-          <p className="text-sm text-muted-foreground mb-4">Compre capítulos para vê-los aqui.</p>
+          <p className="text-sm text-muted-foreground mb-4">Compre livros ou capítulos para vê-los aqui.</p>
           <Button variant="outline" onClick={() => navigate('home')}>
             Explorar Obras
           </Button>
         </div>
       ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            item.chapter && (
-              <div
-                key={item.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-accent/50 transition-colors"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{item.chapter.titulo}</p>
-                  <p className="text-xs text-muted-foreground">{item.chapter.livro.titulo}</p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="text-amber-700 dark:text-amber-400 shrink-0"
-                  onClick={() => navigate('reader', { chapterId: item.chapter!.id, bookId: item.chapter!.livro.id })}
-                >
-                  <BookOpen className="h-4 w-4 mr-1" /> Ler
-                </Button>
+        <div className="space-y-8">
+          {/* Full Books Section */}
+          {hasFullBooks && (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <BookMarked className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <h2 className="text-lg font-semibold">Livros Completos</h2>
+                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 text-xs">
+                  {fullBooks.length}
+                </Badge>
               </div>
-            )
-          ))}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {fullBooks.map((fb) => {
+                  const hasCover = fb.capa_url && fb.capa_url !== '/placeholder-cover.svg';
+                  return (
+                    <Card
+                      key={fb.bookId}
+                      className="group cursor-pointer overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 border-border/50"
+                      onClick={() => navigate('book-detail', { bookId: fb.bookId })}
+                    >
+                      <div className="aspect-[3/4] bg-muted relative overflow-hidden">
+                        {hasCover ? (
+                          <img
+                            src={fb.capa_url}
+                            alt={fb.titulo}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-amber-800/20 to-amber-900/40">
+                            <BookOpen className="h-10 w-10 text-amber-700/50 dark:text-amber-500/50" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2">
+                          <Badge className="bg-emerald-600 text-white text-xs">Completo</Badge>
+                        </div>
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <BookOpen className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </div>
+                      <CardContent className="p-3">
+                        <p className="font-semibold text-sm truncate">{fb.titulo}</p>
+                        <p className="text-xs text-muted-foreground">Todos os capítulos</p>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Individual Chapters Section */}
+          {individualChapters.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-4">
+                <BookOpen className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <h2 className="text-lg font-semibold">Capítulos Avulsos</h2>
+                <Badge variant="secondary" className="text-xs">
+                  {individualChapters.length}
+                </Badge>
+              </div>
+              <Card>
+                <CardContent className="p-2">
+                  {individualChapters.map((item) => (
+                    item.chapter && (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
+                        onClick={() => navigate('reader', {
+                          chapterId: item.chapter!.id,
+                          bookId: item.chapter!.livro.id,
+                        })}
+                      >
+                        <div className="min-w-0 flex-1 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+                            <BookOpen className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{item.chapter.titulo}</p>
+                            <p className="text-xs text-muted-foreground">{item.chapter.livro.titulo}</p>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </div>
+                    )
+                  ))}
+                </CardContent>
+              </Card>
+            </section>
+          )}
         </div>
       )}
     </div>
