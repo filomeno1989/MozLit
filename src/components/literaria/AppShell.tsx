@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppStore } from '@/store/app';
+import { useAppStore, type ViewName } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -19,16 +19,24 @@ import {
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { view: 'home' as const, label: 'Início', icon: Home },
-  { view: 'library' as const, label: 'Minha Biblioteca', icon: Library, auth: true },
-  { view: 'wallet' as const, label: 'Carteira', icon: Wallet, auth: true },
-  { view: 'author-dashboard' as const, label: 'Painel do Autor', icon: PenTool, auth: true, roles: ['ESCRITOR', 'ADMIN'] },
+  { view: 'home' as ViewName, label: 'Início', icon: Home, auth: false, roles: undefined as string[] | undefined },
+  { view: 'library' as ViewName, label: 'Minha Biblioteca', icon: Library, auth: true, roles: undefined },
+  { view: 'wallet' as ViewName, label: 'Carteira', icon: Wallet, auth: true, roles: undefined },
+  { view: 'author-dashboard' as ViewName, label: 'Painel do Autor', icon: PenTool, auth: true, roles: ['ESCRITOR', 'ADMIN'] },
 ];
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, currentView, navigate, isDark, toggleDark, sidebarOpen, setSidebarOpen, clearAuth } = useAppStore();
-
-  const NavLinks = ({ onClick }: { onClick?: () => void }) => (
+function NavLinks({
+  user,
+  currentView,
+  navigate,
+  onClick,
+}: {
+  user: ReturnType<typeof useAppStore.getState>['user'];
+  currentView: ViewName;
+  navigate: (v: ViewName) => void;
+  onClick?: () => void;
+}) {
+  return (
     <nav className="flex flex-col gap-1">
       {navItems
         .filter((item) => {
@@ -56,6 +64,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         ))}
     </nav>
   );
+}
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const { user, currentView, navigate, isDark, toggleDark, sidebarOpen, setSidebarOpen, clearAuth } = useAppStore();
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -74,8 +86,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <BookOpen className="h-5 w-5 text-amber-600" />
                 MozLit
               </SheetTitle>
-              <NavLinks onClick={() => setSidebarOpen(false)} />
-              <div className="mt-auto pt-6 border-t mt-8">
+              <NavLinks user={user} currentView={currentView} navigate={navigate} onClick={() => setSidebarOpen(false)} />
+              <div className="pt-6 border-t mt-8">
                 {user ? (
                   <div className="space-y-3">
                     <p className="text-xs text-muted-foreground">{user.nome}</p>

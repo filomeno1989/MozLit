@@ -1,31 +1,72 @@
-'use client'
+'use client';
 
-export default function Home() {
+import { useEffect } from 'react';
+import { useAppStore } from '@/store/app';
+import AppShell from '@/components/literaria/AppShell';
+import HomePage from '@/components/literaria/HomePage';
+import BookDetailPage from '@/components/literaria/BookDetailPage';
+import EReaderPage from '@/components/literaria/EReaderPage';
+import AuthorDashboard from '@/components/literaria/AuthorDashboard';
+import LoginPage from '@/components/literaria/LoginPage';
+import RegisterPage from '@/components/literaria/RegisterPage';
+import WalletPage from '@/components/literaria/WalletPage';
+import LibraryPage from '@/components/literaria/LibraryPage';
+import NewBookPage from '@/components/literaria/NewBookPage';
+
+function ViewRouter() {
+  const { currentView } = useAppStore();
+
+  switch (currentView) {
+    case 'home':
+      return <HomePage />;
+    case 'book-detail':
+      return <BookDetailPage />;
+    case 'reader':
+      return <EReaderPage />;
+    case 'author-dashboard':
+      return <AuthorDashboard />;
+    case 'login':
+      return <LoginPage />;
+    case 'register':
+      return <RegisterPage />;
+    case 'wallet':
+      return <WalletPage />;
+    case 'library':
+      return <LibraryPage />;
+    case 'new-book':
+      return <NewBookPage />;
+    case 'edit-book':
+      return <NewBookPage />;
+    case 'book-chapters':
+      return <AuthorDashboard />;
+    case 'new-chapter':
+      return <AuthorDashboard />;
+    default:
+      return <HomePage />;
+  }
+}
+
+export default function MozLitApp() {
+  const { token, user } = useAppStore();
+
+  // Validate token on mount
+  useEffect(() => {
+    if (token && user) {
+      fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((res) => {
+          if (!res.ok) {
+            useAppStore.getState().clearAuth();
+          }
+        })
+        .catch(() => {});
+    }
+  }, [token, user]);
+
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '100vh',
-      gap: '2rem',
-      padding: '1rem'
-    }}>
-      <div style={{
-        position: 'relative',
-        width: '6rem',
-        height: '6rem'
-      }}>
-        <img
-          src="/logo.svg"
-          alt="Z.ai Logo"
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain'
-          }}
-        />
-      </div>
-    </div>
-  )
+    <AppShell>
+      <ViewRouter />
+    </AppShell>
+  );
 }
