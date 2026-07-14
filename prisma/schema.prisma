@@ -20,6 +20,7 @@ model User {
   books        Book[]
   transactions Transaction[]
   libraryItems LibraryItem[]
+  comments     Comment[]
 }
 
 model Book {
@@ -51,6 +52,7 @@ model Chapter {
 
   livro          Book     @relation(fields: [livroId], references: [id], onDelete: Cascade)
   libraryItems   LibraryItem[]
+  comments       Comment[]
 }
 
 model Transaction {
@@ -77,4 +79,19 @@ model LibraryItem {
   chapter   Chapter? @relation(fields: [chapterId], references: [id])
 
   @@unique([userId, chapterId])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  conteudo  String
+  chapterId String
+  userId    String
+  parentId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id])
+  chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
 }

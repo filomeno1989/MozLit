@@ -6,6 +6,7 @@ import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Moon, Sun, ChevronLeft, ChevronRight } from 'lucide-react';
+import CommentsSection from '@/components/literaria/CommentsSection';
 
 interface ChapterData {
   id: string;
@@ -161,7 +162,7 @@ export default function EReaderPage() {
       </article>
 
       {/* Bottom nav */}
-      <div className="max-w-2xl mx-auto px-4 pb-10 flex justify-between items-center">
+      <div className="max-w-2xl mx-auto px-4 pb-4 flex justify-between items-center">
         <Button
           variant="outline"
           size="sm"
@@ -171,6 +172,9 @@ export default function EReaderPage() {
         </Button>
         <span className="text-xs text-muted-foreground">Fim do capítulo</span>
       </div>
+
+      {/* Comments Section — outside the anti-copy article */}
+      <CommentsSection chapterId={chapterId!} bookAuthorId={chapter.livro.autorId} />
     </div>
   );
 }
