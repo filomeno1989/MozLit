@@ -9,9 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 
 const CATEGORIAS_SUGESTOES = [
   'Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio',
@@ -74,6 +76,7 @@ export default function AuthorDashboard() {
   const [loading, setLoading] = useState(true);
   const [bookChapters, setBookChapters] = useState<BookWithChapters | null>(null);
   const [showChapterDialog, setShowChapterDialog] = useState(false);
+  const [chapterError, setChapterError] = useState('');
   const [newChapter, setNewChapter] = useState({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
 
   // Edit book dialog
@@ -87,6 +90,13 @@ export default function AuthorDashboard() {
   const [editActiveSections, setEditActiveSections] = useState<SectionKey[]>([]);
   const [editUploading, setEditUploading] = useState(false);
   const editFileRef = useRef<HTMLInputElement>(null);
+
+  // Delete confirmation dialog
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  // Error state for dashboard
+  const [loadError, setLoadError] = useState(false);
 
   // Profile dialog
   const [showProfileDialog, setShowProfileDialog] = useState(false);
@@ -106,6 +116,7 @@ export default function AuthorDashboard() {
       setProfileForm({ biografia: d.biografia ?? '', avatar_url: d.avatar_url ?? '' });
     } catch {
       setData(null);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -116,8 +127,8 @@ export default function AuthorDashboard() {
       const b = await apiFetch<BookWithChapters>(`/api/books/${bookId}`);
       setBookChapters(b);
       setShowChapterDialog(true);
-    } catch {
-      alert('Erro ao carregar capítulos');
+    } catch (err) {
+      setChapterError((err as Error).message);
     }
   }
 
@@ -128,17 +139,20 @@ export default function AuthorDashboard() {
     } catch (err) { alert((err as Error).message); }
   }
 
-  async function deleteBook(bookId: string) {
-    if (!confirm('Tem certeza que deseja excluir este livro?')) return;
+  async function deleteBook() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await apiFetch(`/api/books/${bookId}`, { method: 'DELETE' });
+      await apiFetch(`/api/books/${deleteTarget}`, { method: 'DELETE' });
+      setDeleteTarget(null);
       loadDashboard();
     } catch (err) { alert((err as Error).message); }
+    finally { setDeleting(false); }
   }
 
   async function addChapter() {
     if (!bookChapters || !newChapter.titulo || !newChapter.conteudo) {
-      alert('Título e conteúdo são obrigatórios.'); return;
+      setChapterError('Título e conteúdo são obrigatórios.'); return;
     }
     try {
       await apiFetch('/api/chapters', {
@@ -150,9 +164,10 @@ export default function AuthorDashboard() {
         }),
       });
       setNewChapter({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
+      setChapterError('');
       loadBookChapters(bookChapters.id);
       loadDashboard();
-    } catch (err) { alert((err as Error).message); }
+    } catch (err) { setChapterError((err as Error).message); }
   }
 
   // --- Upload helper ---
@@ -287,7 +302,15 @@ export default function AuthorDashboard() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
+      {loadError ? (
+        <div className="text-center py-16">
+          <p className="text-destructive font-medium mb-2">Erro ao carregar o painel</p>
+          <p className="text-sm text-muted-foreground mb-4">Verifique sua conexão e tente novamente.</p>
+          <Button variant="outline" onClick={loadDashboard}>Tentar novamente</Button>
+        </div>
+      ) : (
+        <>
+        <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold">Painel do Autor</h1>
           <p className="text-sm text-muted-foreground">Gerencie suas obras e acompanhe seus ganhos</p>
@@ -304,15 +327,15 @@ export default function AuthorDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <Card><CardContent className="p-4 flex items-center gap-3">
+        <Card className="transition-shadow hover:shadow-md"><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30"><DollarSign className="h-5 w-5 text-amber-700 dark:text-amber-400" /></div>
           <div><p className="text-xs text-muted-foreground">Saldo Total</p><p className="text-xl font-bold">{(data?.totalGanhos ?? 0).toFixed(2)} MZN</p></div>
         </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
+        <Card className="transition-shadow hover:shadow-md"><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30"><BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /></div>
           <div><p className="text-xs text-muted-foreground">Obras</p><p className="text-xl font-bold">{data?.totalLivros ?? 0}</p></div>
         </CardContent></Card>
-        <Card><CardContent className="p-4 flex items-center gap-3">
+        <Card className="transition-shadow hover:shadow-md"><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30"><FileText className="h-5 w-5 text-blue-700 dark:text-blue-400" /></div>
           <div><p className="text-xs text-muted-foreground">Capítulos</p><p className="text-xl font-bold">{data?.totalCapitulos ?? 0}</p></div>
         </CardContent></Card>
@@ -354,7 +377,7 @@ export default function AuthorDashboard() {
                     {livro.status !== 'PUBLICADO' && (
                       <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}><Eye className="h-3.5 w-3.5 mr-1" /> Publicar</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteBook(livro.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(livro.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               ))}
@@ -369,9 +392,12 @@ export default function AuthorDashboard() {
           <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle></DialogHeader>
           {bookChapters && (
             <div className="space-y-4">
-              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+              {chapterError && (
+                <div className="p-2.5 rounded-lg bg-destructive/10 text-destructive text-sm">{chapterError}</div>
+              )}
+              <div className="divide-y divide-border/40">
                 {bookChapters.chapters.map((ch) => (
-                  <div key={ch.id} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
+                  <div key={ch.id} className="flex items-center justify-between text-sm p-2.5 first:pt-0 last:pb-0">
                     <span className="truncate">
                       <span className="text-muted-foreground font-mono text-xs mr-2">{String(ch.ordem + 1).padStart(2, '0')}</span>
                       {ch.titulo}
@@ -389,8 +415,8 @@ export default function AuthorDashboard() {
                 <div className="flex items-center gap-4">
                   <div className="flex-1"><Label className="text-xs">Preço (MZN)</Label><Input type="number" step="0.01" min="0" value={newChapter.preco_capitulo} onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })} disabled={newChapter.is_free} /></div>
                   <div className="flex items-center gap-2 pt-5">
-                    <input type="checkbox" id="free-check" checked={newChapter.is_free} onChange={(e) => setNewChapter({ ...newChapter, is_free: e.target.checked })} className="rounded" />
-                    <Label htmlFor="free-check" className="text-xs">Grátis</Label>
+                    <Checkbox id="free-check" checked={newChapter.is_free} onCheckedChange={(checked) => setNewChapter({ ...newChapter, is_free: !!checked })} />
+                    <Label htmlFor="free-check" className="text-xs cursor-pointer">Grátis</Label>
                   </div>
                 </div>
                 <Button onClick={addChapter} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Plus className="h-4 w-4 mr-1" /> Adicionar Capítulo</Button>
@@ -450,13 +476,13 @@ export default function AuthorDashboard() {
                 <div className="mt-1.5 space-y-2">
                   <input ref={editFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleEditCoverUpload} className="hidden" />
                   <Button type="button" variant="outline" size="sm" disabled={editUploading} onClick={() => editFileRef.current?.click()}>
-                    <Upload className="h-3.5 w-3.5 mr-1.5" /> {editUploading ? 'Enviando...' : 'Enviar imagem'}
+                    {editUploading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />} {editUploading ? 'Enviando...' : 'Enviar imagem'}
                   </Button>
                   <Input type="url" value={editForm.capa_url} onChange={(e) => setEditForm({ ...editForm, capa_url: e.target.value })} placeholder="ou cole uma URL" />
                   {editForm.capa_url && (
                     <div className="relative inline-block">
-                      <img src={editForm.capa_url} alt="Pré-visualização" className="w-20 aspect-[3/4] rounded-lg object-cover border border-border/50" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      <button type="button" onClick={() => setEditForm({ ...editForm, capa_url: '' })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"><X className="h-3 w-3" /></button>
+                      <img src={editForm.capa_url} alt="Pré-visualização" className="w-20 aspect-[3/4] rounded-lg object-cover border border-border/50" onError={(e) => { const img = e.target as HTMLImageElement; img.style.display = 'none'; }} />
+                      <button type="button" onClick={() => setEditForm({ ...editForm, capa_url: '' })} className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:bg-destructive/90 transition-colors"><X className="h-3.5 w-3.5" /></button>
                     </div>
                   )}
                 </div>
@@ -517,20 +543,20 @@ export default function AuthorDashboard() {
             <div>
               <Label>Biografia</Label>
               <Textarea value={profileForm.biografia} onChange={(e) => setProfileForm({ ...profileForm, biografia: e.target.value })} placeholder="Escreva algo sobre você e sua obra literária..." rows={4} maxLength={500} />
-              <p className="text-xs text-muted-foreground mt-1">{profileForm.biografia.length}/500 caracteres</p>
+              <p className={`text-xs mt-1 ${profileForm.biografia.length > 450 ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-muted-foreground'}`}>{profileForm.biografia.length}/500 caracteres</p>
             </div>
             <div>
               <Label><span className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Avatar</span></Label>
               <div className="mt-1.5 space-y-2">
                 <input ref={profileFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleProfileAvatarUpload} className="hidden" />
                 <Button type="button" variant="outline" size="sm" disabled={profileUploading} onClick={() => profileFileRef.current?.click()}>
-                  <Upload className="h-3.5 w-3.5 mr-1.5" /> {profileUploading ? 'Enviando...' : 'Enviar foto'}
+                  {profileUploading ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />} {profileUploading ? 'Enviando...' : 'Enviar foto'}
                 </Button>
                 <Input type="url" value={profileForm.avatar_url} onChange={(e) => setProfileForm({ ...profileForm, avatar_url: e.target.value })} placeholder="ou cole uma URL" />
                 {profileForm.avatar_url && (
                   <div className="relative inline-block">
-                    <img src={profileForm.avatar_url} alt="Avatar" className="w-16 h-16 rounded-full object-cover border-2 border-amber-200 dark:border-amber-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                    <button type="button" onClick={() => setProfileForm({ ...profileForm, avatar_url: '' })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"><X className="h-3 w-3" /></button>
+                    <img src={profileForm.avatar_url} alt="Avatar" className="w-16 h-16 rounded-full object-cover border-2 border-amber-200 dark:border-amber-800" onError={(e) => { const img = e.target as HTMLImageElement; img.style.display = 'none'; }} />
+                    <button type="button" onClick={() => setProfileForm({ ...profileForm, avatar_url: '' })} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:bg-destructive/90 transition-colors"><X className="h-3 w-3" /></button>
                   </div>
                 )}
               </div>
@@ -539,6 +565,25 @@ export default function AuthorDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+      </>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir obra</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir este livro? Esta acção não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteBook} disabled={deleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -421,7 +421,7 @@ export default function EReaderPage() {
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
-              Índice <ArrowLeft className="h-4 w-4 ml-1" />
+              Índice <List className="h-4 w-4 ml-1" />
             </Button>
           )}
         </div>

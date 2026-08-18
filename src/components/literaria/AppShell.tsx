@@ -206,10 +206,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Footer */}
-      <footer className='border-t py-6 mt-auto'>
-        <div className='max-w-7xl mx-auto px-4 text-center text-sm text-muted-foreground'>
-          <p>MozLit - Plataforma Literária Moçambicana</p>
-          <p className='mt-1'>Leitura, Publicação e Monetização</p>
+      <footer className='border-t py-8 mt-auto'>
+        <div className='max-w-7xl mx-auto px-4'>
+          <div className='flex flex-col sm:flex-row items-center justify-between gap-4'>
+            <div className='text-center sm:text-left'>
+              <p className='text-sm font-medium'>MozLit - Plataforma Literária Moçambicana</p>
+              <p className='text-xs text-muted-foreground mt-0.5'>Leitura, Publicação e Monetização</p>
+            </div>
+            <nav className='flex items-center gap-4 text-xs text-muted-foreground'>
+              <button onClick={() => navigate('home')} className='hover:text-foreground transition-colors'>Início</button>
+              <span className='text-border'>|</span>
+              <button onClick={() => navigate('library')} className='hover:text-foreground transition-colors'>Biblioteca</button>
+              {user && (user.role === 'ESCRITOR' || user.role === 'ADMIN') && (
+                <>
+                  <span className='text-border'>|</span>
+                  <button onClick={() => navigate('author-dashboard')} className='hover:text-foreground transition-colors'>Painel do Autor</button>
+                </>
+              )}
+            </nav>
+          </div>
         </div>
       </footer>
     </div>
