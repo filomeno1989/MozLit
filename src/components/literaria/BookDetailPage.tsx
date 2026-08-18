@@ -285,33 +285,45 @@ export default function BookDetailPage() {
           <CardTitle className="text-lg">Conteúdo</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {/* Pre-chapter sections (Ficha Técnica, Dedicatória, Epígrafe) */}
+          {/* Pre-chapter sections (clickable) */}
           {book.ficha_tecnica && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+            <button
+              onClick={() => navigate('reader', { bookId, section: 'ficha_tecnica' })}
+              className="w-full flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors text-left cursor-pointer"
+            >
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Ficha Técnica</p>
                 <p className="text-xs text-muted-foreground line-clamp-2">{book.ficha_tecnica}</p>
               </div>
-            </div>
+              <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
+            </button>
           )}
           {book.dedicatoria && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+            <button
+              onClick={() => navigate('reader', { bookId, section: 'dedicatoria' })}
+              className="w-full flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors text-left cursor-pointer"
+            >
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Dedicatória</p>
                 <p className="text-xs text-muted-foreground line-clamp-2 italic">{book.dedicatoria}</p>
               </div>
-            </div>
+              <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
+            </button>
           )}
           {book.epigrafe && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+            <button
+              onClick={() => navigate('reader', { bookId, section: 'epigrafe' })}
+              className="w-full flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors text-left cursor-pointer"
+            >
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Epígrafe</p>
                 <p className="text-xs text-muted-foreground line-clamp-2 italic">{book.epigrafe}</p>
               </div>
-            </div>
+              <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
+            </button>
           )}
 
           {/* Chapters */}
@@ -377,15 +389,19 @@ export default function BookDetailPage() {
             })
           )}
 
-          {/* Post-chapter section: Epílogo */}
+          {/* Post-chapter section: Epílogo (clickable) */}
           {book.epilogo && (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 mt-2">
+            <button
+              onClick={() => navigate('reader', { bookId, section: 'epilogo' })}
+              className="w-full flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors text-left cursor-pointer mt-2"
+            >
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">Epílogo</p>
                 <p className="text-xs text-muted-foreground line-clamp-2">{book.epilogo}</p>
               </div>
-            </div>
+              <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
+            </button>
           )}
         </CardContent>
       </Card>

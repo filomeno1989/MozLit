@@ -43,10 +43,16 @@ export async function GET(
       epilogo: chapter.livro.epilogo || '',
     };
 
-    // Determine if first/last chapter
-    const chapterCount = await db.chapter.count({ where: { livroId: chapter.livroId } });
-    const isFirstChapter = chapter.ordem === 0;
-    const isLastChapter = chapter.ordem === chapterCount - 1;
+    // Get prev/next chapter and chapter list
+    const allChapters = await db.chapter.findMany({
+      where: { livroId: chapter.livroId },
+      orderBy: { ordem: 'asc' },
+      select: { id: true, titulo: true, ordem: true, is_free: true },
+    });
+
+    const currentIndex = allChapters.findIndex((c) => c.id === chapter.id);
+    const prevChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : null;
+    const nextChapter = currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : null;
 
     const result = {
       id: chapter.id,
@@ -56,8 +62,9 @@ export async function GET(
       is_free: chapter.is_free,
       preco_capitulo: chapter.preco_capitulo,
       livro: livreData,
-      isFirstChapter,
-      isLastChapter,
+      prevChapter,
+      nextChapter,
+      allChapters,
     };
 
     // Free chapters are always accessible
