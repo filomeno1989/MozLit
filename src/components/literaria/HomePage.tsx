@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookOpen } from 'lucide-react';
 
-const CATEGORIAS = ['Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio'];
+// Categorias são extraídas dinamicamente dos livros registados
 
 interface Book {
   id: string;
@@ -77,13 +77,24 @@ function BookSkeleton() {
 
 export default function HomePage() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null);
   const { navigate } = useAppStore();
 
+  // Extract unique categories from all published books
+  const categorias = Array.from(new Set(allBooks.map((b) => b.categoria))).sort();
+
   useEffect(() => {
     loadBooks();
   }, [categoriaAtiva]);
+
+  // Load all books once (no filter) to extract categories
+  useEffect(() => {
+    apiFetch<Book[]>('/api/books')
+      .then(setAllBooks)
+      .catch(() => {});
+  }, []);
 
   async function loadBooks() {
     setLoading(true);
@@ -91,6 +102,8 @@ export default function HomePage() {
       const query = categoriaAtiva ? `?categoria=${encodeURIComponent(categoriaAtiva)}` : '';
       const data = await apiFetch<Book[]>(`/api/books${query}`);
       setBooks(data);
+      // Also refresh allBooks for category list
+      if (!categoriaAtiva) setAllBooks(data);
     } catch {
       setBooks([]);
     } finally {
@@ -123,7 +136,7 @@ export default function HomePage() {
           >
             Todas
           </button>
-          {CATEGORIAS.map((cat) => (
+          {categorias.map((cat) => (
             <button
               key={cat}
               onClick={() => setCategoriaAtiva(cat === categoriaAtiva ? null : cat)}

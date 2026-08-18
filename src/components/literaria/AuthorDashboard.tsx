@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X } from 'lucide-react';
+
+const CATEGORIAS_SUGESTOES = ['Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio', 'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror', 'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro'];
 
 interface DashboardData {
   totalGanhos: number;
@@ -55,11 +57,16 @@ export default function AuthorDashboard() {
 
   // Edit book dialog
   const [editingBook, setEditingBook] = useState<BookWithChapters | null>(null);
-  const [editForm, setEditForm] = useState({ titulo: '', sinopse: '', capa_url: '', preco_total: '' });
+  const [editForm, setEditForm] = useState({ titulo: '', sinopse: '', capa_url: '', preco_total: '', categoria: '', categoriaInput: '' });
+  const [editShowCatSugg, setEditShowCatSugg] = useState(false);
+  const [editUploading, setEditUploading] = useState(false);
+  const editFileRef = useRef<HTMLInputElement>(null);
 
   // Profile dialog
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileForm, setProfileForm] = useState({ biografia: '', avatar_url: '' });
+  const [profileUploading, setProfileUploading] = useState(false);
+  const profileFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (token) loadDashboard();
@@ -90,14 +97,9 @@ export default function AuthorDashboard() {
 
   async function publishBook(bookId: string) {
     try {
-      await apiFetch(`/api/books/${bookId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'PUBLICADO' }),
-      });
+      await apiFetch(`/api/books/${bookId}`, { method: 'PATCH', body: JSON.stringify({ status: 'PUBLICADO' }) });
       loadDashboard();
-    } catch (err) {
-      alert((err as Error).message);
-    }
+    } catch (err) { alert((err as Error).message); }
   }
 
   async function deleteBook(bookId: string) {
@@ -105,52 +107,76 @@ export default function AuthorDashboard() {
     try {
       await apiFetch(`/api/books/${bookId}`, { method: 'DELETE' });
       loadDashboard();
-    } catch (err) {
-      alert((err as Error).message);
-    }
+    } catch (err) { alert((err as Error).message); }
   }
 
   async function addChapter() {
     if (!bookChapters || !newChapter.titulo || !newChapter.conteudo) {
-      alert('Título e conteúdo são obrigatórios.');
-      return;
+      alert('Título e conteúdo são obrigatórios.'); return;
     }
     try {
       await apiFetch('/api/chapters', {
         method: 'POST',
         body: JSON.stringify({
-          titulo: newChapter.titulo,
-          conteudo: newChapter.conteudo,
-          livroId: bookChapters.id,
-          preco_capitulo: parseFloat(newChapter.preco_capitulo) || 0,
+          titulo: newChapter.titulo, conteudo: newChapter.conteudo,
+          livroId: bookChapters.id, preco_capitulo: parseFloat(newChapter.preco_capitulo) || 0,
           is_free: newChapter.is_free,
         }),
       });
       setNewChapter({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
       loadBookChapters(bookChapters.id);
       loadDashboard();
-    } catch (err) {
-      alert((err as Error).message);
-    }
+    } catch (err) { alert((err as Error).message); }
   }
 
-  function openEditBook(livro: DashboardData['livros'][0]) {
-    setEditForm({
-      titulo: livro.titulo,
-      sinopse: '', // Will load from full book detail
-      capa_url: livro.capa_url || '',
-      preco_total: livro.preco_total?.toString() ?? '0',
+  // --- Upload helper ---
+  async function uploadFile(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch('/api/upload', {
+      method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
     });
-    // Load full book data for editing
+    if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro no upload'); }
+    const d = await res.json();
+    return d.url;
+  }
+
+  // --- Edit Book ---
+  function openEditBook(livro: DashboardData['livros'][0]) {
     apiFetch<BookWithChapters>(`/api/books/${livro.id}`).then((b) => {
       setEditingBook(b);
       setEditForm({
-        titulo: b.titulo,
-        sinopse: b.sinopse,
-        capa_url: b.capa_url || '',
-        preco_total: b.preco_total?.toString() ?? '0',
+        titulo: b.titulo, sinopse: b.sinopse,
+        capa_url: b.capa_url || '', preco_total: b.preco_total?.toString() ?? '0',
+        categoria: b.categoria, categoriaInput: b.categoria,
       });
     }).catch(() => alert('Erro ao carregar dados do livro'));
+  }
+
+  const editCatFiltered = CATEGORIAS_SUGESTOES.filter(
+    (s) => s.toLowerCase().includes(editForm.categoriaInput.toLowerCase()) && s.toLowerCase() !== editForm.categoria.toLowerCase()
+  );
+
+  async function handleEditCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEditUploading(true);
+    try {
+      const url = await uploadFile(file);
+      setEditForm((f) => ({ ...f, capa_url: url }));
+    } catch (err) { alert((err as Error).message); }
+    finally { setEditUploading(false); if (editFileRef.current) editFileRef.current.value = ''; }
+  }
+
+  async function handleProfileAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfileUploading(true);
+    try {
+      const url = await uploadFile(file);
+      setProfileForm((f) => ({ ...f, avatar_url: url }));
+    } catch (err) { alert((err as Error).message); }
+    finally { setProfileUploading(false); if (profileFileRef.current) profileFileRef.current.value = ''; }
   }
 
   async function saveEditBook() {
@@ -159,31 +185,23 @@ export default function AuthorDashboard() {
       await apiFetch(`/api/books/${editingBook.id}`, {
         method: 'PATCH',
         body: JSON.stringify({
-          titulo: editForm.titulo,
-          sinopse: editForm.sinopse,
+          titulo: editForm.titulo, sinopse: editForm.sinopse,
           capa_url: editForm.capa_url || undefined,
           preco_total: parseFloat(editForm.preco_total) || 0,
-          categoria: editingBook.categoria,
+          categoria: editForm.categoria || editingBook.categoria,
         }),
       });
       setEditingBook(null);
       loadDashboard();
-    } catch (err) {
-      alert((err as Error).message);
-    }
+    } catch (err) { alert((err as Error).message); }
   }
 
   async function saveProfile() {
     try {
-      await apiFetch('/api/author/profile', {
-        method: 'PATCH',
-        body: JSON.stringify(profileForm),
-      });
+      await apiFetch('/api/author/profile', { method: 'PATCH', body: JSON.stringify(profileForm) });
       setShowProfileDialog(false);
       loadDashboard();
-    } catch (err) {
-      alert((err as Error).message);
-    }
+    } catch (err) { alert((err as Error).message); }
   }
 
   if (loading) {
@@ -191,9 +209,7 @@ export default function AuthorDashboard() {
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         <Skeleton className="h-8 w-64" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
+          <Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" />
         </div>
       </div>
     );
@@ -210,10 +226,7 @@ export default function AuthorDashboard() {
           <Button variant="outline" size="sm" onClick={() => setShowProfileDialog(true)}>
             <User className="h-4 w-4 mr-1" /> Meu Perfil
           </Button>
-          <Button
-            className="bg-amber-600 hover:bg-amber-700 text-white"
-            onClick={() => navigate('new-book')}
-          >
+          <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => navigate('new-book')}>
             <Plus className="h-4 w-4 mr-1" /> Nova Obra
           </Button>
         </div>
@@ -221,46 +234,23 @@ export default function AuthorDashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-              <DollarSign className="h-5 w-5 text-amber-700 dark:text-amber-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Saldo Total</p>
-              <p className="text-xl font-bold">{(data?.totalGanhos ?? 0).toFixed(2)} MZN</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-              <BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Obras</p>
-              <p className="text-xl font-bold">{data?.totalLivros ?? 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-              <FileText className="h-5 w-5 text-blue-700 dark:text-blue-400" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Capítulos</p>
-              <p className="text-xl font-bold">{data?.totalCapitulos ?? 0}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30"><DollarSign className="h-5 w-5 text-amber-700 dark:text-amber-400" /></div>
+          <div><p className="text-xs text-muted-foreground">Saldo Total</p><p className="text-xl font-bold">{(data?.totalGanhos ?? 0).toFixed(2)} MZN</p></div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30"><BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /></div>
+          <div><p className="text-xs text-muted-foreground">Obras</p><p className="text-xl font-bold">{data?.totalLivros ?? 0}</p></div>
+        </CardContent></Card>
+        <Card><CardContent className="p-4 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30"><FileText className="h-5 w-5 text-blue-700 dark:text-blue-400" /></div>
+          <div><p className="text-xs text-muted-foreground">Capítulos</p><p className="text-xl font-bold">{data?.totalCapitulos ?? 0}</p></div>
+        </CardContent></Card>
       </div>
 
       {/* Livros */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Minhas Obras</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle className="text-lg">Minhas Obras</CardTitle></CardHeader>
         <CardContent>
           {!data?.livros.length ? (
             <p className="text-sm text-muted-foreground py-4">Nenhuma obra criada ainda.</p>
@@ -269,17 +259,10 @@ export default function AuthorDashboard() {
               {data.livros.map((livro) => (
                 <div key={livro.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg border border-border/50 gap-2">
                   <div className="flex items-center gap-3 min-w-0">
-                    {/* Book cover thumbnail */}
                     {livro.capa_url && livro.capa_url !== '/placeholder-cover.svg' ? (
-                      <img
-                        src={livro.capa_url}
-                        alt={livro.titulo}
-                        className="w-10 h-14 rounded object-cover shrink-0 border border-border/30"
-                      />
+                      <img src={livro.capa_url} alt={livro.titulo} className="w-10 h-14 rounded object-cover shrink-0 border border-border/30" />
                     ) : (
-                      <div className="w-10 h-14 rounded bg-muted flex items-center justify-center shrink-0">
-                        <BookOpen className="h-4 w-4 text-muted-foreground" />
-                      </div>
+                      <div className="w-10 h-14 rounded bg-muted flex items-center justify-center shrink-0"><BookOpen className="h-4 w-4 text-muted-foreground" /></div>
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -296,20 +279,12 @@ export default function AuthorDashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 sm:ml-2">
-                    <Button size="sm" variant="ghost" onClick={() => loadBookChapters(livro.id)}>
-                      <FileText className="h-3.5 w-3.5 mr-1" /> Capítulos
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => openEditBook(livro)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => loadBookChapters(livro.id)}><FileText className="h-3.5 w-3.5 mr-1" /> Capítulos</Button>
+                    <Button size="sm" variant="ghost" onClick={() => openEditBook(livro)}><Pencil className="h-3.5 w-3.5" /></Button>
                     {livro.status !== 'PUBLICADO' && (
-                      <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}>
-                        <Eye className="h-3.5 w-3.5 mr-1" /> Publicar
-                      </Button>
+                      <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}><Eye className="h-3.5 w-3.5 mr-1" /> Publicar</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteBook(livro.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => deleteBook(livro.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               ))}
@@ -321,81 +296,34 @@ export default function AuthorDashboard() {
       {/* Chapter Dialog */}
       <Dialog open={showChapterDialog} onOpenChange={setShowChapterDialog}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Capítulos — {bookChapters?.titulo}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Capítulos — {bookChapters?.titulo}</DialogTitle></DialogHeader>
           {bookChapters && (
             <div className="space-y-4">
-              {/* Existing chapters */}
               <div className="space-y-1.5 max-h-40 overflow-y-auto">
                 {bookChapters.chapters.map((ch) => (
                   <div key={ch.id} className="flex items-center justify-between text-sm p-2 rounded bg-muted/50">
                     <span className="truncate">
-                      <span className="text-muted-foreground font-mono text-xs mr-2">
-                        {String(ch.ordem + 1).padStart(2, '0')}
-                      </span>
+                      <span className="text-muted-foreground font-mono text-xs mr-2">{String(ch.ordem + 1).padStart(2, '0')}</span>
                       {ch.titulo}
                       {ch.is_free && <Badge variant="secondary" className="ml-2 text-xs">Grátis</Badge>}
                     </span>
-                    <span className="text-xs text-muted-foreground shrink-0 ml-2">
-                      {ch.is_free ? 'Grátis' : `${ch.preco_capitulo.toFixed(2)} MZN`}
-                    </span>
+                    <span className="text-xs text-muted-foreground shrink-0 ml-2">{ch.is_free ? 'Grátis' : `${ch.preco_capitulo.toFixed(2)} MZN`}</span>
                   </div>
                 ))}
-                {bookChapters.chapters.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-2">Nenhum capítulo.</p>
-                )}
+                {bookChapters.chapters.length === 0 && <p className="text-sm text-muted-foreground py-2">Nenhum capítulo.</p>}
               </div>
-
-              {/* Add chapter form */}
               <div className="border-t pt-4 space-y-3">
                 <p className="text-sm font-medium">Adicionar Capítulo</p>
-                <div>
-                  <Label className="text-xs">Título</Label>
-                  <Input
-                    value={newChapter.titulo}
-                    onChange={(e) => setNewChapter({ ...newChapter, titulo: e.target.value })}
-                    placeholder="Título do capítulo"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Conteúdo</Label>
-                  <Textarea
-                    value={newChapter.conteudo}
-                    onChange={(e) => setNewChapter({ ...newChapter, conteudo: e.target.value })}
-                    placeholder="Escreva o conteúdo do capítulo..."
-                    rows={6}
-                  />
-                </div>
+                <div><Label className="text-xs">Título</Label><Input value={newChapter.titulo} onChange={(e) => setNewChapter({ ...newChapter, titulo: e.target.value })} placeholder="Título do capítulo" /></div>
+                <div><Label className="text-xs">Conteúdo</Label><Textarea value={newChapter.conteudo} onChange={(e) => setNewChapter({ ...newChapter, conteudo: e.target.value })} placeholder="Escreva o conteúdo do capítulo..." rows={6} /></div>
                 <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <Label className="text-xs">Preço (MZN)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newChapter.preco_capitulo}
-                      onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })}
-                      disabled={newChapter.is_free}
-                    />
-                  </div>
+                  <div className="flex-1"><Label className="text-xs">Preço (MZN)</Label><Input type="number" step="0.01" min="0" value={newChapter.preco_capitulo} onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })} disabled={newChapter.is_free} /></div>
                   <div className="flex items-center gap-2 pt-5">
-                    <input
-                      type="checkbox"
-                      id="free-check"
-                      checked={newChapter.is_free}
-                      onChange={(e) => setNewChapter({ ...newChapter, is_free: e.target.checked })}
-                      className="rounded"
-                    />
+                    <input type="checkbox" id="free-check" checked={newChapter.is_free} onChange={(e) => setNewChapter({ ...newChapter, is_free: e.target.checked })} className="rounded" />
                     <Label htmlFor="free-check" className="text-xs">Grátis</Label>
                   </div>
                 </div>
-                <Button
-                  onClick={addChapter}
-                  className="w-full bg-amber-600 hover:bg-amber-700 text-white"
-                >
-                  <Plus className="h-4 w-4 mr-1" /> Adicionar Capítulo
-                </Button>
+                <Button onClick={addChapter} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Plus className="h-4 w-4 mr-1" /> Adicionar Capítulo</Button>
               </div>
             </div>
           )}
@@ -405,66 +333,67 @@ export default function AuthorDashboard() {
       {/* Edit Book Dialog */}
       <Dialog open={!!editingBook} onOpenChange={(open) => !open && setEditingBook(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Editar Obra</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Editar Obra</DialogTitle></DialogHeader>
           {editingBook && (
             <div className="space-y-4">
+              <div><Label>Título</Label><Input value={editForm.titulo} onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })} /></div>
+              <div><Label>Sinopse</Label><Textarea value={editForm.sinopse} onChange={(e) => setEditForm({ ...editForm, sinopse: e.target.value })} rows={3} /></div>
+
+              {/* Categoria editável */}
               <div>
-                <Label>Título</Label>
-                <Input
-                  value={editForm.titulo}
-                  onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })}
-                />
+                <Label>Categoria</Label>
+                <div className="relative mt-1.5">
+                  <Input
+                    value={editForm.categoriaInput}
+                    onChange={(e) => { setEditForm({ ...editForm, categoriaInput: e.target.value, categoria: '' }); setEditShowCatSugg(true); }}
+                    onFocus={() => setEditShowCatSugg(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); if (editForm.categoriaInput.trim()) { setEditForm({ ...editForm, categoria: editForm.categoriaInput.trim() }); setEditShowCatSugg(false); } }
+                      if (e.key === 'Backspace' && !editForm.categoriaInput && editForm.categoria) setEditForm({ ...editForm, categoria: '' });
+                    }}
+                    onBlur={() => setTimeout(() => setEditShowCatSugg(false), 200)}
+                    placeholder="Digite ou seleccione..."
+                  />
+                  {editShowCatSugg && editCatFiltered.length > 0 && !editForm.categoria && (
+                    <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-md max-h-40 overflow-y-auto">
+                      {editCatFiltered.map((cat) => (
+                        <button key={cat} type="button" onMouseDown={() => { setEditForm({ ...editForm, categoria: cat, categoriaInput: cat }); setEditShowCatSugg(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors first:rounded-t-lg last:rounded-b-lg">{cat}</button>
+                      ))}
+                    </div>
+                  )}
+                  {editForm.categoria && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-600 text-white">{editForm.categoria}</span>
+                      <button type="button" onClick={() => setEditForm({ ...editForm, categoria: '', categoriaInput: '' })} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Capa: Upload + URL */}
               <div>
-                <Label>Sinopse</Label>
-                <Textarea
-                  value={editForm.sinopse}
-                  onChange={(e) => setEditForm({ ...editForm, sinopse: e.target.value })}
-                  rows={3}
-                />
+                <Label><span className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Capa do Livro</span></Label>
+                <div className="mt-1.5 space-y-2">
+                  <input ref={editFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleEditCoverUpload} className="hidden" />
+                  <Button type="button" variant="outline" size="sm" disabled={editUploading} onClick={() => editFileRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5 mr-1.5" /> {editUploading ? 'Enviando...' : 'Enviar imagem'}
+                  </Button>
+                  <Input type="url" value={editForm.capa_url} onChange={(e) => setEditForm({ ...editForm, capa_url: e.target.value })} placeholder="ou cole uma URL" />
+                  {editForm.capa_url && (
+                    <div className="relative inline-block">
+                      <img src={editForm.capa_url} alt="Pré-visualização" className="w-20 aspect-[3/4] rounded-lg object-cover border border-border/50" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      <button type="button" onClick={() => setEditForm({ ...editForm, capa_url: '' })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"><X className="h-3 w-3" /></button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <Label>
-                  <span className="flex items-center gap-1.5">
-                    <ImageIcon className="h-3.5 w-3.5" />
-                    URL da Capa
-                  </span>
-                </Label>
-                <Input
-                  type="url"
-                  value={editForm.capa_url}
-                  onChange={(e) => setEditForm({ ...editForm, capa_url: e.target.value })}
-                  placeholder="https://exemplo.com/capa.jpg"
-                />
-                {editForm.capa_url && (
-                  <div className="mt-2 w-20 aspect-[3/4] rounded-lg overflow-hidden border border-border/50">
-                    <img
-                      src={editForm.capa_url}
-                      alt="Pré-visualização"
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                )}
-              </div>
+
               <div>
                 <Label>Preço do Livro Completo (MZN)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editForm.preco_total}
-                  onChange={(e) => setEditForm({ ...editForm, preco_total: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  0 = apenas venda por capítulo avulso
-                </p>
+                <Input type="number" step="0.01" min="0" value={editForm.preco_total} onChange={(e) => setEditForm({ ...editForm, preco_total: e.target.value })} />
+                <p className="text-xs text-muted-foreground mt-1">0 = apenas venda por capítulo avulso</p>
               </div>
-              <Button onClick={saveEditBook} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-                <Save className="h-4 w-4 mr-1" /> Salvar Alterações
-              </Button>
+              <Button onClick={saveEditBook} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Save className="h-4 w-4 mr-1" /> Salvar Alterações</Button>
             </div>
           )}
         </DialogContent>
@@ -473,50 +402,30 @@ export default function AuthorDashboard() {
       {/* Profile Dialog */}
       <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Meu Perfil de Autor</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Meu Perfil de Autor</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Biografia</Label>
-              <Textarea
-                value={profileForm.biografia}
-                onChange={(e) => setProfileForm({ ...profileForm, biografia: e.target.value })}
-                placeholder="Escreva algo sobre você e sua obra literária..."
-                rows={4}
-                maxLength={500}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {profileForm.biografia.length}/500 caracteres
-              </p>
+              <Textarea value={profileForm.biografia} onChange={(e) => setProfileForm({ ...profileForm, biografia: e.target.value })} placeholder="Escreva algo sobre você e sua obra literária..." rows={4} maxLength={500} />
+              <p className="text-xs text-muted-foreground mt-1">{profileForm.biografia.length}/500 caracteres</p>
             </div>
             <div>
-              <Label>
-                <span className="flex items-center gap-1.5">
-                  <ImageIcon className="h-3.5 w-3.5" />
-                  URL do Avatar
-                </span>
-              </Label>
-              <Input
-                type="url"
-                value={profileForm.avatar_url}
-                onChange={(e) => setProfileForm({ ...profileForm, avatar_url: e.target.value })}
-                placeholder="https://exemplo.com/avatar.jpg"
-              />
-              {profileForm.avatar_url && (
-                <div className="mt-2">
-                  <img
-                    src={profileForm.avatar_url}
-                    alt="Avatar"
-                    className="w-16 h-16 rounded-full object-cover border-2 border-amber-200 dark:border-amber-800"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              )}
+              <Label><span className="flex items-center gap-1.5"><ImageIcon className="h-3.5 w-3.5" /> Avatar</span></Label>
+              <div className="mt-1.5 space-y-2">
+                <input ref={profileFileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleProfileAvatarUpload} className="hidden" />
+                <Button type="button" variant="outline" size="sm" disabled={profileUploading} onClick={() => profileFileRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5 mr-1.5" /> {profileUploading ? 'Enviando...' : 'Enviar foto'}
+                </Button>
+                <Input type="url" value={profileForm.avatar_url} onChange={(e) => setProfileForm({ ...profileForm, avatar_url: e.target.value })} placeholder="ou cole uma URL" />
+                {profileForm.avatar_url && (
+                  <div className="relative inline-block">
+                    <img src={profileForm.avatar_url} alt="Avatar" className="w-16 h-16 rounded-full object-cover border-2 border-amber-200 dark:border-amber-800" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <button type="button" onClick={() => setProfileForm({ ...profileForm, avatar_url: '' })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"><X className="h-3 w-3" /></button>
+                  </div>
+                )}
+              </div>
             </div>
-            <Button onClick={saveProfile} className="w-full bg-amber-600 hover:bg-amber-700 text-white">
-              <Save className="h-4 w-4 mr-1" /> Salvar Perfil
-            </Button>
+            <Button onClick={saveProfile} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Save className="h-4 w-4 mr-1" /> Salvar Perfil</Button>
           </div>
         </DialogContent>
       </Dialog>
