@@ -7,7 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX } from 'lucide-react';
+import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Chapter {
   id: string;
@@ -42,6 +47,7 @@ export default function BookDetailPage() {
   const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
   const [ownsFullBook, setOwnsFullBook] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [purchaseConfirm, setPurchaseConfirm] = useState<{ type: 'chapter' | 'full'; id?: string; price: number; name: string } | null>(null);
 
   useEffect(() => {
     if (bookId) {
@@ -75,49 +81,44 @@ export default function BookDetailPage() {
     }
   }
 
-  async function handlePurchase(chapterId: string) {
-    if (!user) {
-      navigate('login');
-      return;
-    }
-    setPurchasing(chapterId);
+  async function executePurchase(type: 'chapter' | 'full', id?: string) {
+    if (!user) { navigate('login'); return; }
+    const purchasingKey = type === 'full' ? 'full-book' : (id || '');
+    setPurchasing(purchasingKey);
     try {
+      const body = type === 'full' ? { bookId: book!.id } : { chapterId: id };
       const res = await apiFetch<{ success: boolean; novoSaldo: number }>('/api/library', {
         method: 'POST',
-        body: JSON.stringify({ chapterId }),
+        body: JSON.stringify(body),
       });
       useAppStore.getState().updateBalance(res.novoSaldo);
-      setPurchasedIds((prev) => new Set([...prev, chapterId]));
-      loadPurchased();
+      toast.success(type === 'full' ? 'Livro completo adquirido!' : 'Capítulo adquirido!');
+      if (type === 'full') {
+        setOwnsFullBook(true);
+        setPurchasedIds(new Set(book!.chapters.map((c) => c.id)));
+      } else {
+        setPurchasedIds((prev) => new Set([...prev, id!]));
+        loadPurchased();
+      }
     } catch (err) {
-      setPurchaseError((err as Error).message);
-      setTimeout(() => setPurchaseError(null), 4000);
+      toast.error((err as Error).message);
     } finally {
       setPurchasing(null);
+      setPurchaseConfirm(null);
     }
   }
 
-  async function handleBuyFullBook() {
-    if (!user) {
-      navigate('login');
-      return;
-    }
+  function handlePurchase(chapterId: string) {
+    if (!user) { navigate('login'); return; }
+    const chapter = book?.chapters.find(c => c.id === chapterId);
+    if (!chapter) return;
+    setPurchaseConfirm({ type: 'chapter', id: chapterId, price: chapter.preco_capitulo, name: chapter.titulo });
+  }
+
+  function handleBuyFullBook() {
+    if (!user) { navigate('login'); return; }
     if (!book || book.preco_total <= 0) return;
-    setPurchasing('full-book');
-    try {
-      const res = await apiFetch<{ success: boolean; novoSaldo: number }>('/api/library', {
-        method: 'POST',
-        body: JSON.stringify({ bookId: book.id }),
-      });
-      useAppStore.getState().updateBalance(res.novoSaldo);
-      setOwnsFullBook(true);
-      setPurchasedIds(new Set(book.chapters.map((c) => c.id)));
-    } catch (err) {
-      setPurchaseError((err as Error).message);
-      setTimeout(() => setPurchaseError(null), 4000);
-    } finally {
-      setPurchasing(null);
-    }
+    setPurchaseConfirm({ type: 'full', price: book.preco_total, name: book.titulo });
   }
 
   function handleRead(chapter: Chapter) {
@@ -265,7 +266,7 @@ export default function BookDetailPage() {
             </div>
           </div>
 
-          {/* Purchase error toast */}
+          {/* Purchase error (fallback) */}
           {purchaseError && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
               {purchaseError}
@@ -474,6 +475,41 @@ export default function BookDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Purchase Confirmation Dialog */}
+      <AlertDialog open={!!purchaseConfirm} onOpenChange={(open) => !open && setPurchaseConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Compra</AlertDialogTitle>
+            <AlertDialogDescription>
+              {purchaseConfirm?.type === 'full' ? (
+                <>
+                  <p>Deseja comprar o livro completo <strong>{purchaseConfirm.name}</strong>?</p>
+                  <p className="mt-2">Valor: <strong>{purchaseConfirm.price.toFixed(2)} MZN</strong></p>
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Saldo após compra: <Wallet className="inline h-3 w-3 mr-0.5" />{Math.max(0, user.saldo_carteira - purchaseConfirm.price).toFixed(2)} MZN</p>}
+                </>
+              ) : (
+                <>
+                  <p>Deseja comprar o capítulo <strong>{purchaseConfirm?.name}</strong>?</p>
+                  <p className="mt-2">Valor: <strong>{purchaseConfirm?.price.toFixed(2)} MZN</strong></p>
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Saldo após compra: <Wallet className="inline h-3 w-3 mr-0.5" />{Math.max(0, user.saldo_carteira - (purchaseConfirm?.price || 0)).toFixed(2)} MZN</p>}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={!!purchasing}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => purchaseConfirm && executePurchase(purchaseConfirm.type, purchaseConfirm.id)}
+              disabled={!!purchasing}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {purchasing ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <ShoppingBag className="h-4 w-4 mr-1.5" />}
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

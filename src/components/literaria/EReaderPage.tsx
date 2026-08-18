@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Moon, Sun, ChevronLeft, ChevronRight, BookOpen, List, X } from 'lucide-react';
 import CommentsSection from '@/components/literaria/CommentsSection';
+import { type SectionKey, SECTION_LABELS } from '@/lib/constants';
 
 interface ChapterListItem {
   id: string;
@@ -36,14 +37,7 @@ interface ChapterData {
   };
 }
 
-type SectionKey = 'ficha_tecnica' | 'dedicatoria' | 'epigrafe' | 'epilogo';
-
-const SECTION_LABELS: Record<SectionKey, string> = {
-  ficha_tecnica: 'Ficha Técnica',
-  dedicatoria: 'Dedicatória',
-  epigrafe: 'Epígrafe',
-  epilogo: 'Epílogo',
-};
+const getSectionLabel = (key: SectionKey) => SECTION_LABELS[key].label;
 
 function renderProseText(text: string) {
   return text.split('\n').map((paragraph, i) => {
@@ -252,7 +246,7 @@ export default function EReaderPage() {
         >
           <header className="mb-10 pb-8 border-b border-border/30">
             <h1 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">
-              {SECTION_LABELS[section]}
+              {getSectionLabel(section)}
             </h1>
             <p className="text-sm text-muted-foreground">
               {sectionBook.titulo}

@@ -1,0 +1,10 @@
+const fs = require('fs');
+let c = fs.readFileSync('/home/z/my-project/src/components/literaria/NewBookPage.tsx','utf8');
+const start = c.indexOf("import { ArrowLeft");
+const sectionIdx = c.indexOf('SECTION_LABELS');
+const end = c.indexOf('};', sectionIdx) + 2;
+const endLine = c.indexOf('\n', end);
+const replacement = "import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp } from 'lucide-react';\nimport { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS } from '@/lib/constants';\n";
+c = c.substring(0, start) + replacement + c.substring(endLine);
+fs.writeFileSync('/home/z/my-project/src/components/literaria/NewBookPage.tsx', c);
+console.log('Done');

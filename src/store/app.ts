@@ -9,10 +9,7 @@ export type ViewName =
   | 'register'
   | 'wallet'
   | 'library'
-  | 'new-book'
-  | 'edit-book'
-  | 'new-chapter'
-  | 'book-chapters';
+  | 'new-book';
 
 export interface User {
   id: string;
@@ -49,7 +46,12 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   currentView: 'home',
   viewParams: {},
-  navigate: (view, params = {}) => set({ currentView: view, viewParams: params }),
+  navigate: (view, params = {}) => {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+    set({ currentView: view, viewParams: params });
+  },
 
   user: null,
   token: null,

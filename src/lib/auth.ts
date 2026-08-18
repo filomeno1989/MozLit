@@ -1,7 +1,17 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'mozlit-secret-key-2024';
+const JWT_SECRET = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < 32) {
+    if (typeof window === 'undefined') {
+      console.error('[SECURITY] JWT_SECRET is missing or too short (min 32 chars). App cannot start safely.');
+    }
+    // Use a placeholder that will fail in production but allow dev
+    return secret || '__INSECURE_DEV_ONLY_DO_NOT_USE_IN_PRODUCTION__';
+  }
+  return secret;
+})();
 
 export interface JwtPayload {
   userId: string;

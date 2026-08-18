@@ -35,12 +35,6 @@ function ViewRouter() {
       return <LibraryPage />;
     case 'new-book':
       return <NewBookPage />;
-    case 'edit-book':
-      return <NewBookPage />;
-    case 'book-chapters':
-      return <AuthorDashboard />;
-    case 'new-chapter':
-      return <AuthorDashboard />;
     default:
       return <HomePage />;
   }

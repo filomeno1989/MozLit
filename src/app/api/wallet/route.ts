@@ -29,6 +29,13 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
 
+    // Security: only ADMIN can manually credit wallets in production
+    // In simulation/demo mode, allow self-service deposits
+    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+    if (!isDemo && payload.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Depósitos manuais apenas disponíveis através de integração de pagamento.' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { tipo, valor } = body;
 

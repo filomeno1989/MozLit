@@ -9,37 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp } from 'lucide-react';
+import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS } from '@/lib/constants';
 
-const CATEGORIAS_SUGESTOES = [
-  'Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio',
-  'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror',
-  'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro',
-];
-
-type SectionKey = 'ficha_tecnica' | 'dedicatoria' | 'epigrafe' | 'epilogo';
-
-const SECTION_LABELS: Record<SectionKey, { label: string; hint: string; icon: string }> = {
-  ficha_tecnica: {
-    label: 'Ficha Técnica',
-    hint: 'ISBN, editora, ano de publicação, edição, etc.',
-    icon: '📋',
-  },
-  dedicatoria: {
-    label: 'Dedicatória',
-    hint: 'A quem o autor dedica a obra (ex: "A minha mãe...")',
-    icon: '💌',
-  },
-  epigrafe: {
-    label: 'Epígrafe',
-    hint: 'Citação ou frase inspiradora no início da obra.',
-    icon: '💬',
-  },
-  epilogo: {
-    label: 'Epílogo',
-    hint: 'Texto final do autor, notas, agradecimentos.',
-    icon: '📝',
-  },
-};
 
 export default function NewBookPage() {
   const { navigate, token } = useAppStore();

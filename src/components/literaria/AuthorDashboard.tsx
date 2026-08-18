@@ -14,21 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
-
-const CATEGORIAS_SUGESTOES = [
-  'Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio',
-  'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror',
-  'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro',
-];
-
-type SectionKey = 'ficha_tecnica' | 'dedicatoria' | 'epigrafe' | 'epilogo';
-
-const SECTION_LABELS: Record<SectionKey, { label: string; hint: string; icon: string }> = {
-  ficha_tecnica: { label: 'Ficha Técnica', hint: 'ISBN, editora, ano, edição...', icon: '📋' },
-  dedicatoria: { label: 'Dedicatória', hint: 'A quem dedica a obra.', icon: '💌' },
-  epigrafe: { label: 'Epígrafe', hint: 'Citação ou frase inspiradora.', icon: '💬' },
-  epilogo: { label: 'Epílogo', hint: 'Notas finais, agradecimentos.', icon: '📝' },
-};
+import { toast } from 'sonner';
+import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS } from '@/lib/constants';
 
 interface DashboardData {
   totalGanhos: number;
@@ -136,7 +123,7 @@ export default function AuthorDashboard() {
     try {
       await apiFetch(`/api/books/${bookId}`, { method: 'PATCH', body: JSON.stringify({ status: 'PUBLICADO' }) });
       loadDashboard();
-    } catch (err) { alert((err as Error).message); }
+    } catch (err) { toast.error((err as Error).message); }
   }
 
   async function deleteBook() {
@@ -146,7 +133,8 @@ export default function AuthorDashboard() {
       await apiFetch(`/api/books/${deleteTarget}`, { method: 'DELETE' });
       setDeleteTarget(null);
       loadDashboard();
-    } catch (err) { alert((err as Error).message); }
+      toast.success('Obra excluída com sucesso.');
+    } catch (err) { toast.error((err as Error).message); }
     finally { setDeleting(false); }
   }
 
@@ -209,7 +197,7 @@ export default function AuthorDashboard() {
         epigrafe: b.epigrafe || '',
         epilogo: b.epilogo || '',
       });
-    }).catch(() => alert('Erro ao carregar dados do livro'));
+    }).catch(() => toast.error('Erro ao carregar dados do livro'));
   }
 
   // Multi-categoria helpers for edit
@@ -244,7 +232,7 @@ export default function AuthorDashboard() {
     try {
       const url = await uploadFile(file);
       setEditForm((f) => ({ ...f, capa_url: url }));
-    } catch (err) { alert((err as Error).message); }
+    } catch (err) { toast.error((err as Error).message); }
     finally { setEditUploading(false); if (editFileRef.current) editFileRef.current.value = ''; }
   }
 
@@ -255,7 +243,7 @@ export default function AuthorDashboard() {
     try {
       const url = await uploadFile(file);
       setProfileForm((f) => ({ ...f, avatar_url: url }));
-    } catch (err) { alert((err as Error).message); }
+    } catch (err) { toast.error((err as Error).message); }
     finally { setProfileUploading(false); if (profileFileRef.current) profileFileRef.current.value = ''; }
   }
 
@@ -278,7 +266,8 @@ export default function AuthorDashboard() {
       await apiFetch(`/api/books/${editingBook.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       setEditingBook(null);
       loadDashboard();
-    } catch (err) { alert((err as Error).message); }
+      toast.success('Obra actualizada com sucesso.');
+    } catch (err) { toast.error((err as Error).message); }
   }
 
   async function saveProfile() {
@@ -286,7 +275,8 @@ export default function AuthorDashboard() {
       await apiFetch('/api/author/profile', { method: 'PATCH', body: JSON.stringify(profileForm) });
       setShowProfileDialog(false);
       loadDashboard();
-    } catch (err) { alert((err as Error).message); }
+      toast.success('Perfil actualizado com sucesso.');
+    } catch (err) { toast.error((err as Error).message); }
   }
 
   if (loading) {
@@ -373,11 +363,11 @@ export default function AuthorDashboard() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 sm:ml-2">
                     <Button size="sm" variant="ghost" onClick={() => loadBookChapters(livro.id)}><FileText className="h-3.5 w-3.5 mr-1" /> Capítulos</Button>
-                    <Button size="sm" variant="ghost" onClick={() => openEditBook(livro)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost" onClick={() => openEditBook(livro)} aria-label="Editar livro"><Pencil className="h-3.5 w-3.5" /></Button>
                     {livro.status !== 'PUBLICADO' && (
                       <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}><Eye className="h-3.5 w-3.5 mr-1" /> Publicar</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(livro.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(livro.id)} aria-label="Excluir livro"><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               ))}
@@ -386,10 +376,31 @@ export default function AuthorDashboard() {
         </CardContent>
       </Card>
 
+      {data && data.transacoes && data.transacoes.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader><CardTitle className="text-lg">Histórico de Transacções</CardTitle></CardHeader>
+          <CardContent>
+            <div className="divide-y divide-border/40">
+              {data.transacoes.map((tx, i) => (
+                <div key={i} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0">
+                    <p className="text-sm truncate">{tx.descricao}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  </div>
+                  <span className={`text-sm font-medium shrink-0 ml-3 ${tx.valor > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                    {tx.valor > 0 ? '+' : ''}{tx.valor.toFixed(2)} MZN
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Chapter Dialog */}
       <Dialog open={showChapterDialog} onOpenChange={setShowChapterDialog}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle><DialogDescription>Gerencie os capítulos desta obra.</DialogDescription></DialogHeader>
           {bookChapters && (
             <div className="space-y-4">
               {chapterError && (
@@ -429,7 +440,7 @@ export default function AuthorDashboard() {
       {/* Edit Book Dialog */}
       <Dialog open={!!editingBook} onOpenChange={(open) => !open && setEditingBook(null)}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Editar Obra</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Editar Obra</DialogTitle><DialogDescription>Altere os detalhes da sua obra literária.</DialogDescription></DialogHeader>
           {editingBook && (
             <div className="space-y-4">
               <div><Label>Título</Label><Input value={editForm.titulo} onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })} /></div>
@@ -538,7 +549,7 @@ export default function AuthorDashboard() {
       {/* Profile Dialog */}
       <Dialog open={showProfileDialog} onOpenChange={setShowProfileDialog}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Meu Perfil de Autor</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Meu Perfil de Autor</DialogTitle><DialogDescription>Actualize a sua biografia e foto de perfil.</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Biografia</Label>
@@ -567,8 +578,6 @@ export default function AuthorDashboard() {
       </Dialog>
       </>
       )}
-
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

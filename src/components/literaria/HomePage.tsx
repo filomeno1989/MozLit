@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,6 +26,10 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
     <Card
       className="group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 border-border/50"
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
+      tabIndex={0}
+      role="button"
+      aria-label={`Abrir livro: ${book.titulo} por ${book.autor.nome}`}
     >
       {/* Cover area */}
       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
@@ -112,16 +116,18 @@ export default function HomePage() {
     new Set(allBooks.flatMap((b) => b.categorias))
   ).sort();
 
-  useEffect(() => {
-    loadBooks();
-  }, [categoriaAtiva]);
+  const initialLoadDone = useRef(false);
 
-  // Load all books once (no filter) to extract categories
   useEffect(() => {
-    apiFetch<Book[]>('/api/books')
-      .then(setAllBooks)
-      .catch(() => {});
-  }, []);
+    if (initialLoadDone.current) {
+      // Category changed — refetch filtered books
+      loadBooks();
+    } else {
+      // Initial load — fetch once, use for both books and categories
+      initialLoadDone.current = true;
+      loadBooks();
+    }
+  }, [categoriaAtiva]);
 
   async function loadBooks() {
     setLoading(true);

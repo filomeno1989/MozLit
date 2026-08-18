@@ -135,6 +135,10 @@ export default function LibraryPage() {
                       key={fb.bookId}
                       className="group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-border/50"
                       onClick={() => navigate('book-detail', { bookId: fb.bookId })}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('book-detail', { bookId: fb.bookId }); } }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`Abrir livro: ${fb.titulo}`}
                     >
                       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
                         {hasCover ? (
@@ -188,6 +192,10 @@ export default function LibraryPage() {
                           chapterId: item.chapter!.id,
                           bookId: item.chapter!.livro.id,
                         })}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('reader', { chapterId: item.chapter!.id, bookId: item.chapter!.livro.id }); } }}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`Ler capítulo: ${item.chapter.titulo}`}
                       >
                         <div className="min-w-0 flex-1 flex items-center gap-3">
                           <div className="w-8 h-8 rounded bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">

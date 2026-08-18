@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, UserPlus, Loader2, AlertCircle } from 'lucide-react';
+import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 function getPasswordStrength(senha: string): { label: string; color: string; width: string } {
   if (!senha) return { label: '', color: 'bg-muted', width: 'w-0' };
@@ -30,6 +30,7 @@ export default function RegisterPage() {
   const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const strength = getPasswordStrength(senha);
 
@@ -92,15 +93,26 @@ export default function RegisterPage() {
             </div>
             <div>
               <Label htmlFor="senha">Senha</Label>
-              <Input
-                id="senha"
-                type="password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                placeholder="Mínimo 6 caracteres"
-                required
-                minLength={6}
-              />
+              <div className="relative">
+                <Input
+                  id="senha"
+                  type={showPassword ? 'text' : 'password'}
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  placeholder="Mínimo 6 caracteres"
+                  required
+                  minLength={6}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {senha && (
                 <div className="mt-2 space-y-1">
                   <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">

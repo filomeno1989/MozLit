@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Wallet as WalletIcon, Plus, CreditCard, History } from 'lucide-react';
+import { Wallet as WalletIcon, Plus, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function WalletPage() {
   const { user, updateBalance } = useAppStore();
@@ -25,16 +26,8 @@ export default function WalletPage() {
   async function loadTransactions() {
     setLoading(true);
     try {
-      // We'll use the author endpoint which returns recent transactions, or library
-      // For simplicity, just get wallet balance and show deposit history
       const saldoData = await apiFetch<{ saldo: number }>('/api/wallet');
       updateBalance(saldoData.saldo);
-      // Load user transactions from a combined query
-      const { db } = await import('@/lib/db');
-      if (user) {
-        const txs = await fetch('/api/author');
-        // Fallback - show empty
-      }
       setTransactions([]);
     } catch {
       // ignore
@@ -46,7 +39,7 @@ export default function WalletPage() {
   async function handleDeposit() {
     const valor = parseFloat(depositAmount);
     if (!valor || valor <= 0) {
-      alert('Insira um valor válido.');
+      toast.error('Insira um valor válido.');
       return;
     }
     setDepositing(true);
@@ -57,9 +50,9 @@ export default function WalletPage() {
       });
       updateBalance(data.saldo);
       setDepositAmount('');
-      alert(`Carregamento de ${valor.toFixed(2)} MZN via ${depositType} realizado com sucesso!`);
+      toast.success('Carregamento realizado!', { description: `${valor.toFixed(2)} MZN via ${depositType}` });
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setDepositing(false);
     }
@@ -124,7 +117,7 @@ export default function WalletPage() {
               disabled={depositing}
               className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
             >
-              {depositing ? '...' : 'Carregar'}
+              {depositing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Carregar'}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">

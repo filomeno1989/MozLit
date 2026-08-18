@@ -8,6 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { MessageCircle, Reply, Send, Trash2, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface CommentUser {
   id: string;
@@ -121,9 +126,7 @@ function SingleComment({
             </button>
             {canDelete && (
               <button
-                onClick={() => {
-                  if (confirm('Eliminar este comentário?')) onDelete(comment.id);
-                }}
+                onClick={() => setDeleteTarget(comment.id)}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors px-1.5 py-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
               >
                 <Trash2 className="h-3 w-3" /> Eliminar
@@ -152,6 +155,7 @@ export default function CommentsSection({
   const [replyContent, setReplyContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const loadComments = useCallback(async () => {
     try {
@@ -187,7 +191,7 @@ export default function CommentsSection({
       setComments((prev) => [{ ...created, replies: [] }, ...prev]);
       setNewComment('');
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -214,7 +218,7 @@ export default function CommentsSection({
       setReplyContent('');
       setExpandedReplies((prev) => new Set([...prev, commentId]));
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     } finally {
       setReplyingTo(null);
     }
@@ -233,7 +237,7 @@ export default function CommentsSection({
           .filter((c) => c.id !== commentId)
       );
     } catch (err) {
-      alert((err as Error).message);
+      toast.error((err as Error).message);
     }
   }
 
@@ -435,6 +439,22 @@ export default function CommentsSection({
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar comentário</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja eliminar este comentário? Esta acção não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (deleteTarget) { onDelete(deleteTarget); setDeleteTarget(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }
