@@ -342,9 +342,9 @@ export default function AuthorDashboard() {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {livro.categorias.join(', ')} — {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
-                        {livro.preco_total > 0 && ` — Completo: ${livro.preco_total.toFixed(2)} MZN`}
-                        {' — '}Receita: {livro.receitaEstimada.toFixed(2)} MZN
+                        {livro.categorias.join(', ')} - {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
+                        {livro.preco_total > 0 && ` - Completo: ${livro.preco_total.toFixed(2)} MZN`}
+                        {' - '}Receita: {livro.receitaEstimada.toFixed(2)} MZN
                       </p>
                     </div>
                   </div>
@@ -366,7 +366,7 @@ export default function AuthorDashboard() {
       {/* Chapter Dialog */}
       <Dialog open={showChapterDialog} onOpenChange={setShowChapterDialog}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Capítulos — {bookChapters?.titulo}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle></DialogHeader>
           {bookChapters && (
             <div className="space-y-4">
               <div className="space-y-1.5 max-h-40 overflow-y-auto">

@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MozLit — Plataforma Literária Moçambicana",
+  title: "MozLit - Plataforma Literária Moçambicana",
   description: "Descubra, leia e publique literatura moçambicana. Uma plataforma de leitura, publicação e monetização.",
   keywords: ["MozLit", "literatura", "Moçambique", "livros", "escritores", "leitura"],
   authors: [{ name: "MozLit" }],
   openGraph: {
-    title: "MozLit — Plataforma Literária Moçambicana",
+    title: "MozLit - Plataforma Literária Moçambicana",
     description: "Descubra, leia e publique literatura moçambicana.",
     type: "website",
   },

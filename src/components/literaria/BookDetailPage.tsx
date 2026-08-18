@@ -302,7 +302,7 @@ export default function BookDetailPage() {
                     <div>
                       <p className="font-medium text-sm">Comprar Livro Completo</p>
                       <p className="text-xs text-muted-foreground">
-                        Acesso a todos os capítulos — presentes e futuros
+                        Acesso a todos os capítulos - presentes e futuros
                       </p>
                     </div>
                   </div>
@@ -328,7 +328,7 @@ export default function BookDetailPage() {
             <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/50 mb-4">
               <BookMarked className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               <span className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
-                Você possui o livro completo — todos os capítulos desbloqueados
+                Você possui o livro completo - todos os capítulos desbloqueados
               </span>
             </div>
           )}

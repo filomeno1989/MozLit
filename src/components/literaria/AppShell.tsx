@@ -188,7 +188,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Footer */}
       <footer className="border-t py-6 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>MozLit — Plataforma Literária Moçambicana</p>
+          <p>MozLit - Plataforma Literária Moçambicana</p>
           <p className="mt-1">Leitura, Publicação e Monetização</p>
         </div>
       </footer>

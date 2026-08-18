@@ -209,7 +209,7 @@ export default function EReaderPage() {
                   userSelect: 'none',
                 }}
               >
-                {user?.nome || 'Leitor'} — MozLit
+                {user?.nome || 'Leitor'} - MozLit
               </div>
             ))
           )}
@@ -299,7 +299,7 @@ export default function EReaderPage() {
                 userSelect: 'none',
               }}
             >
-              {user?.nome || 'Leitor'} — MozLit
+              {user?.nome || 'Leitor'} - MozLit
             </div>
           ))
         )}
@@ -374,7 +374,7 @@ export default function EReaderPage() {
             {chapter.titulo}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Capítulo {chapter.ordem + 1} — {chapter.livro.titulo}
+            Capítulo {chapter.ordem + 1} - {chapter.livro.titulo}
           </p>
         </header>
 
