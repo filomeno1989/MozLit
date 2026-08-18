@@ -278,7 +278,12 @@ export default function BookDetailPage() {
           {/* Sinopse */}
           <div className="mb-6">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Sinopse</h2>
-            <div className="max-w-prose space-y-3">
+            <div
+              className="max-w-prose space-y-3 select-none"
+              onCopy={(e) => e.preventDefault()}
+              onCut={(e) => e.preventDefault()}
+              style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+            >
               {renderSinopse(book.sinopse, book.autor.nome)}
             </div>
           </div>

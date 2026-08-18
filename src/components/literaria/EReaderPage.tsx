@@ -67,6 +67,24 @@ export default function EReaderPage() {
   const bookId = viewParams.bookId as string | undefined;
   const section = viewParams.section as SectionKey | undefined;
 
+  // Block PrintScreen, Ctrl+Shift+I/J/S/C, Ctrl+P, and DevTools shortcuts
+  useEffect(() => {
+    function blockKey(e: KeyboardEvent) {
+      if (
+        e.key === 'PrintScreen' ||
+        (e.ctrlKey && e.shiftKey && ['I','i','J','j','S','s','C','c','3'].includes(e.key)) ||
+        (e.metaKey && e.shiftKey && ['I','i','J','j','S','s','3'].includes(e.key)) ||
+        (e.ctrlKey && e.key === 'p') ||
+        (e.metaKey && e.key === 'p')
+      ) {
+        e.preventDefault();
+        return false;
+      }
+    }
+    document.addEventListener('keydown', blockKey);
+    return () => document.removeEventListener('keydown', blockKey);
+  }, []);
+
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,14 +209,14 @@ export default function EReaderPage() {
       >
         {/* Watermark */}
         <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
-          {Array.from({ length: 12 }).map((_, row) =>
-            Array.from({ length: 4 }).map((_, col) => (
+          {Array.from({ length: 16 }).map((_, row) =>
+            Array.from({ length: 5 }).map((_, col) => (
               <div
-                key={`${row}-${col}`}
-                className="absolute text-foreground/[0.03] dark:text-foreground/[0.04] font-semibold whitespace-nowrap select-none"
+                key={`s-${row}-${col}`}
+                className="absolute text-foreground/[0.04] dark:text-foreground/[0.05] font-semibold whitespace-nowrap select-none"
                 style={{
-                  top: `${row * 10}%`,
-                  left: `${col * 30 - 5}%`,
+                  top: `${row * 7}%`,
+                  left: `${col * 25 - 5}%`,
                   transform: 'rotate(-35deg)',
                   fontSize: '1rem',
                   userSelect: 'none',
@@ -219,7 +237,7 @@ export default function EReaderPage() {
             <span className="text-xs text-muted-foreground truncate max-w-[40%] text-center">
               {sectionBook.titulo}
             </span>
-            <Button variant="ghost" size="icon" onClick={toggleDark} title="Modo noturno">
+            <Button variant="ghost" size="icon" onClick={toggleDark} aria-label="Alternar modo claro/escuro" title="Modo noturno">
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           </div>
@@ -279,16 +297,16 @@ export default function EReaderPage() {
       className="relative min-h-[calc(100vh-7rem)]"
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Watermark overlay */}
+      {/* Watermark overlay - denser for screenshot protection */}
       <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
-        {Array.from({ length: 12 }).map((_, row) =>
-          Array.from({ length: 4 }).map((_, col) => (
+        {Array.from({ length: 16 }).map((_, row) =>
+          Array.from({ length: 5 }).map((_, col) => (
             <div
-              key={`${row}-${col}`}
-              className="absolute text-foreground/[0.03] dark:text-foreground/[0.04] font-semibold whitespace-nowrap select-none"
+              key={`c-${row}-${col}`}
+              className="absolute text-foreground/[0.04] dark:text-foreground/[0.05] font-semibold whitespace-nowrap select-none"
               style={{
-                top: `${row * 10}%`,
-                left: `${col * 30 - 5}%`,
+                top: `${row * 7}%`,
+                left: `${col * 25 - 5}%`,
                 transform: 'rotate(-35deg)',
                 fontSize: '1rem',
                 userSelect: 'none',
