@@ -226,12 +226,25 @@ export default function BookDetailPage() {
             </div>
           </button>
 
-          <p className="text-sm leading-relaxed text-muted-foreground mb-4">{book.sinopse}</p>
+          {/* Divider */}
+          <div className="border-t border-border/60 my-4" />
+
+          {/* Sinopse */}
+          <div className="mb-4">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Sinopse</h2>
+            <p className="text-sm leading-relaxed text-foreground/80">{book.sinopse}</p>
+          </div>
+
+          {/* Stats */}
           <div className="flex items-center gap-4 text-sm mb-4">
-            <span className="text-muted-foreground">{book.chapters.length} capítulos</span>
-            <span className="text-muted-foreground">
-              {book.chapters.filter((c) => c.is_free).length} gratuitos
-            </span>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>{book.chapters.length} capítulos</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <BookMarked className="h-3.5 w-3.5" />
+              <span>{book.chapters.filter((c) => c.is_free).length} gratuitos</span>
+            </div>
           </div>
 
           {/* Full book purchase button */}

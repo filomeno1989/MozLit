@@ -24,52 +24,66 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
 
   return (
     <Card
-      className="group cursor-pointer overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1 border-border/50"
+      className="group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 border-border/50"
       onClick={onClick}
     >
+      {/* Cover area */}
       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
         {hasRealCover ? (
           <img
             src={book.capa_url}
             alt={book.titulo}
-            className="w-full h-full object-cover transition-transform group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="absolute inset-0 bg-gradient-to-b from-amber-800/20 via-amber-700/10 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-br from-amber-900/80 via-amber-800/60 to-amber-950/90 dark:from-amber-900/70 dark:via-amber-800/50 dark:to-amber-950/80" />
         )}
         {!hasRealCover && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-            <BookOpen className="h-10 w-10 text-amber-700/60 dark:text-amber-500/60 mb-3" />
-            <h3 className="font-semibold text-sm leading-tight line-clamp-3">{book.titulo}</h3>
+            <BookOpen className="h-10 w-10 text-amber-200/70 dark:text-amber-300/60 mb-3" />
+            <h3 className="font-bold text-sm leading-tight line-clamp-3 text-amber-100">{book.titulo}</h3>
           </div>
         )}
-        {/* First category badge on cover */}
+        {/* Category badge on cover */}
         {book.categorias.length > 0 && (
-          <Badge className="absolute top-2 right-2 bg-amber-600 text-white text-xs">
-            {book.categorias[0]}
-          </Badge>
+          <div className="absolute top-2 right-2">
+            <Badge className="bg-amber-600/90 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 hover:bg-amber-600">
+              {book.categorias[0]}
+            </Badge>
+          </div>
         )}
         {book.preco_total > 0 && (
-          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-medium">
-            {book.preco_total.toFixed(2)} MZN
+          <div className="absolute bottom-0 inset-x-0 px-2.5 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
+            <span className="text-white text-xs font-semibold">
+              {book.preco_total.toFixed(2)} MZN
+            </span>
           </div>
         )}
       </div>
-      <CardContent className="p-3">
-        {hasRealCover && <p className="font-semibold text-sm truncate mb-0.5">{book.titulo}</p>}
-        <p className="text-xs text-muted-foreground">por {book.autor.nome}</p>
-        {/* All categories as small tags */}
-        {book.categorias.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {book.categorias.map((cat) => (
-              <span key={cat} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                {cat}
-              </span>
-            ))}
-          </div>
+
+      {/* Info area - well structured */}
+      <div className="p-3 pb-3.5 space-y-2">
+        {/* Title */}
+        {hasRealCover ? (
+          <h3 className="font-bold text-sm leading-snug line-clamp-2 text-foreground">
+            {book.titulo}
+          </h3>
+        ) : (
+          <span className="sr-only">{book.titulo}</span>
         )}
-        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{book.sinopse}</p>
-      </CardContent>
+
+        {/* Author - clearly separated */}
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-400 truncate">
+          {book.autor.nome}
+        </p>
+
+        {/* Synopsis - visually distinct */}
+        {book.sinopse && (
+          <p className="text-[11px] leading-relaxed text-muted-foreground/80 line-clamp-2 border-t border-border/40 pt-2">
+            {book.sinopse}
+          </p>
+        )}
+      </div>
     </Card>
   );
 }
@@ -126,13 +140,16 @@ export default function HomePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Hero */}
-      <section className="mb-10 text-center py-12 px-4 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border border-amber-200/50 dark:border-amber-800/30">
-        <h1 className="text-3xl sm:text-4xl font-bold text-amber-900 dark:text-amber-100 mb-3">
-          Descubra Literatura Moçambicana
-        </h1>
-        <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base">
-          Uma plataforma dedicada a escritores e leitores de Moçambique. Publique, leia e monetize suas obras.
-        </p>
+      <section className="mb-10 text-center py-14 px-6 rounded-2xl bg-gradient-to-br from-amber-50 via-orange-50/50 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/15 dark:to-amber-950/30 border border-amber-200/50 dark:border-amber-800/30 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-200/30 via-transparent to-transparent dark:from-amber-800/10" />
+        <div className="relative">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-amber-900 dark:text-amber-100 mb-3 tracking-tight">
+            Descubra Literatura Moçambicana
+          </h1>
+          <p className="text-muted-foreground max-w-lg mx-auto text-sm sm:text-base leading-relaxed">
+            Uma plataforma dedicada a escritores e leitores de Moçambique.<br className="hidden sm:block"/> Publique, leia e monetize suas obras.
+          </p>
+        </div>
       </section>
 
       {/* Categorias */}
@@ -166,11 +183,13 @@ export default function HomePage() {
 
       {/* Livros */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">
+        <div className="flex items-baseline justify-between mb-5">
+          <h2 className="text-xl font-bold tracking-tight">
             {categoriaAtiva || 'Todos os Livros'}
           </h2>
-          <span className="text-sm text-muted-foreground">{books.length} obras</span>
+          <span className="text-sm text-muted-foreground font-medium">
+            {books.length} {books.length === 1 ? 'obra' : 'obras'}
+          </span>
         </div>
 
         {loading ? (
