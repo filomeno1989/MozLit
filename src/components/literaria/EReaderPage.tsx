@@ -247,12 +247,7 @@ export default function EReaderPage() {
           </header>
 
           <div
-            className={`prose prose-neutral dark:prose-invert max-w-none
-              [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem]
-              [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold
-              [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold
-              [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic`}
-              ${isItalic ? '[&_p]:italic' : ''}`}
+            className={"prose prose-neutral dark:prose-invert max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem] [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic" + (isItalic ? ' [&_p]:italic' : '')}
             style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
           >
             {renderProseText(sectionContent)}
