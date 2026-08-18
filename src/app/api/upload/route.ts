@@ -12,37 +12,45 @@ const BUCKET_NAME = 'covers';
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Supabase credentials not configured');
+  if (!url || !key) {
+    const missing = [];
+    if (!url) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+    if (!key) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+    throw new Error('Variaveis de ambiente em falta: ' + missing.join(', '));
+  }
   return createClient(url, key);
 }
 
 export async function POST(request: NextRequest) {
   try {
+    // Auth check
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
-    if (!token) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
+    if (!token) return NextResponse.json({ error: 'Autenticacao necessaria' }, { status: 401 });
     const payload = verifyToken(token);
     if (!payload || !canCreateContent(payload.role)) {
-      return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
+      return NextResponse.json({ error: 'Sem permissao' }, { status: 403 });
     }
 
+    // Get file from form
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-
     if (!file) {
       return NextResponse.json({ error: 'Nenhum ficheiro enviado' }, { status: 400 });
     }
 
+    // Validate type
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: `Tipo não permitido (${file.type}). Use JPG, PNG, WEBP ou GIF.` },
+        { error: 'Tipo nao permitido (' + file.type + '). Use JPG, PNG, WEBP ou GIF.' },
         { status: 400 }
       );
     }
 
+    // Validate size
     if (file.size > MAX_SIZE) {
       const mb = (file.size / 1024 / 1024).toFixed(1);
       return NextResponse.json(
-        { error: `Ficheiro demasiado grande (${mb}MB). Máximo 5MB.` },
+        { error: 'Ficheiro demasiado grande (' + mb + 'MB). Maximo 5MB.' },
         { status: 400 }
       );
     }
@@ -51,77 +59,75 @@ export async function POST(request: NextRequest) {
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
       return NextResponse.json(
-        { error: 'Extensão não permitida. Use JPG, PNG, WEBP ou GIF.' },
+        { error: 'Extensao nao permitida. Use JPG, PNG, WEBP ou GIF.' },
         { status: 400 }
       );
     }
 
+    // Init Supabase
     const supabase = getSupabaseAdmin();
 
     // Generate unique filename
-    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const filePath = `${safeName}`;
+    const safeName = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8) + '.' + ext;
 
+    // Convert file to buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     // Upload to Supabase Storage
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
-      .upload(filePath, buffer, {
+      .upload(safeName, buffer, {
         contentType: file.type,
         upsert: false,
       });
 
     if (uploadError) {
-      console.error('Supabase upload error:', uploadError);
+      console.error('Supabase upload error:', JSON.stringify(uploadError));
+
       // If bucket doesn't exist, try to create it
-      if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('does not exist')) {
-        const { error: createBucketError } = await supabase.storage.createBucket(BUCKET_NAME, {
+      if (uploadError.message.includes('not found') || uploadError.message.includes('does not exist')) {
+        const { error: createError } = await supabase.storage.createBucket(BUCKET_NAME, {
           public: true,
           fileSizeLimit: 5242880,
-          allowedMimeTypes: ALLOWED_TYPES,
         });
-        if (createBucketError) {
-          console.error('Bucket creation error:', createBucketError);
+        if (createError) {
+          console.error('Bucket create error:', JSON.stringify(createError));
           return NextResponse.json(
-            { error: 'Erro ao criar bucket de armazenamento. Verifique as permissões no Supabase.' },
+            { error: 'Erro de configuracao do armazenamento. Contacte o administrador.' },
             { status: 500 }
           );
         }
-        // Retry upload after creating bucket
-        const retry = await supabase.storage
+        // Retry upload
+        const { error: retryError } = await supabase.storage
           .from(BUCKET_NAME)
-          .upload(filePath, buffer, {
+          .upload(safeName, buffer, {
             contentType: file.type,
             upsert: false,
           });
-        if (retry.error) {
+        if (retryError) {
           return NextResponse.json(
-            { error: 'Erro ao enviar ficheiro. Tente novamente.' },
+            { error: 'Erro ao enviar apos recriar bucket.' },
             { status: 500 }
           );
         }
       } else {
         return NextResponse.json(
-          { error: 'Erro ao enviar ficheiro. Tente novamente.' },
+          { error: 'Erro no Supabase Storage: ' + uploadError.message },
           { status: 500 }
         );
       }
     }
 
     // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(filePath);
+    const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(safeName);
 
-    const publicUrl = urlData.publicUrl;
-
-    return NextResponse.json({ url: publicUrl, name: file.name });
-  } catch (error) {
-    console.error('Erro no upload:', error);
+    return NextResponse.json({ url: data.publicUrl, name: file.name });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Upload error:', msg);
     return NextResponse.json(
-      { error: 'Erro ao fazer upload do ficheiro. Tente novamente.' },
+      { error: msg },
       { status: 500 }
     );
   }
