@@ -102,6 +102,18 @@ export default function NewBookPage() {
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !token) return;
+
+    // Client-side validation
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      setError(`Tipo de ficheiro não suportado (${file.type}). Use JPG, PNG, WEBP ou GIF.`);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(`Ficheiro demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo 5MB.`);
+      return;
+    }
+
     setUploading(true);
     setError('');
     try {
@@ -113,13 +125,21 @@ export default function NewBookPage() {
         body: formData,
       });
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erro no upload');
+        let msg = 'Erro no upload';
+        try { const d = await res.json(); msg = d.error || msg; } catch {}
+        if (res.status === 429) msg = 'Muitas requisições. Aguarde alguns segundos e tente novamente.';
+        else if (res.status === 502) msg = 'Servidor indisponível. A página vai recarregar...';
+        throw new Error(msg);
       }
       const data = await res.json();
       setCapaUrl(data.url);
     } catch (err) {
-      setError((err as Error).message);
+      const msg = (err as Error).message;
+      setError(msg);
+      // Auto-reload on 502
+      if (msg.includes('indisponível')) {
+        setTimeout(() => window.location.reload(), 2000);
+      }
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

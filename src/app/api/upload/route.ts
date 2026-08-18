@@ -4,9 +4,17 @@ import { existsSync } from 'fs';
 import path from 'path';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 
+// Increase body size limit for file uploads
+export const maxDuration = 30;
+
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'covers');
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+
+// Ensure upload directory exists on startup
+if (!existsSync(UPLOAD_DIR)) {
+  mkdir(UPLOAD_DIR, { recursive: true }).catch(() => {});
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,14 +34,15 @@ export async function POST(request: NextRequest) {
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Tipo de ficheiro não permitido. Use JPG, PNG, WEBP ou GIF.' },
+        { error: `Tipo não permitido (${file.type}). Use JPG, PNG, WEBP ou GIF.` },
         { status: 400 }
       );
     }
 
     if (file.size > MAX_SIZE) {
+      const mb = (file.size / 1024 / 1024).toFixed(1);
       return NextResponse.json(
-        { error: 'Ficheiro demasiado grande. Máximo 5MB.' },
+        { error: `Ficheiro demasiado grande (${mb}MB). Máximo 5MB.` },
         { status: 400 }
       );
     }
@@ -53,6 +62,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: publicUrl, name: file.name });
   } catch (error) {
     console.error('Erro no upload:', error);
-    return NextResponse.json({ error: 'Erro ao fazer upload' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Erro ao fazer upload do ficheiro. Tente novamente.' },
+      { status: 500 }
+    );
   }
 }

@@ -157,11 +157,17 @@ export default function AuthorDashboard() {
 
   // --- Upload helper ---
   async function uploadFile(file: File): Promise<string> {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) throw new Error(`Tipo não suportado (${file.type}). Use JPG, PNG, WEBP ou GIF.`);
+    if (file.size > 5 * 1024 * 1024) throw new Error(`Ficheiro demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo 5MB.`);
+
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch('/api/upload', {
       method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
     });
+    if (res.status === 429) throw new Error('Muitas requisições. Aguarde e tente novamente.');
+    if (res.status === 502) throw new Error('Servidor indisponível. Recarregue a página.');
     if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro no upload'); }
     const d = await res.json();
     return d.url;
