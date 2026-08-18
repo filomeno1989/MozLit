@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import path from 'path';
+import { createClient } from '@supabase/supabase-js';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 
-// Increase body size limit for file uploads
 export const maxDuration = 30;
 
-const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'covers');
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const BUCKET_NAME = 'covers';
 
-// Ensure upload directory exists on startup
-if (!existsSync(UPLOAD_DIR)) {
-  mkdir(UPLOAD_DIR, { recursive: true }).catch(() => {});
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Supabase credentials not configured');
+  return createClient(url, key);
 }
 
 export async function POST(request: NextRequest) {
@@ -47,18 +47,76 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!existsSync(UPLOAD_DIR)) {
-      await mkdir(UPLOAD_DIR, { recursive: true });
+    // Validate extension
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return NextResponse.json(
+        { error: 'Extensão não permitida. Use JPG, PNG, WEBP ou GIF.' },
+        { status: 400 }
+      );
     }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const supabase = getSupabaseAdmin();
+
+    // Generate unique filename
     const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const filePath = path.join(UPLOAD_DIR, safeName);
+    const filePath = `${safeName}`;
 
     const bytes = await file.arrayBuffer();
-    await writeFile(filePath, Buffer.from(bytes));
+    const buffer = Buffer.from(bytes);
 
-    const publicUrl = `/uploads/covers/${safeName}`;
+    // Upload to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(filePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Supabase upload error:', uploadError);
+      // If bucket doesn't exist, try to create it
+      if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('does not exist')) {
+        const { error: createBucketError } = await supabase.storage.createBucket(BUCKET_NAME, {
+          public: true,
+          fileSizeLimit: 5242880,
+          allowedMimeTypes: ALLOWED_TYPES,
+        });
+        if (createBucketError) {
+          console.error('Bucket creation error:', createBucketError);
+          return NextResponse.json(
+            { error: 'Erro ao criar bucket de armazenamento. Verifique as permissões no Supabase.' },
+            { status: 500 }
+          );
+        }
+        // Retry upload after creating bucket
+        const retry = await supabase.storage
+          .from(BUCKET_NAME)
+          .upload(filePath, buffer, {
+            contentType: file.type,
+            upsert: false,
+          });
+        if (retry.error) {
+          return NextResponse.json(
+            { error: 'Erro ao enviar ficheiro. Tente novamente.' },
+            { status: 500 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'Erro ao enviar ficheiro. Tente novamente.' },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(filePath);
+
+    const publicUrl = urlData.publicUrl;
+
     return NextResponse.json({ url: publicUrl, name: file.name });
   } catch (error) {
     console.error('Erro no upload:', error);
