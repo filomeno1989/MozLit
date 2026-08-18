@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, Library as LibraryIcon, BookMarked, ChevronRight } from 'lucide-react';
+import { BookOpen, Library as LibraryIcon, BookMarked, ChevronRight, AlertCircle } from 'lucide-react';
 
 interface ChapterLibItem {
   id: string;
@@ -30,11 +30,12 @@ interface FullBookInfo {
 }
 
 export default function LibraryPage() {
-  const { navigate, user, token } = useAppStore();
+  const { navigate, token } = useAppStore();
   const [allItems, setAllItems] = useState<ChapterLibItem[]>([]);
   const [fullBookIds, setFullBookIds] = useState<string[]>([]);
   const [fullBooks, setFullBooks] = useState<FullBookInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (token) loadLibrary();
@@ -42,6 +43,7 @@ export default function LibraryPage() {
 
   async function loadLibrary() {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiFetch<{ items: ChapterLibItem[]; fullBookIds: string[] }>('/api/library');
       setAllItems(res.items);
@@ -64,9 +66,7 @@ export default function LibraryPage() {
         setFullBooks([]);
       }
     } catch {
-      setAllItems([]);
-      setFullBookIds([]);
-      setFullBooks([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -79,6 +79,17 @@ export default function LibraryPage() {
         {Array.from({ length: 3 }).map((_, i) => (
           <Skeleton key={i} className="h-16" />
         ))}
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <AlertCircle className="h-12 w-12 mx-auto text-destructive/50 mb-4" />
+        <p className="text-destructive font-medium mb-2">Erro ao carregar biblioteca</p>
+        <p className="text-sm text-muted-foreground mb-4">Verifique sua conexão e tente novamente.</p>
+        <Button variant="outline" onClick={loadLibrary}>Tentar novamente</Button>
       </div>
     );
   }
@@ -116,13 +127,13 @@ export default function LibraryPage() {
                   {fullBooks.length}
                 </Badge>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {fullBooks.map((fb) => {
                   const hasCover = fb.capa_url && fb.capa_url !== '/placeholder-cover.svg';
                   return (
                     <Card
                       key={fb.bookId}
-                      className="group cursor-pointer overflow-hidden transition-all hover:shadow-md hover:-translate-y-0.5 border-border/50"
+                      className="group cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 border-border/50"
                       onClick={() => navigate('book-detail', { bookId: fb.bookId })}
                     >
                       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
@@ -130,7 +141,7 @@ export default function LibraryPage() {
                           <img
                             src={fb.capa_url}
                             alt={fb.titulo}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                           />
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-amber-800/20 to-amber-900/40">
@@ -166,9 +177,10 @@ export default function LibraryPage() {
                 </Badge>
               </div>
               <Card>
-                <CardContent className="p-2">
-                  {individualChapters.map((item) => (
-                    item.chapter && (
+                <CardContent className="p-2 divide-y divide-border/40">
+                  {individualChapters
+                    .filter((item) => item.chapter)
+                    .map((item) => (
                       <div
                         key={item.id}
                         className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
@@ -188,8 +200,7 @@ export default function LibraryPage() {
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                       </div>
-                    )
-                  ))}
+                    ))}
                 </CardContent>
               </Card>
             </section>

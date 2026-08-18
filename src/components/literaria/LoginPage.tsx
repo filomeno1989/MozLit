@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, LogIn } from 'lucide-react';
+import { BookOpen, LogIn, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const { navigate, setAuth } = useAppStore();
@@ -35,8 +35,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <Card className="border-border/50">
+    <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center px-4 py-12">
+      <Card className="border-border/50 w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-3 p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 w-fit">
             <BookOpen className="h-6 w-6 text-amber-700 dark:text-amber-400" />
@@ -47,7 +47,10 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
             )}
             <div>
               <Label htmlFor="email">Email</Label>
@@ -67,16 +70,17 @@ export default function LoginPage() {
                 type="password"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
-                placeholder="••••••••"
+                placeholder="......"
                 required
               />
             </div>
             <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={loading}>
-              <LogIn className="h-4 w-4 mr-1" /> {loading ? 'Entrando...' : 'Entrar'}
+              {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <LogIn className="h-4 w-4 mr-1" />}
+              {loading ? 'Entrando...' : 'Entrar'}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
               Não tem conta?{' '}
-              <button type="button" onClick={() => navigate('register')} className="text-amber-700 dark:text-amber-400 hover:underline font-medium">
+              <button type="button" onClick={() => navigate('register')} className="text-amber-700 dark:text-amber-400 hover:underline font-medium focus-visible:underline focus-visible:outline-2 focus-visible:outline-amber-500 focus-visible:outline-offset-2">
                 Criar conta
               </button>
             </p>

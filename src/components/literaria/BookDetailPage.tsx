@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText } from 'lucide-react';
+import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX } from 'lucide-react';
 
 interface Chapter {
   id: string;
@@ -41,6 +41,7 @@ export default function BookDetailPage() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
   const [ownsFullBook, setOwnsFullBook] = useState(false);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (bookId) {
@@ -89,7 +90,8 @@ export default function BookDetailPage() {
       setPurchasedIds((prev) => new Set([...prev, chapterId]));
       loadPurchased();
     } catch (err) {
-      alert((err as Error).message);
+      setPurchaseError((err as Error).message);
+      setTimeout(() => setPurchaseError(null), 4000);
     } finally {
       setPurchasing(null);
     }
@@ -111,7 +113,8 @@ export default function BookDetailPage() {
       setOwnsFullBook(true);
       setPurchasedIds(new Set(book.chapters.map((c) => c.id)));
     } catch (err) {
-      alert((err as Error).message);
+      setPurchaseError((err as Error).message);
+      setTimeout(() => setPurchaseError(null), 4000);
     } finally {
       setPurchasing(null);
     }
@@ -153,9 +156,10 @@ export default function BookDetailPage() {
   if (!book) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <p className="text-muted-foreground">Livro não encontrado.</p>
-        <Button variant="link" onClick={() => navigate('home')} className="mt-2">
-          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar
+        <BookX className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
+        <p className="text-muted-foreground mb-2">Livro não encontrado.</p>
+        <Button variant="outline" size="sm" onClick={() => navigate('home')}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Voltar ao início
         </Button>
       </div>
     );
@@ -236,11 +240,8 @@ export default function BookDetailPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">{book.titulo}</h1>
 
-          {/* Author info with avatar */}
-          <button
-            onClick={() => {}}
-            className="flex items-center gap-3 mb-4 group text-left"
-          >
+          {/* Author info */}
+          <div className="flex items-center gap-3 mb-4 group">
             {book.autor.avatar_url ? (
               <img
                 src={book.autor.avatar_url}
@@ -262,7 +263,14 @@ export default function BookDetailPage() {
                 </p>
               )}
             </div>
-          </button>
+          </div>
+
+          {/* Purchase error toast */}
+          {purchaseError && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+              {purchaseError}
+            </div>
+          )}
 
           {/* Divider */}
           <div className="border-t border-border/60 my-5" />
@@ -312,7 +320,7 @@ export default function BookDetailPage() {
                     className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
                   >
                     {purchasing === 'full-book' ? (
-                      <span className="animate-pulse">...</span>
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
                         <BookMarked className="h-4 w-4 mr-1.5" />
@@ -340,7 +348,7 @@ export default function BookDetailPage() {
         <CardHeader>
           <CardTitle className="text-lg">Conteúdo</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="max-h-[50vh] overflow-y-auto space-y-2">
           {/* Pre-chapter sections (clickable) */}
           {book.ficha_tecnica && (
             <button
@@ -431,7 +439,7 @@ export default function BookDetailPage() {
                           className="bg-amber-600 hover:bg-amber-700 text-white"
                         >
                           {purchasing === chapter.id ? (
-                            <span className="animate-pulse">...</span>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <ShoppingBag className="h-3.5 w-3.5 mr-1" />
                           )}

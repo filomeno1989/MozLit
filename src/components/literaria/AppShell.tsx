@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { useAppStore, type ViewName } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   BookOpen,
   Home,
@@ -37,7 +39,7 @@ function NavLinks({
   onClick?: () => void;
 }) {
   return (
-    <nav className="flex flex-col gap-1">
+    <nav className='flex flex-col gap-1'>
       {navItems
         .filter((item) => {
           if (item.auth && !user) return false;
@@ -58,7 +60,7 @@ function NavLinks({
                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             )}
           >
-            <item.icon className="h-4 w-4" />
+            <item.icon className='h-4 w-4' />
             {item.label}
           </button>
         ))}
@@ -68,50 +70,68 @@ function NavLinks({
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, currentView, navigate, isDark, toggleDark, sidebarOpen, setSidebarOpen, clearAuth } = useAppStore();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  function handleLogout() {
+    clearAuth();
+    navigate('home');
+    setSidebarOpen(false);
+    setShowLogoutDialog(false);
+  }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-foreground">
+    <div className='min-h-screen flex flex-col bg-background text-foreground'>
+      {/* Logout confirmation dialog */}
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent className='max-w-sm'>
+          <DialogHeader>
+            <DialogTitle>Sair da conta</DialogTitle>
+            <DialogDescription>Tem certeza que deseja sair da sua conta?</DialogDescription>
+          </DialogHeader>
+          <div className='flex justify-end gap-2'>
+            <Button variant='outline' onClick={() => setShowLogoutDialog(false)}>Cancelar</Button>
+            <Button variant='destructive' onClick={handleLogout}>Sair</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="max-w-7xl mx-auto flex h-14 items-center px-4 gap-3">
+      <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+        <div className='max-w-7xl mx-auto flex h-14 items-center px-4 gap-3'>
           {/* Mobile menu */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
+            <SheetTrigger asChild className='md:hidden'>
+              <Button variant='ghost' size='icon' aria-label='Abrir menu'>
+                <Menu className='h-5 w-5' />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-64 p-4">
-              <SheetTitle className="flex items-center gap-2 text-lg font-bold mb-6">
-                <BookOpen className="h-5 w-5 text-amber-600" />
+            <SheetContent side='left' className='w-64 p-4'>
+              <SheetTitle className='flex items-center gap-2 text-lg font-bold mb-6'>
+                <BookOpen className='h-5 w-5 text-amber-600' />
                 MozLit
               </SheetTitle>
               <NavLinks user={user} currentView={currentView} navigate={navigate} onClick={() => setSidebarOpen(false)} />
-              <div className="pt-6 border-t mt-8">
+              <div className='pt-6 border-t mt-8'>
                 {user ? (
-                  <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">{user.nome}</p>
+                  <div className='space-y-3'>
+                    <p className='text-xs text-muted-foreground'>{user.nome}</p>
                     <button
-                      onClick={() => {
-                        clearAuth();
-                        navigate('home');
-                        setSidebarOpen(false);
-                      }}
-                      className="flex items-center gap-2 text-sm text-destructive hover:underline"
+                      onClick={() => setShowLogoutDialog(true)}
+                      className='flex items-center gap-2 text-sm text-destructive hover:underline'
                     >
-                      <LogOut className="h-4 w-4" /> Sair
+                      <LogOut className='h-4 w-4' /> Sair
                     </button>
                   </div>
                 ) : (
                   <Button
-                    variant="outline"
-                    className="w-full"
+                    variant='outline'
+                    className='w-full'
                     onClick={() => {
                       navigate('login');
                       setSidebarOpen(false);
                     }}
                   >
-                    <LogIn className="h-4 w-4 mr-2" /> Entrar
+                    <LogIn className='h-4 w-4 mr-2' /> Entrar
                   </Button>
                 )}
               </div>
@@ -119,13 +139,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </Sheet>
 
           {/* Logo */}
-          <button onClick={() => navigate('home')} className="flex items-center gap-2 font-bold text-lg">
-            <BookOpen className="h-5 w-5 text-amber-600" />
-            <span className="hidden sm:inline">MozLit</span>
+          <button onClick={() => navigate('home')} className='flex items-center gap-2 font-bold text-lg'>
+            <BookOpen className='h-5 w-5 text-amber-600' />
+            <span className='hidden sm:inline'>MozLit</span>
           </button>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1 ml-6">
+          <nav className='hidden md:flex items-center gap-1 ml-6'>
             {navItems
               .filter((item) => {
                 if (item.auth && !user) return false;
@@ -148,32 +168,32 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className='ml-auto flex items-center gap-2'>
             {user?.role === 'ESCRITOR' || user?.role === 'ADMIN' ? (
               <Button
-                variant="ghost"
-                size="sm"
+                variant='ghost'
+                size='sm'
                 onClick={() => navigate('new-book')}
-                className="hidden sm:flex"
+                className='hidden sm:flex'
               >
-                <Plus className="h-4 w-4 mr-1" /> Publicar
+                <Plus className='h-4 w-4 mr-1' /> Publicar
               </Button>
             ) : null}
-            <Button variant="ghost" size="icon" onClick={toggleDark}>
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            <Button variant='ghost' size='icon' onClick={toggleDark} aria-label='Alternar modo claro/escuro'>
+              {isDark ? <Sun className='h-4 w-4' /> : <Moon className='h-4 w-4' />}
             </Button>
             {user ? (
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:inline text-sm text-muted-foreground">
+              <div className='flex items-center gap-2'>
+                <span className='hidden sm:inline text-sm text-muted-foreground' aria-label='Saldo da carteira'>
                   {user.saldo_carteira.toFixed(2)} MZN
                 </span>
-                <Button variant="ghost" size="icon" onClick={() => clearAuth()}>
-                  <LogOut className="h-4 w-4" />
+                <Button variant='ghost' size='icon' onClick={() => setShowLogoutDialog(true)} aria-label='Sair da conta'>
+                  <LogOut className='h-4 w-4' />
                 </Button>
               </div>
             ) : (
-              <Button variant="default" size="sm" onClick={() => navigate('login')} className="bg-amber-600 hover:bg-amber-700 text-white">
-                <LogIn className="h-4 w-4 mr-1" /> Entrar
+              <Button variant='default' size='sm' onClick={() => navigate('login')} className='bg-amber-600 hover:bg-amber-700 text-white'>
+                <LogIn className='h-4 w-4 mr-1' /> Entrar
               </Button>
             )}
           </div>
@@ -181,15 +201,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1">
+      <main className='flex-1'>
         {children}
       </main>
 
       {/* Footer */}
-      <footer className="border-t py-6 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 text-center text-sm text-muted-foreground">
+      <footer className='border-t py-6 mt-auto'>
+        <div className='max-w-7xl mx-auto px-4 text-center text-sm text-muted-foreground'>
           <p>MozLit - Plataforma Literária Moçambicana</p>
-          <p className="mt-1">Leitura, Publicação e Monetização</p>
+          <p className='mt-1'>Leitura, Publicação e Monetização</p>
         </div>
       </footer>
     </div>

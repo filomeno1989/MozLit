@@ -127,12 +127,7 @@ export default function EReaderPage() {
     setChapterMenuOpen(false);
   }, [chapterId]);
 
-  // Anti-copy: block right-click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => e.preventDefault();
-    document.addEventListener('contextmenu', handler);
-    return () => document.removeEventListener('contextmenu', handler);
-  }, []);
+
 
   function goToChapter(id: string) {
     setChapterMenuOpen(false);
@@ -320,12 +315,14 @@ export default function EReaderPage() {
               variant="ghost"
               size="icon"
               onClick={() => setChapterMenuOpen(!chapterMenuOpen)}
+              aria-label="Todos os capítulos"
+              aria-expanded={chapterMenuOpen}
               title="Todos os capítulos"
               className={chapterMenuOpen ? 'bg-accent' : ''}
             >
               <List className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={toggleDark} title="Modo noturno">
+            <Button variant="ghost" size="icon" onClick={toggleDark} aria-label="Alternar modo claro/escuro" title="Modo noturno">
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           </div>
@@ -402,7 +399,6 @@ export default function EReaderPage() {
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Cap. {chapter.prevChapter.ordem + 1}</span>
-              <ChevronLeft className="h-4 w-4 sm:hidden" />
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
@@ -420,13 +416,12 @@ export default function EReaderPage() {
               size="sm"
               onClick={() => goToChapter(chapter.nextChapter.id)}
             >
-              <span className="hidden sm:inline">Cap. {chapter.nextChapter.ordem + 1} </span>
-              <ChevronRight className="h-4 w-4 sm:ml-1" />
-              <ChevronRight className="h-4 w-4 sm:hidden" />
+              <span className="hidden sm:inline">Cap. {chapter.nextChapter.ordem + 1}</span>
+              <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
-              Índice <ArrowLeft className="h-4 w-4 ml-1 rotate-180" />
+              Índice <ArrowLeft className="h-4 w-4 ml-1" />
             </Button>
           )}
         </div>

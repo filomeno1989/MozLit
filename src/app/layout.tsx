@@ -22,6 +22,10 @@ export const metadata: Metadata = {
     title: "MozLit - Plataforma Literária Moçambicana",
     description: "Descubra, leia e publique literatura moçambicana.",
     type: "website",
+    images: ["/og-image.png"],
+  },
+  other: {
+    "theme-color": "#d97706",
   },
 };
 

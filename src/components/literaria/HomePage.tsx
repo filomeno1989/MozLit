@@ -157,7 +157,8 @@ export default function HomePage() {
         <div className="flex flex-wrap gap-2 justify-center">
           <button
             onClick={() => setCategoriaAtiva(null)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            aria-pressed={!categoriaAtiva}
+            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-amber-500 focus-visible:outline-offset-2 ${
               !categoriaAtiva
                 ? 'bg-amber-600 text-white'
                 : 'bg-muted text-muted-foreground hover:bg-accent'
@@ -169,7 +170,8 @@ export default function HomePage() {
             <button
               key={cat}
               onClick={() => setCategoriaAtiva(cat === categoriaAtiva ? null : cat)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+              aria-pressed={cat === categoriaAtiva}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-amber-500 focus-visible:outline-offset-2 ${
                 cat === categoriaAtiva
                   ? 'bg-amber-600 text-white'
                   : 'bg-muted text-muted-foreground hover:bg-accent'
@@ -201,7 +203,15 @@ export default function HomePage() {
         ) : books.length === 0 ? (
           <div className="text-center py-16">
             <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
-            <p className="text-muted-foreground">Nenhum livro encontrado nesta categoria.</p>
+            <p className="text-muted-foreground mb-3">Nenhum livro encontrado nesta categoria.</p>
+            {categoriaAtiva && (
+              <button
+                onClick={() => setCategoriaAtiva(null)}
+                className="text-sm text-amber-700 dark:text-amber-400 hover:underline font-medium"
+              >
+                Limpar filtro
+              </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
