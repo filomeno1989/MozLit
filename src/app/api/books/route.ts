@@ -7,11 +7,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const categoria = searchParams.get('categoria');
 
+    const where: Record<string, unknown> = { status: 'PUBLICADO' };
+    if (categoria) {
+      // Search within JSON array string: '"Categoria"'
+      (where as Record<string, string>).categorias = { contains: `"${categoria}"` } as any;
+    }
+
     const books = await db.book.findMany({
-      where: {
-        status: 'PUBLICADO',
-        ...(categoria ? { categoria } : {}),
-      },
+      where,
       include: {
         autor: {
           select: { id: true, nome: true, biografia: true, avatar_url: true },
@@ -20,7 +23,13 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(books);
+    // Parse categorias JSON for each book
+    const parsed = books.map((b) => ({
+      ...b,
+      categorias: JSON.parse(b.categorias || '[]'),
+    }));
+
+    return NextResponse.json(parsed);
   } catch (error) {
     console.error('Error fetching books:', error);
     return NextResponse.json(
@@ -56,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { titulo, sinopse, categoria, capa_url, preco_total } = body;
+    const { titulo, sinopse, categorias, capa_url, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo } = body;
 
     if (!titulo || !sinopse) {
       return NextResponse.json(
@@ -65,13 +74,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate categorias is an array with at least one item
+    const cats = Array.isArray(categorias) && categorias.length > 0
+      ? categorias
+      : ['Ficção'];
+
     const book = await db.book.create({
       data: {
         titulo,
         sinopse,
-        categoria: categoria || 'Ficção',
+        categorias: JSON.stringify(cats),
         capa_url: capa_url || '/placeholder-cover.svg',
         preco_total: preco_total ?? 0,
+        ficha_tecnica: ficha_tecnica || '',
+        dedicatoria: dedicatoria || '',
+        epigrafe: epigrafe || '',
+        epilogo: epilogo || '',
         status: 'RASCUNHO',
         autorId: payload.userId,
       },
@@ -82,7 +100,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(book, { status: 201 });
+    // Return parsed categorias
+    const result = {
+      ...book,
+      categorias: JSON.parse(book.categorias || '[]'),
+    };
+
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Error creating book:', error);
     return NextResponse.json(

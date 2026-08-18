@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package } from 'lucide-react';
+import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText } from 'lucide-react';
 
 interface Chapter {
   id: string;
@@ -22,9 +22,13 @@ interface BookDetail {
   titulo: string;
   sinopse: string;
   capa_url: string;
-  categoria: string;
+  categorias: string[];
   status: string;
   preco_total: number;
+  ficha_tecnica: string;
+  dedicatoria: string;
+  epigrafe: string;
+  epilogo: string;
   autor: { id: string; nome: string; biografia: string; avatar_url: string };
   chapters: Chapter[];
 }
@@ -105,7 +109,6 @@ export default function BookDetailPage() {
       });
       useAppStore.getState().updateBalance(res.novoSaldo);
       setOwnsFullBook(true);
-      // Mark all chapters as owned
       setPurchasedIds(new Set(book.chapters.map((c) => c.id)));
     } catch (err) {
       alert((err as Error).message);
@@ -125,6 +128,11 @@ export default function BookDetailPage() {
   function hasAccess(chapter: Chapter) {
     return chapter.is_free || purchasedIds.has(chapter.id) || ownsFullBook;
   }
+
+  // Check which book sections exist
+  const hasPreSections = book && (book.ficha_tecnica || book.dedicatoria || book.epigrafe);
+  const hasPostSections = book && book.epilogo;
+  const hasAnySection = hasPreSections || hasPostSections;
 
   if (loading) {
     return (
@@ -180,9 +188,14 @@ export default function BookDetailPage() {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <Badge className="mb-3 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-            {book.categoria}
-          </Badge>
+          {/* Multi-categorias */}
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {book.categorias.map((cat) => (
+              <Badge key={cat} className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                {cat}
+              </Badge>
+            ))}
+          </div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">{book.titulo}</h1>
 
           {/* Author info with avatar */}
@@ -221,7 +234,7 @@ export default function BookDetailPage() {
             </span>
           </div>
 
-          {/* Full book purchase button (only for readers, not own book) */}
+          {/* Full book purchase button */}
           {!isOwnBook && !ownsFullBook && book.preco_total > 0 && user && (
             <Card className="mb-4 border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="p-4">
@@ -252,11 +265,6 @@ export default function BookDetailPage() {
                     )}
                   </Button>
                 </div>
-                {ownsFullBook && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
-                    ✓ Livro completo adquirido
-                  </p>
-                )}
               </CardContent>
             </Card>
           )}
@@ -271,14 +279,46 @@ export default function BookDetailPage() {
         </div>
       </div>
 
-      {/* Capítulos */}
+      {/* Capítulos + Secções */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Capítulos</CardTitle>
+          <CardTitle className="text-lg">Conteúdo</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
+          {/* Pre-chapter sections (Ficha Técnica, Dedicatória, Epígrafe) */}
+          {book.ficha_tecnica && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Ficha Técnica</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{book.ficha_tecnica}</p>
+              </div>
+            </div>
+          )}
+          {book.dedicatoria && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Dedicatória</p>
+                <p className="text-xs text-muted-foreground line-clamp-2 italic">{book.dedicatoria}</p>
+              </div>
+            </div>
+          )}
+          {book.epigrafe && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Epígrafe</p>
+                <p className="text-xs text-muted-foreground line-clamp-2 italic">{book.epigrafe}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Chapters */}
           {book.chapters.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">Nenhum capítulo disponível ainda.</p>
+            <p className="text-sm text-muted-foreground py-4">
+              {hasAnySection ? 'Nenhum capítulo disponível ainda.' : 'Nenhum conteúdo disponível ainda.'}
+            </p>
           ) : (
             book.chapters.map((chapter) => {
               const owned = hasAccess(chapter);
@@ -335,6 +375,17 @@ export default function BookDetailPage() {
                 </div>
               );
             })
+          )}
+
+          {/* Post-chapter section: Epílogo */}
+          {book.epilogo && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 mt-2">
+              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Epílogo</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{book.epilogo}</p>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>

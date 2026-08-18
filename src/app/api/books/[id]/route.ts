@@ -35,7 +35,12 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(book);
+    const result = {
+      ...book,
+      categorias: JSON.parse(book.categorias || '[]'),
+    };
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching book:', error);
     return NextResponse.json(
@@ -95,17 +100,21 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { titulo, sinopse, categoria, capa_url, status, preco_total } = body;
+    const { titulo, sinopse, categorias, capa_url, status, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo } = body;
 
     const updatedBook = await db.book.update({
       where: { id },
       data: {
         ...(titulo !== undefined && { titulo }),
         ...(sinopse !== undefined && { sinopse }),
-        ...(categoria !== undefined && { categoria }),
+        ...(categorias !== undefined && { categorias: JSON.stringify(categorias) }),
         ...(capa_url !== undefined && { capa_url }),
         ...(status !== undefined && { status }),
         ...(preco_total !== undefined && { preco_total }),
+        ...(ficha_tecnica !== undefined && { ficha_tecnica }),
+        ...(dedicatoria !== undefined && { dedicatoria }),
+        ...(epigrafe !== undefined && { epigrafe }),
+        ...(epilogo !== undefined && { epilogo }),
       },
       include: {
         autor: {
@@ -114,7 +123,12 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updatedBook);
+    const result = {
+      ...updatedBook,
+      categorias: JSON.parse(updatedBook.categorias || '[]'),
+    };
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error updating book:', error);
     return NextResponse.json(

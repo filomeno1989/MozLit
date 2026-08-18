@@ -15,14 +15,20 @@ export async function GET(
         titulo: true,
         sinopse: true,
         capa_url: true,
-        categoria: true,
+        categorias: true,
         status: true,
         preco_total: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json(books);
+    // Parse categorias JSON for each book
+    const parsed = books.map((b) => ({
+      ...b,
+      categorias: JSON.parse(b.categorias || '[]'),
+    }));
+
+    return NextResponse.json(parsed);
   } catch (error) {
     console.error('Erro ao buscar livros do autor:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

@@ -11,9 +11,22 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp } from 'lucide-react';
 
-const CATEGORIAS_SUGESTOES = ['Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio', 'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror', 'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro'];
+const CATEGORIAS_SUGESTOES = [
+  'Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio',
+  'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror',
+  'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro',
+];
+
+type SectionKey = 'ficha_tecnica' | 'dedicatoria' | 'epigrafe' | 'epilogo';
+
+const SECTION_LABELS: Record<SectionKey, { label: string; hint: string; icon: string }> = {
+  ficha_tecnica: { label: 'Ficha Técnica', hint: 'ISBN, editora, ano, edição...', icon: '📋' },
+  dedicatoria: { label: 'Dedicatória', hint: 'A quem dedica a obra.', icon: '💌' },
+  epigrafe: { label: 'Epígrafe', hint: 'Citação ou frase inspiradora.', icon: '💬' },
+  epilogo: { label: 'Epílogo', hint: 'Notas finais, agradecimentos.', icon: '📝' },
+};
 
 interface DashboardData {
   totalGanhos: number;
@@ -24,10 +37,14 @@ interface DashboardData {
   livros: Array<{
     id: string;
     titulo: string;
-    categoria: string;
+    categorias: string[];
     capa_url: string;
     status: string;
     preco_total: number;
+    ficha_tecnica: string;
+    dedicatoria: string;
+    epigrafe: string;
+    epilogo: string;
     totalCapitulos: number;
     capitulosPagos: number;
     receitaEstimada: number;
@@ -43,7 +60,11 @@ interface BookWithChapters {
   preco_total: number;
   status: string;
   sinopse: string;
-  categoria: string;
+  categorias: string[];
+  ficha_tecnica: string;
+  dedicatoria: string;
+  epigrafe: string;
+  epilogo: string;
   chapters: Array<{ id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }>;
 }
 
@@ -57,8 +78,13 @@ export default function AuthorDashboard() {
 
   // Edit book dialog
   const [editingBook, setEditingBook] = useState<BookWithChapters | null>(null);
-  const [editForm, setEditForm] = useState({ titulo: '', sinopse: '', capa_url: '', preco_total: '', categoria: '', categoriaInput: '' });
+  const [editForm, setEditForm] = useState({
+    titulo: '', sinopse: '', capa_url: '', preco_total: '',
+    categorias: [] as string[], categoriaInput: '',
+    ficha_tecnica: '', dedicatoria: '', epigrafe: '', epilogo: '',
+  });
   const [editShowCatSugg, setEditShowCatSugg] = useState(false);
+  const [editActiveSections, setEditActiveSections] = useState<SectionKey[]>([]);
   const [editUploading, setEditUploading] = useState(false);
   const editFileRef = useRef<HTMLInputElement>(null);
 
@@ -145,17 +171,50 @@ export default function AuthorDashboard() {
   function openEditBook(livro: DashboardData['livros'][0]) {
     apiFetch<BookWithChapters>(`/api/books/${livro.id}`).then((b) => {
       setEditingBook(b);
+      // Determine which sections are active (have content)
+      const active: SectionKey[] = [];
+      if (b.ficha_tecnica) active.push('ficha_tecnica');
+      if (b.dedicatoria) active.push('dedicatoria');
+      if (b.epigrafe) active.push('epigrafe');
+      if (b.epilogo) active.push('epilogo');
+      setEditActiveSections(active);
       setEditForm({
         titulo: b.titulo, sinopse: b.sinopse,
         capa_url: b.capa_url || '', preco_total: b.preco_total?.toString() ?? '0',
-        categoria: b.categoria, categoriaInput: b.categoria,
+        categorias: Array.isArray(b.categorias) ? b.categorias : [],
+        categoriaInput: '',
+        ficha_tecnica: b.ficha_tecnica || '',
+        dedicatoria: b.dedicatoria || '',
+        epigrafe: b.epigrafe || '',
+        epilogo: b.epilogo || '',
       });
     }).catch(() => alert('Erro ao carregar dados do livro'));
   }
 
+  // Multi-categoria helpers for edit
   const editCatFiltered = CATEGORIAS_SUGESTOES.filter(
-    (s) => s.toLowerCase().includes(editForm.categoriaInput.toLowerCase()) && s.toLowerCase() !== editForm.categoria.toLowerCase()
+    (s) =>
+      s.toLowerCase().includes(editForm.categoriaInput.toLowerCase()) &&
+      !editForm.categorias.some((c) => c.toLowerCase() === s.toLowerCase())
   );
+
+  function editAddCategoria(cat: string) {
+    const trimmed = cat.trim();
+    if (!trimmed) return;
+    if (editForm.categorias.some((c) => c.toLowerCase() === trimmed.toLowerCase())) return;
+    setEditForm({ ...editForm, categorias: [...editForm.categorias, trimmed], categoriaInput: '' });
+    setEditShowCatSugg(false);
+  }
+
+  function editRemoveCategoria(cat: string) {
+    setEditForm({ ...editForm, categorias: editForm.categorias.filter((c) => c !== cat) });
+  }
+
+  function editToggleSection(key: SectionKey) {
+    setEditActiveSections((prev) =>
+      prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]
+    );
+  }
 
   async function handleEditCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -182,15 +241,20 @@ export default function AuthorDashboard() {
   async function saveEditBook() {
     if (!editingBook) return;
     try {
-      await apiFetch(`/api/books/${editingBook.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          titulo: editForm.titulo, sinopse: editForm.sinopse,
-          capa_url: editForm.capa_url || undefined,
-          preco_total: parseFloat(editForm.preco_total) || 0,
-          categoria: editForm.categoria || editingBook.categoria,
-        }),
-      });
+      const payload: Record<string, unknown> = {
+        titulo: editForm.titulo,
+        sinopse: editForm.sinopse,
+        capa_url: editForm.capa_url || undefined,
+        preco_total: parseFloat(editForm.preco_total) || 0,
+        categorias: editForm.categorias,
+      };
+      // Always send section fields (empty string to clear)
+      payload.ficha_tecnica = editForm.ficha_tecnica;
+      payload.dedicatoria = editForm.dedicatoria;
+      payload.epigrafe = editForm.epigrafe;
+      payload.epilogo = editForm.epilogo;
+
+      await apiFetch(`/api/books/${editingBook.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       setEditingBook(null);
       loadDashboard();
     } catch (err) { alert((err as Error).message); }
@@ -272,7 +336,7 @@ export default function AuthorDashboard() {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {livro.categoria} — {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
+                        {livro.categorias.join(', ')} — {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
                         {livro.preco_total > 0 && ` — Completo: ${livro.preco_total.toFixed(2)} MZN`}
                         {' — '}Receita: {livro.receitaEstimada.toFixed(2)} MZN
                       </p>
@@ -339,32 +403,36 @@ export default function AuthorDashboard() {
               <div><Label>Título</Label><Input value={editForm.titulo} onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })} /></div>
               <div><Label>Sinopse</Label><Textarea value={editForm.sinopse} onChange={(e) => setEditForm({ ...editForm, sinopse: e.target.value })} rows={3} /></div>
 
-              {/* Categoria editável */}
+              {/* Multi-categoria */}
               <div>
-                <Label>Categoria</Label>
+                <Label>Categorias</Label>
                 <div className="relative mt-1.5">
                   <Input
                     value={editForm.categoriaInput}
-                    onChange={(e) => { setEditForm({ ...editForm, categoriaInput: e.target.value, categoria: '' }); setEditShowCatSugg(true); }}
+                    onChange={(e) => { setEditForm({ ...editForm, categoriaInput: e.target.value }); setEditShowCatSugg(true); }}
                     onFocus={() => setEditShowCatSugg(true)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') { e.preventDefault(); if (editForm.categoriaInput.trim()) { setEditForm({ ...editForm, categoria: editForm.categoriaInput.trim() }); setEditShowCatSugg(false); } }
-                      if (e.key === 'Backspace' && !editForm.categoriaInput && editForm.categoria) setEditForm({ ...editForm, categoria: '' });
+                      if (e.key === 'Enter') { e.preventDefault(); editAddCategoria(editForm.categoriaInput); }
+                      if (e.key === 'Backspace' && !editForm.categoriaInput && editForm.categorias.length > 0) editRemoveCategoria(editForm.categorias[editForm.categorias.length - 1]);
                     }}
                     onBlur={() => setTimeout(() => setEditShowCatSugg(false), 200)}
-                    placeholder="Digite ou seleccione..."
+                    placeholder="Adicionar categoria..."
                   />
-                  {editShowCatSugg && editCatFiltered.length > 0 && !editForm.categoria && (
+                  {editShowCatSugg && editCatFiltered.length > 0 && (
                     <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-md max-h-40 overflow-y-auto">
                       {editCatFiltered.map((cat) => (
-                        <button key={cat} type="button" onMouseDown={() => { setEditForm({ ...editForm, categoria: cat, categoriaInput: cat }); setEditShowCatSugg(false); }} className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors first:rounded-t-lg last:rounded-b-lg">{cat}</button>
+                        <button key={cat} type="button" onMouseDown={() => editAddCategoria(cat)} className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors first:rounded-t-lg last:rounded-b-lg">{cat}</button>
                       ))}
                     </div>
                   )}
-                  {editForm.categoria && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-600 text-white">{editForm.categoria}</span>
-                      <button type="button" onClick={() => setEditForm({ ...editForm, categoria: '', categoriaInput: '' })} className="text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+                  {editForm.categorias.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {editForm.categorias.map((cat) => (
+                        <span key={cat} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-600 text-white">
+                          {cat}
+                          <button type="button" onClick={() => editRemoveCategoria(cat)} className="hover:text-amber-200"><X className="h-3 w-3" /></button>
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -385,6 +453,42 @@ export default function AuthorDashboard() {
                       <button type="button" onClick={() => setEditForm({ ...editForm, capa_url: '' })} className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"><X className="h-3 w-3" /></button>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Secções opcionais */}
+              <div>
+                <Label className="text-sm font-medium">Secções Opcionais</Label>
+                <div className="space-y-2 mt-2">
+                  {(Object.keys(SECTION_LABELS) as SectionKey[]).map((key) => {
+                    const info = SECTION_LABELS[key];
+                    const isActive = editActiveSections.includes(key);
+                    return (
+                      <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => editToggleSection(key)}
+                          className="w-full flex items-center justify-between p-2.5 text-left hover:bg-accent/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">{info.icon}</span>
+                            <span className="text-sm font-medium">{info.label}</span>
+                          </div>
+                          {isActive ? <ChevronUp className="h-4 w-4 text-amber-600" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                        </button>
+                        {isActive && (
+                          <div className="px-2.5 pb-2.5">
+                            <Textarea
+                              value={editForm[key]}
+                              onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
+                              placeholder={`Escreva a ${info.label.toLowerCase()} aqui...`}
+                              rows={3}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

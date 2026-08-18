@@ -13,31 +13,60 @@ export async function GET(
 
     const chapter = await db.chapter.findUnique({
       where: { id },
-      include: { livro: { select: { autorId: true, titulo: true } } },
+      include: {
+        livro: {
+          select: {
+            autorId: true,
+            titulo: true,
+            categorias: true,
+            ficha_tecnica: true,
+            dedicatoria: true,
+            epigrafe: true,
+            epilogo: true,
+          },
+        },
+      },
     });
 
     if (!chapter) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
+    const livreData = {
+      id: chapter.livro.id,
+      titulo: chapter.livro.titulo,
+      autorId: chapter.livro.autorId,
+      categorias: JSON.parse(chapter.livro.categorias || '[]'),
+      ficha_tecnica: chapter.livro.ficha_tecnica || '',
+      dedicatoria: chapter.livro.dedicatoria || '',
+      epigrafe: chapter.livro.epigrafe || '',
+      epilogo: chapter.livro.epilogo || '',
+    };
+
+    // Determine if first/last chapter
+    const chapterCount = await db.chapter.count({ where: { livroId: chapter.livroId } });
+    const isFirstChapter = chapter.ordem === 0;
+    const isLastChapter = chapter.ordem === chapterCount - 1;
+
+    const result = {
+      id: chapter.id,
+      titulo: chapter.titulo,
+      conteudo: chapter.conteudo,
+      ordem: chapter.ordem,
+      is_free: chapter.is_free,
+      preco_capitulo: chapter.preco_capitulo,
+      livro: livreData,
+      isFirstChapter,
+      isLastChapter,
+    };
+
     // Free chapters are always accessible
     if (chapter.is_free) {
-      return NextResponse.json({
-        chapter: {
-          id: chapter.id,
-          titulo: chapter.titulo,
-          conteudo: chapter.conteudo,
-          ordem: chapter.ordem,
-          is_free: chapter.is_free,
-          preco_capitulo: chapter.preco_capitulo,
-          livro: chapter.livro,
-        },
-      });
+      return NextResponse.json({ chapter: result });
     }
 
     // Check access for authenticated users
     if (payload) {
-      // Check: chapter-level purchase OR book-level purchase (LIVRO_COMPLETO)
       const hasAccess = await db.libraryItem.findFirst({
         where: {
           userId: payload.userId,
@@ -48,17 +77,7 @@ export async function GET(
         },
       });
       if (hasAccess) {
-        return NextResponse.json({
-          chapter: {
-            id: chapter.id,
-            titulo: chapter.titulo,
-            conteudo: chapter.conteudo,
-            ordem: chapter.ordem,
-            is_free: chapter.is_free,
-            preco_capitulo: chapter.preco_capitulo,
-            livro: chapter.livro,
-          },
-        });
+        return NextResponse.json({ chapter: result });
       }
     }
 

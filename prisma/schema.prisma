@@ -26,16 +26,20 @@ model User {
 }
 
 model Book {
-  id         String   @id @default(cuid())
-  titulo     String
-  sinopse    String
-  capa_url   String   @default("/placeholder-cover.svg")
-  preco_total Float   @default(0)
-  categoria  String   @default("Ficção")
-  status     String   @default("RASCUNHO") // RASCUNHO, PUBLICADO
-  autorId    String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String   @id @default(cuid())
+  titulo         String
+  sinopse        String
+  capa_url       String   @default("/placeholder-cover.svg")
+  preco_total    Float    @default(0)
+  categorias     String   @default("[]") // JSON array: '["Ficção","Drama"]'
+  ficha_tecnica  String   @default("")
+  dedicatoria    String   @default("")
+  epigrafe       String   @default("")
+  epilogo        String   @default("")
+  status         String   @default("RASCUNHO") // RASCUNHO, PUBLICADO
+  autorId        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   autor      User     @relation(fields: [autorId], references: [id])
   chapters   Chapter[]

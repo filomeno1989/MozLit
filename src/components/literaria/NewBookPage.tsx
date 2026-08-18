@@ -8,15 +8,44 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Plus, ImageIcon, X, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 
-const CATEGORIAS_SUGESTOES = ['Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio', 'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror', 'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro'];
+const CATEGORIAS_SUGESTOES = [
+  'Ficção', 'Poesia', 'Drama', 'Contos', 'Romance', 'História', 'Ensaio',
+  'Autobiografia', 'Infanto-Juvenil', 'Ficção Científica', 'Terror',
+  'Suspense', 'Religioso', 'Filosofia', 'Crónica', 'Teatro',
+];
+
+type SectionKey = 'ficha_tecnica' | 'dedicatoria' | 'epigrafe' | 'epilogo';
+
+const SECTION_LABELS: Record<SectionKey, { label: string; hint: string; icon: string }> = {
+  ficha_tecnica: {
+    label: 'Ficha Técnica',
+    hint: 'ISBN, editora, ano de publicação, edição, etc.',
+    icon: '📋',
+  },
+  dedicatoria: {
+    label: 'Dedicatória',
+    hint: 'A quem o autor dedica a obra (ex: "A minha mãe...")',
+    icon: '💌',
+  },
+  epigrafe: {
+    label: 'Epígrafe',
+    hint: 'Citação ou frase inspiradora no início da obra.',
+    icon: '💬',
+  },
+  epilogo: {
+    label: 'Epílogo',
+    hint: 'Texto final do autor, notas, agradecimentos.',
+    icon: '📝',
+  },
+};
 
 export default function NewBookPage() {
   const { navigate, token } = useAppStore();
   const [titulo, setTitulo] = useState('');
   const [sinopse, setSinopse] = useState('');
-  const [categoria, setCategoria] = useState('');
+  const [categorias, setCategorias] = useState<string[]>([]);
   const [categoriaInput, setCategoriaInput] = useState('');
   const [showCategoriaSuggestions, setShowCategoriaSuggestions] = useState(false);
   const [capaUrl, setCapaUrl] = useState('');
@@ -26,27 +55,48 @@ export default function NewBookPage() {
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Optional sections
+  const [activeSections, setActiveSections] = useState<SectionKey[]>([]);
+  const [sectionContent, setSectionContent] = useState<Record<SectionKey, string>>({
+    ficha_tecnica: '',
+    dedicatoria: '',
+    epigrafe: '',
+    epilogo: '',
+  });
+
   const filteredSuggestions = CATEGORIAS_SUGESTOES.filter(
-    (s) => s.toLowerCase().includes(categoriaInput.toLowerCase()) && s.toLowerCase() !== categoria.toLowerCase()
+    (s) =>
+      s.toLowerCase().includes(categoriaInput.toLowerCase()) &&
+      !categorias.some((c) => c.toLowerCase() === s.toLowerCase())
   );
 
-  function handleCategoriaSelect(cat: string) {
-    setCategoria(cat);
-    setCategoriaInput(cat);
+  function addCategoria(cat: string) {
+    const trimmed = cat.trim();
+    if (!trimmed) return;
+    if (categorias.some((c) => c.toLowerCase() === trimmed.toLowerCase())) return;
+    setCategorias([...categorias, trimmed]);
+    setCategoriaInput('');
     setShowCategoriaSuggestions(false);
+  }
+
+  function removeCategoria(cat: string) {
+    setCategorias(categorias.filter((c) => c !== cat));
   }
 
   function handleCategoriaKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (categoriaInput.trim()) {
-        setCategoria(categoriaInput.trim());
-        setShowCategoriaSuggestions(false);
-      }
+      if (categoriaInput.trim()) addCategoria(categoriaInput);
     }
-    if (e.key === 'Backspace' && !categoriaInput && categoria) {
-      setCategoria('');
+    if (e.key === 'Backspace' && !categoriaInput && categorias.length > 0) {
+      removeCategoria(categorias[categorias.length - 1]);
     }
+  }
+
+  function toggleSection(key: SectionKey) {
+    setActiveSections((prev) =>
+      prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]
+    );
   }
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -82,8 +132,8 @@ export default function NewBookPage() {
       setError('Título e sinopse são obrigatórios.');
       return;
     }
-    if (!categoria) {
-      setError('Seleccione ou digite uma categoria.');
+    if (categorias.length === 0) {
+      setError('Adicione pelo menos uma categoria.');
       return;
     }
     setLoading(true);
@@ -94,9 +144,13 @@ export default function NewBookPage() {
         body: JSON.stringify({
           titulo,
           sinopse,
-          categoria,
+          categorias,
           capa_url: capaUrl || undefined,
           preco_total: parseFloat(precoTotal) || 0,
+          ficha_tecnica: sectionContent.ficha_tecnica || undefined,
+          dedicatoria: sectionContent.dedicatoria || undefined,
+          epigrafe: sectionContent.epigrafe || undefined,
+          epilogo: sectionContent.epilogo || undefined,
         }),
       });
       navigate('author-dashboard');
@@ -147,29 +201,28 @@ export default function NewBookPage() {
               />
             </div>
 
-            {/* Categoria com busca + sugestões + livre */}
+            {/* Categorias - Multi-select com tags */}
             <div>
-              <Label>Categoria</Label>
+              <Label>Categorias</Label>
               <div className="relative mt-1.5">
                 <Input
                   value={categoriaInput}
                   onChange={(e) => {
                     setCategoriaInput(e.target.value);
-                    setCategoria('');
                     setShowCategoriaSuggestions(true);
                   }}
                   onFocus={() => setShowCategoriaSuggestions(true)}
                   onKeyDown={handleCategoriaKeyDown}
                   onBlur={() => setTimeout(() => setShowCategoriaSuggestions(false), 200)}
-                  placeholder="Digite ou seleccione uma categoria..."
+                  placeholder="Digite ou seleccione categorias..."
                 />
-                {showCategoriaSuggestions && filteredSuggestions.length > 0 && !categoria && (
+                {showCategoriaSuggestions && filteredSuggestions.length > 0 && (
                   <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-md max-h-48 overflow-y-auto">
                     {filteredSuggestions.map((cat) => (
                       <button
                         key={cat}
                         type="button"
-                        onMouseDown={() => handleCategoriaSelect(cat)}
+                        onMouseDown={() => addCategoria(cat)}
                         className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors first:rounded-t-lg last:rounded-b-lg"
                       >
                         {cat}
@@ -177,22 +230,28 @@ export default function NewBookPage() {
                     ))}
                   </div>
                 )}
-                {categoria && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-600 text-white">
-                      {categoria}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => { setCategoria(''); setCategoriaInput(''); }}
-                      className="text-muted-foreground hover:text-destructive"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                {/* Tags de categorias seleccionadas */}
+                {categorias.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {categorias.map((cat) => (
+                      <span
+                        key={cat}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-600 text-white"
+                      >
+                        {cat}
+                        <button
+                          type="button"
+                          onClick={() => removeCategoria(cat)}
+                          className="hover:text-amber-200 transition-colors"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground mt-1.5">
-                  Comece a digitar para pesquisar, ou escreva a sua própria categoria e prima Enter.
+                  Adicione uma ou mais categorias. Prima Enter para confirmar.
                 </p>
               </div>
             </div>
@@ -206,7 +265,6 @@ export default function NewBookPage() {
                 </span>
               </Label>
               <div className="mt-1.5 space-y-3">
-                {/* Upload button */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -224,8 +282,6 @@ export default function NewBookPage() {
                   <Upload className="h-4 w-4 mr-2" />
                   {uploading ? 'Enviando...' : 'Enviar imagem do dispositivo'}
                 </Button>
-
-                {/* URL input */}
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-px bg-border" />
                   <span className="text-xs text-muted-foreground">ou cole uma URL</span>
@@ -237,8 +293,6 @@ export default function NewBookPage() {
                   onChange={(e) => setCapaUrl(e.target.value)}
                   placeholder="https://exemplo.com/capa.jpg"
                 />
-
-                {/* Preview */}
                 {capaUrl && (
                   <div className="relative inline-block">
                     <img
@@ -256,6 +310,54 @@ export default function NewBookPage() {
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Secções opcionais - toggles */}
+            <div>
+              <Label className="text-sm font-medium">Secções Opcionais</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+                Clique para activar e preencher as secções que deseja incluir na obra.
+              </p>
+              <div className="space-y-2">
+                {(Object.keys(SECTION_LABELS) as SectionKey[]).map((key) => {
+                  const info = SECTION_LABELS[key];
+                  const isActive = activeSections.includes(key);
+                  return (
+                    <div key={key} className="border border-border/50 rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => toggleSection(key)}
+                        className="w-full flex items-center justify-between p-3 text-left hover:bg-accent/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-base">{info.icon}</span>
+                          <div>
+                            <span className="text-sm font-medium">{info.label}</span>
+                            <p className="text-xs text-muted-foreground">{info.hint}</p>
+                          </div>
+                        </div>
+                        {isActive ? (
+                          <ChevronUp className="h-4 w-4 text-amber-600 shrink-0" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                      </button>
+                      {isActive && (
+                        <div className="px-3 pb-3">
+                          <Textarea
+                            value={sectionContent[key]}
+                            onChange={(e) =>
+                              setSectionContent((prev) => ({ ...prev, [key]: e.target.value }))
+                            }
+                            placeholder={`Escreva a ${info.label.toLowerCase()} aqui...`}
+                            rows={4}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

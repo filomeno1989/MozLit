@@ -8,14 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookOpen } from 'lucide-react';
 
-// Categorias são extraídas dinamicamente dos livros registados
-
 interface Book {
   id: string;
   titulo: string;
   sinopse: string;
   capa_url: string;
-  categoria: string;
+  categorias: string[];
   status: string;
   preco_total: number;
   autor: { id: string; nome: string };
@@ -45,9 +43,12 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
             <h3 className="font-semibold text-sm leading-tight line-clamp-3">{book.titulo}</h3>
           </div>
         )}
-        <Badge className="absolute top-2 right-2 bg-amber-600 text-white text-xs">
-          {book.categoria}
-        </Badge>
+        {/* First category badge on cover */}
+        {book.categorias.length > 0 && (
+          <Badge className="absolute top-2 right-2 bg-amber-600 text-white text-xs">
+            {book.categorias[0]}
+          </Badge>
+        )}
         {book.preco_total > 0 && (
           <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/60 text-white text-xs font-medium">
             {book.preco_total.toFixed(2)} MZN
@@ -57,6 +58,16 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
       <CardContent className="p-3">
         {hasRealCover && <p className="font-semibold text-sm truncate mb-0.5">{book.titulo}</p>}
         <p className="text-xs text-muted-foreground">por {book.autor.nome}</p>
+        {/* All categories as small tags */}
+        {book.categorias.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {book.categorias.map((cat) => (
+              <span key={cat} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                {cat}
+              </span>
+            ))}
+          </div>
+        )}
         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{book.sinopse}</p>
       </CardContent>
     </Card>
@@ -83,7 +94,9 @@ export default function HomePage() {
   const { navigate } = useAppStore();
 
   // Extract unique categories from all published books
-  const categorias = Array.from(new Set(allBooks.map((b) => b.categoria))).sort();
+  const categorias = Array.from(
+    new Set(allBooks.flatMap((b) => b.categorias))
+  ).sort();
 
   useEffect(() => {
     loadBooks();
@@ -102,7 +115,6 @@ export default function HomePage() {
       const query = categoriaAtiva ? `?categoria=${encodeURIComponent(categoriaAtiva)}` : '';
       const data = await apiFetch<Book[]>(`/api/books${query}`);
       setBooks(data);
-      // Also refresh allBooks for category list
       if (!categoriaAtiva) setAllBooks(data);
     } catch {
       setBooks([]);
