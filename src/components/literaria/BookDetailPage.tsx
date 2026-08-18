@@ -161,6 +161,44 @@ export default function BookDetailPage() {
     );
   }
 
+  // Clean synopsis: remove author name from the end if present, then split into paragraphs
+  function renderSinopse(text: string, authorName: string) {
+    // Strip trailing author name lines (e.g. "Por Autor" or just the name)
+    let cleaned = text.trim();
+    const nameParts = authorName.toLowerCase().split(' ');
+    const lines = cleaned.split('\n');
+    // Remove last 1-2 lines if they look like an author signature
+    while (lines.length > 1) {
+      const last = lines[lines.length - 1].trim();
+      if (!last) { lines.pop(); continue; }
+      const lastLower = last.toLowerCase();
+      if (
+        lastLower.startsWith('por ') ||
+        nameParts.some((part) => part.length > 3 && lastLower.includes(part))
+      ) {
+        lines.pop();
+      } else {
+        break;
+      }
+    }
+    cleaned = lines.join('\n').trim();
+
+    // Split by double newlines (paragraphs) or single newlines
+    const paragraphs = cleaned.split(/\n\n+/).filter(Boolean);
+    return paragraphs.map((p, i) => {
+      const lines = p.split('\n').filter(Boolean);
+      if (lines.length === 1 && lines[0].length < 80) {
+        // Short single line – render as a styled quote or stand-alone line
+        return (
+          <p key={i} className="text-sm leading-relaxed text-foreground/80 italic">{lines[0]}</p>
+        );
+      }
+      return (
+        <p key={i} className="text-sm leading-relaxed text-foreground/80">{p}</p>
+      );
+    });
+  }
+
   const isOwnBook = user && user.id === book.autor.id;
 
   return (
@@ -227,23 +265,28 @@ export default function BookDetailPage() {
           </button>
 
           {/* Divider */}
-          <div className="border-t border-border/60 my-4" />
+          <div className="border-t border-border/60 my-5" />
 
           {/* Sinopse */}
-          <div className="mb-4">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Sinopse</h2>
-            <p className="text-sm leading-relaxed text-foreground/80">{book.sinopse}</p>
+          <div className="mb-6">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Sinopse</h2>
+            <div className="max-w-prose space-y-3">
+              {renderSinopse(book.sinopse, book.autor.nome)}
+            </div>
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-4 text-sm mb-4">
-            <div className="flex items-center gap-1.5 text-muted-foreground">
+          {/* Divider */}
+          <div className="border-t border-border/40 my-5" />
+
+          {/* Stats as badges */}
+          <div className="flex items-center gap-3 text-sm mb-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5" />
-              <span>{book.chapters.length} capítulos</span>
+              <span className="text-xs font-medium">{book.chapters.length} capítulos</span>
             </div>
-            <div className="flex items-center gap-1.5 text-muted-foreground">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 text-muted-foreground">
               <BookMarked className="h-3.5 w-3.5" />
-              <span>{book.chapters.filter((c) => c.is_free).length} gratuitos</span>
+              <span className="text-xs font-medium">{book.chapters.filter((c) => c.is_free).length} gratuitos</span>
             </div>
           </div>
 
