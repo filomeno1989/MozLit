@@ -9,97 +9,109 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  nome         String
-  email        String   @unique
-  senha_hash   String
-  role         String   @default("LEITOR") // ADMIN, ESCRITOR, LEITOR
-  saldo_carteira Float  @default(0)
-  biografia    String   @default("")
-  avatar_url   String   @default("")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome           String
+  email          String   @unique
+  senha_hash     String   @default("")
+  role           String   @default("LEITOR") // ADMIN, ESCRITOR, LEITOR
+  saldo_carteira Float    @default(0) @map("saldo_carteira")
+  biografia      String   @default("")
+  avatar_url     String   @default("") @map("avatar_url")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   books        Book[]
   transactions Transaction[]
   libraryItems LibraryItem[]
   comments     Comment[]
+
+  @@map("profiles")
 }
 
 model Book {
-  id             String   @id @default(cuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   titulo         String
-  sinopse        String
-  capa_url       String   @default("/placeholder-cover.svg")
-  preco_total    Float    @default(0)
-  categorias     String   @default("[]") // JSON array: '["Ficção","Drama"]'
-  ficha_tecnica  String   @default("")
-  dedicatoria    String   @default("")
-  epigrafe       String   @default("")
-  epilogo        String   @default("")
-  status         String   @default("RASCUNHO") // RASCUNHO, PUBLICADO
-  autorId        String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  sinopse        String   @default("")
+  capa_url       String   @default("/placeholder-cover.svg") @map("capa_url")
+  preco_total    Float    @default(0) @map("preco_total")
+  categoria      String   @default("Ficção") @map("categoria")
+  categorias     String   @default("[]") @map("categorias")
+  ficha_tecnica  String   @default("") @map("ficha_tecnica")
+  dedicatoria    String   @default("") @map("dedicatoria")
+  epigrafe       String   @default("") @map("epigrafe")
+  epilogo        String   @default("") @map("epilogo")
+  status         String   @default("RASCUNHO")
+  autorId        String   @map("autor_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  autor      User     @relation(fields: [autorId], references: [id])
+  autor      User     @relation(fields: [autorId], references: [id], onDelete: Cascade)
   chapters   Chapter[]
+
+  @@map("books")
 }
 
 model Chapter {
-  id             String   @id @default(cuid())
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   titulo         String
-  conteudo       String
-  preco_capitulo Float    @default(0)
-  is_free        Boolean  @default(false)
+  conteudo       String   @default("")
+  preco_capitulo Float    @default(0) @map("preco_capitulo")
+  is_free        Boolean  @default(false) @map("is_free")
   ordem          Int      @default(0)
-  livroId        String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  livroId        String   @map("livro_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   livro          Book     @relation(fields: [livroId], references: [id], onDelete: Cascade)
   libraryItems   LibraryItem[]
   comments       Comment[]
+
+  @@map("chapters")
 }
 
 model Transaction {
-  id        String   @id @default(cuid())
-  userId    String
-  tipo      String   // MPESA, NIB, COMPRA
-  valor     Float
-  status    String   @default("PENDENTE") // PENDENTE, CONCLUIDO, FALHADO
-  descricao String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tipo       String
+  valor      Float
+  status     String   @default("PENDENTE")
+  descricao  String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
 }
 
 model LibraryItem {
-  id        String   @id @default(cuid())
-  userId    String
-  bookId    String?
-  chapterId String?
-  tipo      String   @default("CAPITULO") // CAPITULO, LIVRO_COMPLETO
-  createdAt DateTime @default(now())
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  bookId     String?  @map("book_id") @db.Uuid
+  chapterId  String?  @map("chapter_id") @db.Uuid
+  tipo       String   @default("CAPITULO")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  user      User     @relation(fields: [userId], references: [id])
-  chapter   Chapter? @relation(fields: [chapterId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter   Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   @@unique([userId, chapterId])
+  @@map("library_items")
 }
 
 model Comment {
-  id        String   @id @default(cuid())
-  conteudo  String
-  chapterId String
-  userId    String
-  parentId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conteudo   String
+  chapterId  String   @map("chapter_id") @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  parentId   String?  @map("parent_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("CommentReplies")
+
+  @@map("comments")
 }
