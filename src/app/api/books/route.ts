@@ -6,6 +6,7 @@ import {
   validateSinopse,
   validateCategorias,
   validateFaixaEtaria,
+  validateVolumeInfo,
 } from '@/lib/validate';
 
 export async function GET(request: NextRequest) {
@@ -99,13 +100,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { titulo, sinopse, categorias, capa_url, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo, faixa_etaria } = body;
+    const { titulo, sinopse, categorias, capa_url, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo, faixa_etaria, volume_info } = body;
 
     // Validate inputs
     const tituloValidado = validateTitulo(titulo);
     const sinopseValidada = validateSinopse(sinopse);
     const catsValidadas = validateCategorias(categorias);
     const faixaValidada = validateFaixaEtaria(faixa_etaria);
+    const volumeValidado = validateVolumeInfo(volume_info);
 
     const book = await db.book.create({
       data: {
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
         epigrafe: typeof epigrafe === 'string' ? epigrafe : '',
         epilogo: typeof epilogo === 'string' ? epilogo : '',
         faixa_etaria: faixaValidada,
+        ...(volumeValidado ? { volume_info: volumeValidado } : {}),
         status: 'RASCUNHO',
         autorId: payload.userId,
       },

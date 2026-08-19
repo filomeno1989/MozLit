@@ -42,6 +42,7 @@ model Book {
   epigrafe       String   @default("") @map("epigrafe")
   epilogo        String   @default("") @map("epilogo")
   faixa_etaria   String   @default("Livre") @map("faixa_etaria")
+  volume_info    Json?    @map("volume_info")
   status         String   @default("RASCUNHO")
   autorId        String   @map("autor_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

@@ -30,6 +30,8 @@ interface DashboardData {
     capa_url: string;
     status: string;
     preco_total: number;
+    faixa_etaria: string;
+    volume_info: { numero: number; total: number } | null;
     ficha_tecnica: string;
     dedicatoria: string;
     epigrafe: string;
@@ -50,6 +52,8 @@ interface BookWithChapters {
   status: string;
   sinopse: string;
   categorias: string[];
+  faixa_etaria: string;
+  volume_info: { numero: number; total: number } | null;
   ficha_tecnica: string;
   dedicatoria: string;
   epigrafe: string;
@@ -71,6 +75,8 @@ export default function AuthorDashboard() {
   const [editForm, setEditForm] = useState({
     titulo: '', sinopse: '', capa_url: '', preco_total: '',
     categorias: [] as string[], categoriaInput: '',
+    faixa_etaria: 'Livre',
+    isVolume: false, volumeNumero: '1', volumeTotal: '',
     ficha_tecnica: '', dedicatoria: '', epigrafe: '', epilogo: '',
   });
   const [editShowCatSugg, setEditShowCatSugg] = useState(false);
@@ -225,6 +231,10 @@ export default function AuthorDashboard() {
         dedicatoria: b.dedicatoria || '',
         epigrafe: b.epigrafe || '',
         epilogo: b.epilogo || '',
+        faixa_etaria: b.faixa_etaria || 'Livre',
+        isVolume: !!(b as any).volume_info,
+        volumeNumero: (b as any).volume_info?.numero?.toString() ?? '1',
+        volumeTotal: (b as any).volume_info?.total?.toString() ?? '',
       });
     }).catch(() => toast.error('Erro ao carregar dados do livro'));
   }
@@ -291,6 +301,12 @@ export default function AuthorDashboard() {
       payload.dedicatoria = editForm.dedicatoria;
       payload.epigrafe = editForm.epigrafe;
       payload.epilogo = editForm.epilogo;
+      payload.faixa_etaria = editForm.faixa_etaria;
+      if (editForm.isVolume && editForm.volumeNumero && editForm.volumeTotal) {
+        payload.volume_info = { numero: parseInt(editForm.volumeNumero), total: parseInt(editForm.volumeTotal) };
+      } else {
+        payload.volume_info = null;
+      }
 
       await apiFetch(`/api/books/${editingBook.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       setEditingBook(null);
@@ -378,10 +394,24 @@ export default function AuthorDashboard() {
                     )}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-sm truncate">{livro.titulo}</h3>
-                        <Badge variant={livro.status === 'PUBLICADO' ? 'default' : 'secondary'} className="text-xs shrink-0">
-                          {livro.status === 'PUBLICADO' ? 'Publicado' : 'Rascunho'}
-                        </Badge>
+                        <h3 className="font-medium text-sm truncate">
+                          {livro.titulo}
+                          {livro.volume_info && (
+                            <span className="text-muted-foreground font-normal ml-1">
+                              (Vol. {livro.volume_info.numero}/{livro.volume_info.total})
+                            </span>
+                          )}
+                        </h3>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Badge variant={livro.status === 'PUBLICADO' ? 'default' : 'secondary'} className="text-xs">
+                            {livro.status === 'PUBLICADO' ? 'Publicado' : 'Rascunho'}
+                          </Badge>
+                          {livro.faixa_etaria && livro.faixa_etaria !== 'Livre' && (
+                            <Badge variant="outline" className="text-xs border-orange-400 text-orange-600">
+                              {livro.faixa_etaria}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {livro.categorias.join(', ')} - {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
@@ -565,6 +595,51 @@ export default function AuthorDashboard() {
                     );
                   })}
                 </div>
+              </div>
+
+              <div>
+                <Label>Classificação Etária</Label>
+                <select
+                  value={editForm.faixa_etaria}
+                  onChange={(e) => setEditForm({ ...editForm, faixa_etaria: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="Livre">Livre (Todos os públicos)</option>
+                  <option value="10+">10+ anos</option>
+                  <option value="12+">12+ anos</option>
+                  <option value="14+">14+ anos</option>
+                  <option value="16+">16+ anos</option>
+                  <option value="18+">18+ anos</option>
+                </select>
+              </div>
+
+              {/* Volumes */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-1.5 text-sm">
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Obra em Volumes
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm({ ...editForm, isVolume: !editForm.isVolume })}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.isVolume ? 'bg-amber-600' : 'bg-border'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editForm.isVolume ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                {editForm.isVolume && (
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Volume N.º</Label>
+                      <Input type="number" min="1" value={editForm.volumeNumero} onChange={(e) => setEditForm({ ...editForm, volumeNumero: e.target.value })} className="mt-1" />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Total de Volumes</Label>
+                      <Input type="number" min="2" value={editForm.volumeTotal} onChange={(e) => setEditForm({ ...editForm, volumeTotal: e.target.value })} className="mt-1" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

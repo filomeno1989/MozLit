@@ -54,7 +54,13 @@ export async function POST(request: NextRequest) {
     const senha_hash = await hashPassword(senhaValidada);
 
     const user = await db.user.create({
-      data: { nome: nomeValidado, email: emailValidado, senha_hash, role: userRole },
+      data: {
+        nome: nomeValidado,
+        email: emailValidado,
+        senha_hash,
+        role: userRole,
+        ...(dataNascimento ? { data_nascimento: new Date(dataNascimento) } : {}),
+      },
     });
 
     const token = generateToken({

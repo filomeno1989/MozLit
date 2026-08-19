@@ -108,6 +108,17 @@ export function validateFaixaEtaria(faixa: unknown): FaixaEtaria {
   return faixa as FaixaEtaria;
 }
 
+/** Validate volume_info: { numero: number, total: number } or null */
+export function validateVolumeInfo(vol: unknown): { numero: number; total: number } | null {
+  if (vol === null || vol === undefined) return null;
+  if (typeof vol !== 'object' || Array.isArray(vol)) return null;
+  const v = vol as Record<string, unknown>;
+  const numero = typeof v.numero === 'number' ? Math.floor(v.numero) : 0;
+  const total = typeof v.total === 'number' ? Math.floor(v.total) : 0;
+  if (numero < 1 || total < 2 || numero > total) return null;
+  return { numero, total };
+}
+
 /** Validate a numeric deposit value */
 export function validateDeposito(valor: unknown): number {
   const num = Number(valor);

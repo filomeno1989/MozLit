@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 import { CATEGORIAS_SUGESTOES, FAIXAS_ETARIAS, type SectionKey, SECTION_LABELS } from '@/lib/constants';
 
 
@@ -22,6 +22,9 @@ export default function NewBookPage() {
   const [capaUrl, setCapaUrl] = useState('');
   const [precoTotal, setPrecoTotal] = useState('');
   const [faixaEtaria, setFaixaEtaria] = useState('Livre');
+  const [isVolume, setIsVolume] = useState(false);
+  const [volumeNumero, setVolumeNumero] = useState('1');
+  const [volumeTotal, setVolumeTotal] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -140,6 +143,7 @@ export default function NewBookPage() {
           capa_url: capaUrl || undefined,
           preco_total: parseFloat(precoTotal) || 0,
           faixa_etaria: faixaEtaria,
+          volume_info: isVolume && volumeNumero && volumeTotal ? { numero: parseInt(volumeNumero), total: parseInt(volumeTotal) } : undefined,
           ficha_tecnica: sectionContent.ficha_tecnica || undefined,
           dedicatoria: sectionContent.dedicatoria || undefined,
           epigrafe: sectionContent.epigrafe || undefined,
@@ -352,6 +356,57 @@ export default function NewBookPage() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Volumes */}
+            <div>
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5">
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Obra em Volumes
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setIsVolume(!isVolume)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isVolume ? 'bg-amber-600' : 'bg-border'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isVolume ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+              {isVolume && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="vol-numero" className="text-xs">Volume N.º</Label>
+                    <Input
+                      id="vol-numero"
+                      type="number"
+                      min="1"
+                      value={volumeNumero}
+                      onChange={(e) => setVolumeNumero(e.target.value)}
+                      className="mt-1"
+                      placeholder="1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="vol-total" className="text-xs">Total de Volumes</Label>
+                    <Input
+                      id="vol-total"
+                      type="number"
+                      min="2"
+                      value={volumeTotal}
+                      onChange={(e) => setVolumeTotal(e.target.value)}
+                      className="mt-1"
+                      placeholder="3"
+                    />
+                  </div>
+                  {volumeNumero && volumeTotal && parseInt(volumeNumero) > parseInt(volumeTotal) && (
+                    <p className="col-span-2 text-xs text-destructive">O n.º do volume não pode exceder o total.</p>
+                  )}
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Ex.: NYOTA — Volume {volumeNumero || '?'} de {volumeTotal || '?'}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div>

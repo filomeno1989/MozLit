@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateSinopse, validateCategorias, validateFaixaEtaria } from '@/lib/validate';
+import { validateTitulo, validateSinopse, validateCategorias, validateFaixaEtaria, validateVolumeInfo } from '@/lib/validate';
 
 export async function GET(
   request: NextRequest,
@@ -113,7 +113,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { titulo, sinopse, categorias, capa_url, status, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo, faixa_etaria } = body;
+    const { titulo, sinopse, categorias, capa_url, status, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo, faixa_etaria, volume_info } = body;
 
     // Validate inputs if provided
     const data: Record<string, unknown> = {};
@@ -128,6 +128,7 @@ export async function PATCH(
     if (epigrafe !== undefined) data.epigrafe = String(epigrafe);
     if (epilogo !== undefined) data.epilogo = String(epilogo);
     if (faixa_etaria !== undefined) data.faixa_etaria = validateFaixaEtaria(faixa_etaria);
+    if (volume_info !== undefined) data.volume_info = validateVolumeInfo(volume_info);
 
     // If publishing, verify book has chapters
     if (status === 'PUBLICADO') {
