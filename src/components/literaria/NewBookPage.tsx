@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp } from 'lucide-react';
-import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS } from '@/lib/constants';
+import { CATEGORIAS_SUGESTOES, FAIXAS_ETARIAS, type SectionKey, SECTION_LABELS } from '@/lib/constants';
 
 
 export default function NewBookPage() {
@@ -21,6 +21,7 @@ export default function NewBookPage() {
   const [showCategoriaSuggestions, setShowCategoriaSuggestions] = useState(false);
   const [capaUrl, setCapaUrl] = useState('');
   const [precoTotal, setPrecoTotal] = useState('');
+  const [faixaEtaria, setFaixaEtaria] = useState('Livre');
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -138,6 +139,7 @@ export default function NewBookPage() {
           categorias,
           capa_url: capaUrl || undefined,
           preco_total: parseFloat(precoTotal) || 0,
+          faixa_etaria: faixaEtaria,
           ficha_tecnica: sectionContent.ficha_tecnica || undefined,
           dedicatoria: sectionContent.dedicatoria || undefined,
           epigrafe: sectionContent.epigrafe || undefined,
@@ -350,6 +352,23 @@ export default function NewBookPage() {
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="faixa-etaria">Classificação Etária</Label>
+              <select
+                id="faixa-etaria"
+                value={faixaEtaria}
+                onChange={(e) => setFaixaEtaria(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                {FAIXAS_ETARIAS.map((f) => (
+                  <option key={f} value={f}>{f === 'Livre' ? 'Livre (Todos os públicos)' : f + ' anos'}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Indique a faixa etária recomendada para a obra.
+              </p>
             </div>
 
             <div>

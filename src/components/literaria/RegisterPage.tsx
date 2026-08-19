@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine } from 'lucide-react';
+import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine, Calendar } from 'lucide-react';
+import { FAIXAS_ETARIAS, IDADE_MINIMA_REGISTO } from '@/lib/constants';
 
 function getPasswordStrength(senha: string): { label: string; color: string; width: string } {
   if (!senha) return { label: '', color: 'bg-muted', width: 'w-0' };
@@ -28,6 +29,7 @@ export default function RegisterPage() {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'LEITOR' | 'ESCRITOR'>('LEITOR');
+  const [dataNascimento, setDataNascimento] = useState('');
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [loading, setLoading] = useState(false);
@@ -47,10 +49,24 @@ export default function RegisterPage() {
       return;
     }
 
+    // Validate age
+    if (dataNascimento) {
+      const birth = new Date(dataNascimento);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      if (age < IDADE_MINIMA_REGISTO) {
+        setError(`Deve ter pelo menos ${IDADE_MINIMA_REGISTO} anos para se registar.`);
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const data = await apiFetch<{ user: User; token: string }>('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ nome, email, senha, role }),
+        body: JSON.stringify({ nome, email, senha, role, dataNascimento: dataNascimento || undefined }),
       });
       setAuth(data.user, data.token);
       navigate(role === 'ESCRITOR' ? 'author-dashboard' : 'home');
@@ -87,6 +103,7 @@ export default function RegisterPage() {
                 onChange={(e) => setNome(e.target.value)}
                 placeholder="Seu nome"
                 required
+                maxLength={100}
               />
             </div>
             <div>
@@ -99,6 +116,24 @@ export default function RegisterPage() {
                 placeholder="seu@email.com"
                 required
               />
+            </div>
+            <div>
+              <Label htmlFor="data-nascimento">Data de Nascimento</Label>
+              <div className="relative">
+                <Input
+                  id="data-nascimento"
+                  type="date"
+                  value={dataNascimento}
+                  onChange={(e) => setDataNascimento(e.target.value)}
+                  max={new Date(Date.now() - IDADE_MINIMA_REGISTO * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                  required
+                  className="pr-10"
+                />
+                <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Mínimo {IDADE_MINIMA_REGISTO} anos de idade
+              </p>
             </div>
             <div>
               <Label>Registrar como</Label>
@@ -142,6 +177,7 @@ export default function RegisterPage() {
                   placeholder="Mínimo 6 caracteres"
                   required
                   minLength={6}
+                  maxLength={128}
                   className="pr-10"
                 />
                 <button
@@ -173,6 +209,7 @@ export default function RegisterPage() {
                   placeholder="Repita a senha"
                   required
                   minLength={6}
+                  maxLength={128}
                   className={`pr-10 ${confirmarSenha && confirmarSenha !== senha ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                 />
                 {confirmarSenha && confirmarSenha !== senha && (

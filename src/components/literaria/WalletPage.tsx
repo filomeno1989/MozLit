@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Wallet as WalletIcon, Plus, Loader2 } from 'lucide-react';
+import { Wallet as WalletIcon, Plus, Loader2, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function WalletPage() {
@@ -17,29 +16,42 @@ export default function WalletPage() {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositType, setDepositType] = useState<'MPESA' | 'NIB'>('MPESA');
   const [depositing, setDepositing] = useState(false);
-  const [transactions, setTransactions] = useState<Array<{ id: string; tipo: string; valor: number; status: string; descricao: string | null; createdAt: string }>>([]);
+  const [transactions, setTransactions] = useState<Array<{
+    id: string; tipo: string; valor: number; status: string;
+    descricao: string | null; createdAt: string;
+  }>>([]);
 
-  useEffect(() => {
-    if (user) loadTransactions();
-  }, [user]);
-
-  async function loadTransactions() {
+  const loadTransactions = useCallback(async () => {
     setLoading(true);
     try {
       const saldoData = await apiFetch<{ saldo: number }>('/api/wallet');
       updateBalance(saldoData.saldo);
-      setTransactions([]);
+      // Load actual transactions from author endpoint
+      try {
+        const authorData = await apiFetch<{ transacoes: typeof transactions }>('/api/author');
+        setTransactions(authorData.transacoes || []);
+      } catch {
+        setTransactions([]);
+      }
     } catch {
       // ignore
     } finally {
       setLoading(false);
     }
-  }
+  }, [updateBalance]);
+
+  useEffect(() => {
+    if (user) loadTransactions();
+  }, [user, loadTransactions]);
 
   async function handleDeposit() {
     const valor = parseFloat(depositAmount);
     if (!valor || valor <= 0) {
       toast.error('Insira um valor válido.');
+      return;
+    }
+    if (valor > 100000) {
+      toast.error('Depósito máximo: 100.000 MZN.');
       return;
     }
     setDepositing(true);
@@ -51,12 +63,15 @@ export default function WalletPage() {
       updateBalance(data.saldo);
       setDepositAmount('');
       toast.success('Carregamento realizado!', { description: `${valor.toFixed(2)} MZN via ${depositType}` });
+      loadTransactions();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setDepositing(false);
     }
   }
+
+  const saldo = user?.saldo_carteira ?? 0;
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">
@@ -68,7 +83,7 @@ export default function WalletPage() {
           <WalletIcon className="h-8 w-8 mx-auto text-amber-700 dark:text-amber-400 mb-2" />
           <p className="text-sm text-muted-foreground">Saldo Disponível</p>
           <p className="text-3xl font-bold text-amber-900 dark:text-amber-100 mt-1">
-            {user?.saldo_carteira.toFixed(2) ?? '0.00'} <span className="text-lg">MZN</span>
+            {saldo.toFixed(2)} <span className="text-lg">MZN</span>
           </p>
         </CardContent>
       </Card>
@@ -108,6 +123,7 @@ export default function WalletPage() {
               type="number"
               step="0.01"
               min="0"
+              max="100000"
               placeholder="Valor (MZN)"
               value={depositAmount}
               onChange={(e) => setDepositAmount(e.target.value)}
@@ -121,8 +137,62 @@ export default function WalletPage() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Simulação: o saldo será adicionado instantaneamente.
+            {process.env.NEXT_PUBLIC_DEMO_MODE === 'true'
+              ? 'Modo demonstração: o saldo será adicionado instantaneamente.'
+              : 'O carregamento será processado pela integração de pagamento.'}
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Recent Transactions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Transacções Recentes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ))}
+            </div>
+          ) : transactions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Nenhuma transacção registada.
+            </p>
+          ) : (
+            <div className="divide-y">
+              {transactions.map((t) => (
+                <div key={t.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-full ${
+                      t.tipo === 'COMPRA' ? 'bg-red-100 dark:bg-red-900/20' : 'bg-emerald-100 dark:bg-emerald-900/20'
+                    }`}
+                    >
+                      {t.tipo === 'COMPRA'
+                        ? <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                        : <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium line-clamp-1">{t.descricao || t.tipo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(t.createdAt).toLocaleDateString('pt-MZ')}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-semibold ${
+                    t.tipo === 'COMPRA' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}
+                  >
+                    {t.tipo === 'COMPRA' ? '-' : '+'}{t.valor.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
