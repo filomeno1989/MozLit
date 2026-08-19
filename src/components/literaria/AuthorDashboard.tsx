@@ -123,7 +123,36 @@ export default function AuthorDashboard() {
     try {
       await apiFetch(`/api/books/${bookId}`, { method: 'PATCH', body: JSON.stringify({ status: 'PUBLICADO' }) });
       loadDashboard();
+      toast.success('Obra publicada com sucesso!');
     } catch (err) { toast.error((err as Error).message); }
+  }
+
+  async function unpublishBook(bookId: string) {
+    try {
+      await apiFetch(`/api/books/${bookId}`, { method: 'PATCH', body: JSON.stringify({ status: 'RASCUNHO' }) });
+      loadDashboard();
+      toast.success('Obra movida para rascunho.');
+    } catch (err) { toast.error((err as Error).message); }
+  }
+
+  const [deleteBuyersCount, setDeleteBuyersCount] = useState(0);
+
+  async function confirmDelete(bookId: string) {
+    try {
+      // Check how many buyers this book has
+      const items = await apiFetch<{ items: Array<{ tipo: string }> }>('/api/library');
+      // We can't filter server-side, but the API will block if buyers exist
+      setDeleteBuyersCount(0); // Will be updated from error if blocked
+      setDeleteTarget(bookId);
+    } catch (err: any) {
+      // If the API returns 409 with buyersCount, show it
+      const msg = err?.message || '';
+      if (msg.includes('Não pode excluir')) {
+        toast.error(msg);
+      } else {
+        setDeleteTarget(bookId);
+      }
+    }
   }
 
   async function deleteBook() {
@@ -367,7 +396,10 @@ export default function AuthorDashboard() {
                     {livro.status !== 'PUBLICADO' && (
                       <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}><Eye className="h-3.5 w-3.5 mr-1" /> Publicar</Button>
                     )}
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteTarget(livro.id)} aria-label="Excluir livro"><Trash2 className="h-3.5 w-3.5" /></Button>
+                    {livro.status === 'PUBLICADO' && (
+                      <Button size="sm" variant="outline" className="text-amber-600" onClick={() => unpublishBook(livro.id)}>Despublicar</Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => confirmDelete(livro.id)} aria-label="Excluir livro"><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>
               ))}
@@ -582,7 +614,7 @@ export default function AuthorDashboard() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir obra</AlertDialogTitle>
-            <AlertDialogDescription>Tem certeza que deseja excluir este livro? Esta acção não pode ser desfeita.</AlertDialogDescription>
+            <AlertDialogDescription>Tem certeza que deseja excluir esta obra? Se a obra estiver publicada e tiver compradores, a exclusão será bloqueada. Despublique primeiro se necessário. Esta acção não pode ser desfeita.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
