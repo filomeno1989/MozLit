@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, Search } from 'lucide-react';
 
 interface Book {
   id: string;
@@ -109,6 +109,10 @@ export default function HomePage() {
   const [allBooks, setAllBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const { navigate } = useAppStore();
 
   // Extract unique categories from all published books
@@ -116,31 +120,42 @@ export default function HomePage() {
     new Set(allBooks.flatMap((b) => b.categorias))
   ).sort();
 
-  const initialLoadDone = useRef(false);
-
   useEffect(() => {
-    if (initialLoadDone.current) {
-      // Category changed — refetch filtered books
-      loadBooks();
-    } else {
-      // Initial load — fetch once, use for both books and categories
-      initialLoadDone.current = true;
-      loadBooks();
-    }
-  }, [categoriaAtiva]);
+    setBooks([]);
+    setNextCursor(null);
+    loadBooks();
+  }, [categoriaAtiva, searchQuery]);
 
-  async function loadBooks() {
-    setLoading(true);
+  async function loadBooks(cursor?: string) {
+    const isFirst = !cursor;
+    if (isFirst) setLoading(true);
+    else setLoadingMore(true);
     try {
-      const query = categoriaAtiva ? `?categoria=${encodeURIComponent(categoriaAtiva)}` : '';
-      const data = await apiFetch<Book[]>(`/api/books${query}`);
-      setBooks(data);
-      if (!categoriaAtiva) setAllBooks(data);
+      const params = new URLSearchParams();
+      if (categoriaAtiva) params.set('categoria', categoriaAtiva);
+      if (searchQuery) params.set('search', searchQuery);
+      if (cursor) params.set('cursor', cursor);
+      params.set('limit', '20');
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const data = await apiFetch<{ books: Book[]; nextCursor: string | null }>(`/api/books${query}`);
+      if (isFirst) {
+        setBooks(data.books || []);
+        if (!categoriaAtiva && !searchQuery) setAllBooks(data.books || []);
+      } else {
+        setBooks((prev) => [...prev, ...(data.books || [])]);
+      }
+      setNextCursor(data.nextCursor || null);
     } catch {
-      setBooks([]);
+      if (isFirst) setBooks([]);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  }
+
+  function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    setSearchQuery(searchInput.trim());
   }
 
   return (
@@ -155,6 +170,17 @@ export default function HomePage() {
           <p className="text-muted-foreground max-w-lg mx-auto text-sm sm:text-base leading-relaxed">
             Uma plataforma dedicada a escritores e leitores de Moçambique.<br className="hidden sm:block"/> Publique, leia e monetize suas obras.
           </p>
+          {/* Search Bar */}
+          <form onSubmit={handleSearch} className="mt-6 max-w-md mx-auto relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => { setSearchInput(e.target.value); if (!e.target.value) setSearchQuery(''); }}
+              placeholder="Buscar por título ou autor..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-full border border-border/60 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+            />
+          </form>
         </div>
       </section>
 
@@ -200,13 +226,14 @@ export default function HomePage() {
           </span>
         </div>
 
-        {loading ? (
+        {loading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {Array.from({ length: 10 }).map((_, i) => (
               <BookSkeleton key={i} />
             ))}
           </div>
-        ) : books.length === 0 ? (
+        )}
+        {!loading && books.length === 0 && (
           <div className="text-center py-16">
             <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
             <p className="text-muted-foreground mb-3">Nenhum livro encontrado nesta categoria.</p>
@@ -219,16 +246,30 @@ export default function HomePage() {
               </button>
             )}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {books.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                onClick={() => navigate('book-detail', { bookId: book.id })}
-              />
-            ))}
-          </div>
+        )}
+        {!loading && books.length > 0 && (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {books.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  onClick={() => navigate('book-detail', { bookId: book.id })}
+                />
+              ))}
+            </div>
+            {nextCursor && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={() => loadBooks(nextCursor!)}
+                  disabled={loadingMore}
+                  className="px-6 py-2.5 rounded-full border border-border/60 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
+                >
+                  {loadingMore ? 'Carregando...' : 'Carregar mais'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

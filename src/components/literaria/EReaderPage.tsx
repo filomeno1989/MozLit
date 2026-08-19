@@ -201,28 +201,17 @@ export default function EReaderPage() {
         className="relative min-h-[calc(100vh-7rem)]"
         onContextMenu={(e) => e.preventDefault()}
       >
-        {/* Watermark */}
-        <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
-          {Array.from({ length: 16 }).map((_, row) =>
-            Array.from({ length: 5 }).map((_, col) => (
-              <div
-                key={`s-${row}-${col}`}
-                className="absolute text-foreground/[0.04] dark:text-foreground/[0.05] font-semibold whitespace-nowrap select-none"
-                style={{
-                  top: `${row * 7}%`,
-                  left: `${col * 25 - 5}%`,
-                  transform: 'rotate(-35deg)',
-                  fontSize: '1rem',
-                  userSelect: 'none',
-                }}
-              >
-                {user?.nome || 'Leitor'} - MozLit
-              </div>
-            ))
-          )}
-        </div>
+        <div
+          className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
+          aria-hidden="true"
+          style={{
+            backgroundImage: `repeating-linear-gradient(-35deg, transparent, transparent 120px, currentColor 120px, currentColor 121px)`,
+            backgroundSize: '400px 280px',
+            backgroundPosition: '0 0, 200px 140px',
+            opacity: 0.02,
+          }}
+        ></div>
 
-        {/* Top bar */}
         <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b">
           <div className="max-w-2xl mx-auto px-4 h-12 flex items-center justify-between">
             <Button variant="ghost" size="sm" onClick={() => navigate('book-detail', { bookId })}>
