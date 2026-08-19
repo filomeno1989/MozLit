@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins } from 'lucide-react';
 import { toast } from 'sonner';
-import { mznParaMoedas } from '@/lib/constants';
+import { formatarMoedas } from '@/lib/constants';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -331,7 +331,7 @@ export default function BookDetailPage() {
                     ) : (
                       <>
                         <Coins className="h-4 w-4 mr-1.5" />
-                        {mznParaMoedas(book.preco_total).toLocaleString('pt-MZ')} MC
+                        {formatarMoedas(Math.round(book.preco_total))}
                       </>
                     )}
                   </Button>
@@ -437,7 +437,7 @@ export default function BookDetailPage() {
                     ) : (
                       <>
                         <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                          {mznParaMoedas(chapter.preco_capitulo).toLocaleString('pt-MZ')} MC
+                          {formatarMoedas(Math.round(chapter.preco_capitulo))}
                         </span>
                         <Button
                           size="sm"
@@ -486,14 +486,14 @@ export default function BookDetailPage() {
               {purchaseConfirm?.type === 'full' ? (
                 <>
                   <p>Deseja comprar o livro completo <strong>{purchaseConfirm.name}</strong>?</p>
-                  <p className="mt-2">Valor: <strong>{mznParaMoedas(purchaseConfirm.price).toLocaleString('pt-MZ')} MC</strong></p>
-                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - mznParaMoedas(purchaseConfirm.price)).toLocaleString('pt-MZ')} MC</p>}
+                  <p className="mt-2">Valor: <strong>{formatarMoedas(Math.round(purchaseConfirm.price))}</strong></p>
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - Math.round(purchaseConfirm.price)).toLocaleString('pt-MZ')} MC</p>}
                 </>
               ) : (
                 <>
                   <p>Deseja comprar o capítulo <strong>{purchaseConfirm?.name}</strong>?</p>
-                  <p className="mt-2">Valor: <strong>{mznParaMoedas(purchaseConfirm?.price || 0).toLocaleString('pt-MZ')} MC</strong></p>
-                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - mznParaMoedas(purchaseConfirm?.price || 0)).toLocaleString('pt-MZ')} MC</p>}
+                  <p className="mt-2">Valor: <strong>{formatarMoedas(Math.round(purchaseConfirm?.price || 0))}</strong></p>
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - Math.round(purchaseConfirm?.price || 0)).toLocaleString('pt-MZ')} MC</p>}
                 </>
               )}
             </AlertDialogDescription>

@@ -13,9 +13,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, BookOpen, Eye, Pencil, Trash2, DollarSign, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS } from '@/lib/constants';
+import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS, formatarMoedas } from '@/lib/constants';
 
 interface DashboardData {
   totalGanhos: number;
@@ -69,6 +69,10 @@ export default function AuthorDashboard() {
   const [showChapterDialog, setShowChapterDialog] = useState(false);
   const [chapterError, setChapterError] = useState('');
   const [newChapter, setNewChapter] = useState({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
+
+  // Edit chapter
+  const [editingChapter, setEditingChapter] = useState<{ id: string; titulo: string; conteudo: string; preco_capitulo: string; is_free: boolean } | null>(null);
+  const [savingChapter, setSavingChapter] = useState(false);
 
   // Edit book dialog
   const [editingBook, setEditingBook] = useState<BookWithChapters | null>(null);
@@ -182,7 +186,7 @@ export default function AuthorDashboard() {
         method: 'POST',
         body: JSON.stringify({
           titulo: newChapter.titulo, conteudo: newChapter.conteudo,
-          livroId: bookChapters.id, preco_capitulo: parseFloat(newChapter.preco_capitulo) || 0,
+          livroId: bookChapters.id, preco_capitulo: parseInt(newChapter.preco_capitulo) || 0,
           is_free: newChapter.is_free,
         }),
       });
@@ -191,6 +195,51 @@ export default function AuthorDashboard() {
       loadBookChapters(bookChapters.id);
       loadDashboard();
     } catch (err) { setChapterError((err as Error).message); }
+  }
+
+  function openEditChapter(ch: { id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }) {
+    // Load full chapter content for editing
+    apiFetch<{ titulo: string; conteudo: string; preco_capitulo: number; is_free: boolean }>(`/api/chapters/${ch.id}`).then((full) => {
+      setEditingChapter({
+        id: ch.id,
+        titulo: full.titulo,
+        conteudo: full.conteudo,
+        preco_capitulo: String(Math.round(full.preco_capitulo)),
+        is_free: full.is_free,
+      });
+    }).catch(() => toast.error('Erro ao carregar capítulo'));
+  }
+
+  async function saveEditChapter() {
+    if (!editingChapter) return;
+    setSavingChapter(true);
+    try {
+      await apiFetch(`/api/chapters/${editingChapter.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          titulo: editingChapter.titulo,
+          conteudo: editingChapter.conteudo,
+          preco_capitulo: parseInt(editingChapter.preco_capitulo) || 0,
+          is_free: editingChapter.is_free,
+        }),
+      });
+      setEditingChapter(null);
+      if (bookChapters) loadBookChapters(bookChapters.id);
+      loadDashboard();
+      toast.success('Capítulo actualizado com sucesso.');
+    } catch (err) { toast.error((err as Error).message); }
+    finally { setSavingChapter(false); }
+  }
+
+  async function deleteChapter(chapterId: string) {
+    if (!bookChapters) return;
+    try {
+      await apiFetch(`/api/chapters/${chapterId}`, { method: 'DELETE' });
+      if (editingChapter?.id === chapterId) setEditingChapter(null);
+      loadBookChapters(bookChapters.id);
+      loadDashboard();
+      toast.success('Capítulo excluído.');
+    } catch (err) { toast.error((err as Error).message); }
   }
 
   // --- Upload helper ---
@@ -294,7 +343,7 @@ export default function AuthorDashboard() {
         titulo: editForm.titulo,
         sinopse: editForm.sinopse,
         capa_url: editForm.capa_url || undefined,
-        preco_total: parseFloat(editForm.preco_total) || 0,
+        preco_total: parseInt(editForm.preco_total) || 0,
         categorias: editForm.categorias,
       };
       // Always send section fields (empty string to clear)
@@ -364,8 +413,8 @@ export default function AuthorDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="transition-shadow hover:shadow-md"><CardContent className="p-4 flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30"><DollarSign className="h-5 w-5 text-amber-700 dark:text-amber-400" /></div>
-          <div><p className="text-xs text-muted-foreground">Saldo Total</p><p className="text-xl font-bold">{(data?.totalGanhos ?? 0).toFixed(2)} MZN</p></div>
+          <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30"><Coins className="h-5 w-5 text-amber-700 dark:text-amber-400" /></div>
+          <div><p className="text-xs text-muted-foreground">Ganhos (MC)</p><p className="text-xl font-bold">{formatarMoedas(Math.round(data?.totalGanhos ?? 0))}</p></div>
         </CardContent></Card>
         <Card className="transition-shadow hover:shadow-md"><CardContent className="p-4 flex items-center gap-3">
           <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-900/30"><BookOpen className="h-5 w-5 text-emerald-700 dark:text-emerald-400" /></div>
@@ -416,8 +465,8 @@ export default function AuthorDashboard() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {livro.categorias.join(', ')} - {livro.totalCapitulos} cap. ({livro.capitulosPagos} pagos)
-                        {livro.preco_total > 0 && ` - Completo: ${livro.preco_total.toFixed(2)} MZN`}
-                        {' - '}Receita: {livro.receitaEstimada.toFixed(2)} MZN
+                        {livro.preco_total > 0 && ` - Completo: ${Math.round(livro.preco_total)} MC`}
+                        {' - '}Receita: {Math.round(livro.receitaEstimada)} MC
                       </p>
                     </div>
                   </div>
@@ -451,7 +500,7 @@ export default function AuthorDashboard() {
                     <p className="text-xs text-muted-foreground">{new Date(tx.createdAt).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                   </div>
                   <span className={`text-sm font-medium shrink-0 ml-3 ${tx.valor > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
-                    {tx.valor > 0 ? '+' : ''}{tx.valor.toFixed(2)} MZN
+                    {tx.valor > 0 ? '+' : ''}{Math.round(tx.valor)} MC
                   </span>
                 </div>
               ))}
@@ -477,7 +526,11 @@ export default function AuthorDashboard() {
                       {ch.titulo}
                       {ch.is_free && <Badge variant="secondary" className="ml-2 text-xs">Grátis</Badge>}
                     </span>
-                    <span className="text-xs text-muted-foreground shrink-0 ml-2">{ch.is_free ? 'Grátis' : `${ch.preco_capitulo.toFixed(2)} MZN`}</span>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground mr-1">{ch.is_free ? 'Grátis' : `${Math.round(ch.preco_capitulo)} MC`}</span>
+                      <button onClick={() => openEditChapter(ch)} className="p-1 rounded hover:bg-accent transition-colors" title="Editar capítulo"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                      <button onClick={() => deleteChapter(ch.id)} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="Excluir capítulo"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
+                    </div>
                   </div>
                 ))}
                 {bookChapters.chapters.length === 0 && <p className="text-sm text-muted-foreground py-2">Nenhum capítulo.</p>}
@@ -487,7 +540,7 @@ export default function AuthorDashboard() {
                 <div><Label className="text-xs">Título</Label><Input value={newChapter.titulo} onChange={(e) => setNewChapter({ ...newChapter, titulo: e.target.value })} placeholder="Título do capítulo" /></div>
                 <div><Label className="text-xs">Conteúdo</Label><Textarea value={newChapter.conteudo} onChange={(e) => setNewChapter({ ...newChapter, conteudo: e.target.value })} placeholder="Escreva o conteúdo do capítulo..." rows={6} /></div>
                 <div className="flex items-center gap-4">
-                  <div className="flex-1"><Label className="text-xs">Preço (MZN)</Label><Input type="number" step="0.01" min="0" value={newChapter.preco_capitulo} onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })} disabled={newChapter.is_free} /></div>
+                  <div className="flex-1"><Label className="text-xs">Preço (MC)</Label><Input type="number" step="1" min="0" value={newChapter.preco_capitulo} onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })} disabled={newChapter.is_free} /></div>
                   <div className="flex items-center gap-2 pt-5">
                     <Checkbox id="free-check" checked={newChapter.is_free} onCheckedChange={(checked) => setNewChapter({ ...newChapter, is_free: !!checked })} />
                     <Label htmlFor="free-check" className="text-xs cursor-pointer">Grátis</Label>
@@ -644,8 +697,8 @@ export default function AuthorDashboard() {
               </div>
 
               <div>
-                <Label>Preço do Livro Completo (MZN)</Label>
-                <Input type="number" step="0.01" min="0" value={editForm.preco_total} onChange={(e) => setEditForm({ ...editForm, preco_total: e.target.value })} />
+                <Label>Preço do Livro Completo (MC)</Label>
+                <Input type="number" step="1" min="0" value={editForm.preco_total} onChange={(e) => setEditForm({ ...editForm, preco_total: e.target.value })} />
                 <p className="text-xs text-muted-foreground mt-1">0 = apenas venda por capítulo avulso</p>
               </div>
               <Button onClick={saveEditBook} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Save className="h-4 w-4 mr-1" /> Salvar Alterações</Button>
@@ -686,6 +739,34 @@ export default function AuthorDashboard() {
       </Dialog>
       </>
       )}
+
+      {/* Edit Chapter Dialog */}
+      <Dialog open={!!editingChapter} onOpenChange={(open) => { if (!open) setEditingChapter(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Editar Capítulo</DialogTitle><DialogDescription>Altere o título, conteúdo e preço do capítulo.</DialogDescription></DialogHeader>
+          {editingChapter && (
+            <div className="space-y-4">
+              <div><Label className="text-xs">Título</Label><Input value={editingChapter.titulo} onChange={(e) => setEditingChapter({ ...editingChapter, titulo: e.target.value })} /></div>
+              <div><Label className="text-xs">Conteúdo</Label><Textarea value={editingChapter.conteudo} onChange={(e) => setEditingChapter({ ...editingChapter, conteudo: e.target.value })} rows={10} /></div>
+              <div className="flex items-center gap-4">
+                <div className="flex-1"><Label className="text-xs">Preço (MC)</Label><Input type="number" step="1" min="0" value={editingChapter.preco_capitulo} onChange={(e) => setEditingChapter({ ...editingChapter, preco_capitulo: e.target.value })} disabled={editingChapter.is_free} /></div>
+                <div className="flex items-center gap-2 pt-5">
+                  <Checkbox id="edit-free-check" checked={editingChapter.is_free} onCheckedChange={(checked) => setEditingChapter({ ...editingChapter, is_free: !!checked })} />
+                  <Label htmlFor="edit-free-check" className="text-xs cursor-pointer">Grátis</Label>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setEditingChapter(null)}>Cancelar</Button>
+                <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={saveEditChapter} disabled={savingChapter}>
+                  {savingChapter ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

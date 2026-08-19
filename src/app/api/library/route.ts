@@ -108,51 +108,48 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Já possui este livro completo' }, { status: 409 });
       }
 
-      const precoMzn = book.preco_total;
-      if (!precoMzn || precoMzn <= 0) {
+      const precoMoedas = Math.round(book.preco_total);
+      if (!precoMoedas || precoMoedas <= 0) {
         return NextResponse.json({ error: 'Preço inválido para o livro' }, { status: 400 });
       }
 
-      // Converter preço MZN para moedas
-      const precoMoedas = Math.round(precoMzn * 10);
+      const result = await db.$transaction(async (tx) => {
+        const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
+          SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+        `;
+        if (!buyerRow || buyerRow.moedas < precoMoedas) {
+          throw new Error('Moedas insuficientes. Compre moedas na carteira.');
+        }
 
-      const buyer = await db.$queryRaw<Array<{ moedas: number; id: string }>>`
-        SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
-      `;
-
-      if (!buyer[0] || buyer[0].moedas < precoMoedas) {
-        return NextResponse.json({ error: 'Moedas insuficientes. Compre moedas na carteira.' }, { status: 402 });
-      }
-
-      await db.$transaction([
-        db.libraryItem.create({
+        await tx.libraryItem.create({
           data: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
-        }),
-        db.user.update({
+        });
+        await tx.user.update({
           where: { id: payload.userId },
           data: { moedas: { decrement: precoMoedas } },
-        }),
-        db.user.update({
+        });
+        await tx.user.update({
           where: { id: book.autorId },
           data: { moedas: { increment: precoMoedas } },
-        }),
-        db.transaction.create({
+        });
+        await tx.transaction.create({
           data: {
             userId: payload.userId,
             tipo: 'COMPRA',
-            valor: precoMzn,
+            valor: precoMoedas,
             status: 'CONCLUIDO',
             descricao: `Livro completo: ${book.titulo} (${precoMoedas} MC)`,
           },
-        }),
-      ]);
+        });
 
-      const updatedBuyer = await db.user.findUnique({
-        where: { id: payload.userId },
-        select: { moedas: true },
+        const updatedBuyer = await tx.user.findUnique({
+          where: { id: payload.userId },
+          select: { moedas: true },
+        });
+        return updatedBuyer;
       });
 
-      return NextResponse.json({ success: true, novoSaldoMoedas: updatedBuyer?.moedas ?? 0 });
+      return NextResponse.json({ success: true, novoSaldoMoedas: result?.moedas ?? 0 });
     }
 
     // --- Chapter Purchase ---
@@ -197,46 +194,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, novoSaldoMoedas: user?.moedas ?? 0 });
     }
 
-    const precoMzn = chapter.preco_capitulo;
-    const precoMoedas = Math.round(precoMzn * 10);
+    const precoMoedas = Math.round(chapter.preco_capitulo);
 
-    const buyer = await db.$queryRaw<Array<{ moedas: number; id: string }>>`
-      SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
-    `;
+    const result = await db.$transaction(async (tx) => {
+      const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
+        SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+      `;
+      if (!buyerRow || buyerRow.moedas < precoMoedas) {
+        throw new Error('Moedas insuficientes. Compre moedas na carteira.');
+      }
 
-    if (!buyer[0] || buyer[0].moedas < precoMoedas) {
-      return NextResponse.json({ error: 'Moedas insuficientes. Compre moedas na carteira.' }, { status: 402 });
-    }
-
-    await db.$transaction([
-      db.libraryItem.create({
+      await tx.libraryItem.create({
         data: { userId: payload.userId, chapterId, bookId: chapter.livroId },
-      }),
-      db.user.update({
+      });
+      await tx.user.update({
         where: { id: payload.userId },
         data: { moedas: { decrement: precoMoedas } },
-      }),
-      db.user.update({
+      });
+      await tx.user.update({
         where: { id: chapter.livro.autorId },
         data: { moedas: { increment: precoMoedas } },
-      }),
-      db.transaction.create({
+      });
+      await tx.transaction.create({
         data: {
           userId: payload.userId,
           tipo: 'COMPRA',
-          valor: precoMzn,
+          valor: precoMoedas,
           status: 'CONCLUIDO',
           descricao: `Compra: ${chapter.titulo} (${precoMoedas} MC)`,
         },
-      }),
-    ]);
+      });
 
-    const updatedBuyer = await db.user.findUnique({
-      where: { id: payload.userId },
-      select: { moedas: true },
+      const updatedBuyer = await tx.user.findUnique({
+        where: { id: payload.userId },
+        select: { moedas: true },
+      });
+      return updatedBuyer;
     });
 
-    return NextResponse.json({ success: true, novoSaldoMoedas: updatedBuyer?.moedas ?? 0 });
+    return NextResponse.json({ success: true, novoSaldoMoedas: result?.moedas ?? 0 });
   } catch (error) {
     console.error('Erro na compra:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

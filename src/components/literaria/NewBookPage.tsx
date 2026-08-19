@@ -428,15 +428,15 @@ export default function NewBookPage() {
             </div>
 
             <div>
-              <Label htmlFor="preco_total">Preço do Livro Completo (MZN)</Label>
+              <Label htmlFor="preco_total">Preço do Livro Completo (MC)</Label>
               <Input
                 id="preco_total"
                 type="number"
-                step="0.01"
+                step="1"
                 min="0"
                 value={precoTotal}
                 onChange={(e) => setPrecoTotal(e.target.value)}
-                placeholder="0.00"
+                placeholder="0"
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Deixe 0 ou vazio se quiser vender apenas capítulos avulsos.

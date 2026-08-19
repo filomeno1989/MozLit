@@ -41,20 +41,19 @@ export async function POST(request: NextRequest) {
       // Calcular custo em MZN (10 moedas = 1 MZN)
       const custoMzn = qtdMoedas / 10;
 
-      // Verificar saldo suficiente
-      const user = await db.$queryRaw<Array<{ saldo_carteira: number; id: string; moedas: number }>>`
-        SELECT id, saldo_carteira, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
-      `;
-      if (!user[0] || user[0].saldo_carteira < custoMzn) {
-        return NextResponse.json({ error: 'Saldo MZN insuficiente para comprar moedas.' }, { status: 402 });
-      }
+      const result = await db.$transaction(async (tx) => {
+        const [userRow] = await tx.$queryRaw<Array<{ saldo_carteira: number; id: string; moedas: number }>>`
+          SELECT id, saldo_carteira, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+        `;
+        if (!userRow || userRow.saldo_carteira < custoMzn) {
+          throw new Error('Saldo MZN insuficiente para comprar moedas.');
+        }
 
-      await db.$transaction([
-        db.user.update({
+        await tx.user.update({
           where: { id: payload.userId },
           data: { saldo_carteira: { decrement: custoMzn }, moedas: { increment: qtdMoedas } },
-        }),
-        db.transaction.create({
+        });
+        await tx.transaction.create({
           data: {
             userId: payload.userId,
             tipo: 'COMPRA_MOEDAS',
@@ -62,14 +61,16 @@ export async function POST(request: NextRequest) {
             status: 'CONCLUIDO',
             descricao: `Compra de ${qtdMoedas.toLocaleString('pt-MZ')} MC`,
           },
-        }),
-      ]);
+        });
 
-      const updated = await db.user.findUnique({
-        where: { id: payload.userId },
-        select: { saldo_carteira: true, moedas: true },
+        const updated = await tx.user.findUnique({
+          where: { id: payload.userId },
+          select: { saldo_carteira: true, moedas: true },
+        });
+        return updated;
       });
-      return NextResponse.json({ saldo: updated?.saldo_carteira ?? 0, moedas: updated?.moedas ?? 0 });
+
+      return NextResponse.json({ saldo: result?.saldo_carteira ?? 0, moedas: result?.moedas ?? 0 });
     }
 
     // === DEPÓSITO MZN ===
