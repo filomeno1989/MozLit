@@ -5,7 +5,7 @@ import { hashPassword, generateToken, type Role } from '@/lib/auth';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nome, email, senha } = body;
+    const { nome, email, senha, role: requestedRole } = body;
 
     if (!nome || !email || !senha) {
       return NextResponse.json(
@@ -14,8 +14,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Security: role is always LEITOR on registration. Admin/ESCRITOR assigned via admin endpoint only.
-    const userRole: Role = 'LEITOR';
+    // Only allow LEITOR or ESCRITOR from client; ADMIN is server-only
+    const safeRoles: Role[] = ['LEITOR', 'ESCRITOR'];
+    const userRole: Role = safeRoles.includes(requestedRole) ? requestedRole : 'LEITOR';
 
     const existingUser = await db.user.findUnique({ where: { email } });
     if (existingUser) {

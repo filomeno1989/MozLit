@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine } from 'lucide-react';
 
 function getPasswordStrength(senha: string): { label: string; color: string; width: string } {
   if (!senha) return { label: '', color: 'bg-muted', width: 'w-0' };
@@ -27,7 +27,9 @@ export default function RegisterPage() {
   const { navigate, setAuth } = useAppStore();
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'LEITOR' | 'ESCRITOR'>('LEITOR');
   const [senha, setSenha] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,13 +40,20 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (senha !== confirmarSenha) {
+      setError('As senhas não coincidem.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await apiFetch<{ user: User; token: string }>('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ nome, email, senha }),
+        body: JSON.stringify({ nome, email, senha, role }),
       });
       setAuth(data.user, data.token);
-      navigate('home');
+      navigate(role === 'ESCRITOR' ? 'author-dashboard' : 'home');
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -92,6 +101,37 @@ export default function RegisterPage() {
               />
             </div>
             <div>
+              <Label>Registrar como</Label>
+              <div className="grid grid-cols-2 gap-3 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setRole('LEITOR')}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                    role === 'LEITOR'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                      : 'border-border/50 hover:border-border'
+                  }`}
+                >
+                  <BookOpenCheck className={`h-6 w-6 ${role === 'LEITOR' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm font-medium ${role === 'LEITOR' ? 'text-amber-900 dark:text-amber-100' : 'text-muted-foreground'}`}>Leitor</span>
+                  <span className="text-[11px] text-muted-foreground">Descubra e leia obras</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRole('ESCRITOR')}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all text-center ${
+                    role === 'ESCRITOR'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                      : 'border-border/50 hover:border-border'
+                  }`}
+                >
+                  <PenLine className={`h-6 w-6 ${role === 'ESCRITOR' ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm font-medium ${role === 'ESCRITOR' ? 'text-amber-900 dark:text-amber-100' : 'text-muted-foreground'}`}>Autor</span>
+                  <span className="text-[11px] text-muted-foreground">Publique e monetize</span>
+                </button>
+              </div>
+            </div>
+            <div>
               <Label htmlFor="senha">Senha</Label>
               <div className="relative">
                 <Input
@@ -121,6 +161,24 @@ export default function RegisterPage() {
                   <p className="text-xs text-muted-foreground">Força: {strength.label}</p>
                 </div>
               )}
+            </div>
+            <div>
+              <Label htmlFor="confirmar-senha">Confirmação da Senha</Label>
+              <div className="relative">
+                <Input
+                  id="confirmar-senha"
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmarSenha}
+                  onChange={(e) => setConfirmarSenha(e.target.value)}
+                  placeholder="Repita a senha"
+                  required
+                  minLength={6}
+                  className={`pr-10 ${confirmarSenha && confirmarSenha !== senha ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                />
+                {confirmarSenha && confirmarSenha !== senha && (
+                  <p className="text-xs text-destructive mt-1">As senhas não coincidem</p>
+                )}
+              </div>
             </div>
             <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <UserPlus className="h-4 w-4 mr-1" />}
