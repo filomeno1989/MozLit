@@ -16,6 +16,7 @@ model User {
   role           String   @default("LEITOR") // ADMIN, ESCRITOR, LEITOR
   data_nascimento DateTime? @map("data_nascimento") @db.Date
   saldo_carteira Float    @default(0) @map("saldo_carteira")
+  moedas          Int      @default(0) @map("moedas")
   biografia      String   @default("")
   avatar_url     String   @default("") @map("avatar_url")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

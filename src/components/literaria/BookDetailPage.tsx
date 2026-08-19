@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet } from 'lucide-react';
+import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins } from 'lucide-react';
 import { toast } from 'sonner';
+import { mznParaMoedas } from '@/lib/constants';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -87,11 +88,11 @@ export default function BookDetailPage() {
     setPurchasing(purchasingKey);
     try {
       const body = type === 'full' ? { bookId: book!.id } : { chapterId: id };
-      const res = await apiFetch<{ success: boolean; novoSaldo: number }>('/api/library', {
+      const res = await apiFetch<{ success: boolean; novoSaldoMoedas: number }>('/api/library', {
         method: 'POST',
         body: JSON.stringify(body),
       });
-      useAppStore.getState().updateBalance(res.novoSaldo);
+      useAppStore.getState().updateMoedas(res.novoSaldoMoedas);
       toast.success(type === 'full' ? 'Livro completo adquirido!' : 'Capítulo adquirido!');
       if (type === 'full') {
         setOwnsFullBook(true);
@@ -329,8 +330,8 @@ export default function BookDetailPage() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <>
-                        <BookMarked className="h-4 w-4 mr-1.5" />
-                        {book.preco_total.toFixed(2)} MZN
+                        <Coins className="h-4 w-4 mr-1.5" />
+                        {mznParaMoedas(book.preco_total).toLocaleString('pt-MZ')} MC
                       </>
                     )}
                   </Button>
@@ -436,7 +437,7 @@ export default function BookDetailPage() {
                     ) : (
                       <>
                         <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                          {chapter.preco_capitulo.toFixed(2)} MZN
+                          {mznParaMoedas(chapter.preco_capitulo).toLocaleString('pt-MZ')} MC
                         </span>
                         <Button
                           size="sm"
@@ -485,14 +486,14 @@ export default function BookDetailPage() {
               {purchaseConfirm?.type === 'full' ? (
                 <>
                   <p>Deseja comprar o livro completo <strong>{purchaseConfirm.name}</strong>?</p>
-                  <p className="mt-2">Valor: <strong>{purchaseConfirm.price.toFixed(2)} MZN</strong></p>
-                  {user && <p className="mt-1 text-xs text-muted-foreground">Saldo após compra: <Wallet className="inline h-3 w-3 mr-0.5" />{Math.max(0, user.saldo_carteira - purchaseConfirm.price).toFixed(2)} MZN</p>}
+                  <p className="mt-2">Valor: <strong>{mznParaMoedas(purchaseConfirm.price).toLocaleString('pt-MZ')} MC</strong></p>
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - mznParaMoedas(purchaseConfirm.price)).toLocaleString('pt-MZ')} MC</p>}
                 </>
               ) : (
                 <>
                   <p>Deseja comprar o capítulo <strong>{purchaseConfirm?.name}</strong>?</p>
-                  <p className="mt-2">Valor: <strong>{purchaseConfirm?.price.toFixed(2)} MZN</strong></p>
-                  {user && <p className="mt-1 text-xs text-muted-foreground">Saldo após compra: <Wallet className="inline h-3 w-3 mr-0.5" />{Math.max(0, user.saldo_carteira - (purchaseConfirm?.price || 0)).toFixed(2)} MZN</p>}
+                  <p className="mt-2">Valor: <strong>{mznParaMoedas(purchaseConfirm?.price || 0).toLocaleString('pt-MZ')} MC</strong></p>
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - mznParaMoedas(purchaseConfirm?.price || 0)).toLocaleString('pt-MZ')} MC</p>}
                 </>
               )}
             </AlertDialogDescription>

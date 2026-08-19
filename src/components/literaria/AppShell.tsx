@@ -17,6 +17,7 @@ import {
   Library,
   PenTool,
   Plus,
+  Coins,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -184,9 +185,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Button>
             {user ? (
               <div className='flex items-center gap-2'>
-                <span className='hidden sm:inline text-sm text-muted-foreground' aria-label='Saldo da carteira'>
-                  {user.saldo_carteira.toFixed(2)} MZN
-                </span>
+                <button
+                  onClick={() => navigate('wallet')}
+                  className='hidden sm:inline-flex items-center gap-1 text-sm font-medium text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors'
+                  aria-label='Moedas'
+                >
+                  <Coins className='h-3.5 w-3.5' />
+                  {(user.moedas ?? 0).toLocaleString('pt-MZ')} MC
+                </button>
                 <Button variant='ghost' size='icon' onClick={() => setShowLogoutDialog(true)} aria-label='Sair da conta'>
                   <LogOut className='h-4 w-4' />
                 </Button>

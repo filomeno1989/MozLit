@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         email: user.email,
         role: user.role,
         saldo_carteira: user.saldo_carteira,
+        moedas: user.moedas,
       },
     });
   } catch (error) {

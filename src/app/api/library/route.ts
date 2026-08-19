@@ -97,12 +97,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
       }
 
-      // Prevent author from buying own book
       if (book.autorId === payload.userId) {
         return NextResponse.json({ error: 'Não pode comprar o seu próprio livro.' }, { status: 400 });
       }
 
-      // Check if already owns the full book
       const alreadyOwns = await db.libraryItem.findFirst({
         where: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
       });
@@ -110,18 +108,20 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Já possui este livro completo' }, { status: 409 });
       }
 
-      const price = book.preco_total;
-      if (!price || price <= 0) {
+      const precoMzn = book.preco_total;
+      if (!precoMzn || precoMzn <= 0) {
         return NextResponse.json({ error: 'Preço inválido para o livro' }, { status: 400 });
       }
 
-      // Use raw SQL with FOR UPDATE to prevent race condition
-      const buyer = await db.$queryRaw<Array<{ saldo_carteira: number; id: string }>>`
-        SELECT id, saldo_carteira FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+      // Converter preço MZN para moedas
+      const precoMoedas = Math.round(precoMzn * 10);
+
+      const buyer = await db.$queryRaw<Array<{ moedas: number; id: string }>>`
+        SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
       `;
 
-      if (!buyer[0] || buyer[0].saldo_carteira < price) {
-        return NextResponse.json({ error: 'Saldo insuficiente. Carregue sua carteira.' }, { status: 402 });
+      if (!buyer[0] || buyer[0].moedas < precoMoedas) {
+        return NextResponse.json({ error: 'Moedas insuficientes. Compre moedas na carteira.' }, { status: 402 });
       }
 
       await db.$transaction([
@@ -130,29 +130,29 @@ export async function POST(request: NextRequest) {
         }),
         db.user.update({
           where: { id: payload.userId },
-          data: { saldo_carteira: { decrement: price } },
+          data: { moedas: { decrement: precoMoedas } },
         }),
         db.user.update({
           where: { id: book.autorId },
-          data: { saldo_carteira: { increment: price } },
+          data: { moedas: { increment: precoMoedas } },
         }),
         db.transaction.create({
           data: {
             userId: payload.userId,
             tipo: 'COMPRA',
-            valor: price,
+            valor: precoMzn,
             status: 'CONCLUIDO',
-            descricao: `Livro completo: ${book.titulo}`,
+            descricao: `Livro completo: ${book.titulo} (${precoMoedas} MC)`,
           },
         }),
       ]);
 
       const updatedBuyer = await db.user.findUnique({
         where: { id: payload.userId },
-        select: { saldo_carteira: true },
+        select: { moedas: true },
       });
 
-      return NextResponse.json({ success: true, novoSaldo: updatedBuyer?.saldo_carteira ?? 0 });
+      return NextResponse.json({ success: true, novoSaldoMoedas: updatedBuyer?.moedas ?? 0 });
     }
 
     // --- Chapter Purchase ---
@@ -169,12 +169,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
-    // Prevent author from buying own chapter
     if (chapter.livro.autorId === payload.userId) {
       return NextResponse.json({ error: 'Não pode comprar o seu próprio capítulo.' }, { status: 400 });
     }
 
-    // Check if user already has access
     const alreadyPurchased = await db.libraryItem.findFirst({
       where: {
         userId: payload.userId,
@@ -194,20 +192,20 @@ export async function POST(request: NextRequest) {
       });
       const user = await db.user.findUnique({
         where: { id: payload.userId },
-        select: { saldo_carteira: true },
+        select: { moedas: true },
       });
-      return NextResponse.json({ success: true, novoSaldo: user?.saldo_carteira ?? 0 });
+      return NextResponse.json({ success: true, novoSaldoMoedas: user?.moedas ?? 0 });
     }
 
-    const price = chapter.preco_capitulo;
+    const precoMzn = chapter.preco_capitulo;
+    const precoMoedas = Math.round(precoMzn * 10);
 
-    // Use raw SQL with FOR UPDATE to prevent race condition
-    const buyer = await db.$queryRaw<Array<{ saldo_carteira: number; id: string }>>`
-      SELECT id, saldo_carteira FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+    const buyer = await db.$queryRaw<Array<{ moedas: number; id: string }>>`
+      SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
     `;
 
-    if (!buyer[0] || buyer[0].saldo_carteira < price) {
-      return NextResponse.json({ error: 'Saldo insuficiente. Carregue sua carteira.' }, { status: 402 });
+    if (!buyer[0] || buyer[0].moedas < precoMoedas) {
+      return NextResponse.json({ error: 'Moedas insuficientes. Compre moedas na carteira.' }, { status: 402 });
     }
 
     await db.$transaction([
@@ -216,29 +214,29 @@ export async function POST(request: NextRequest) {
       }),
       db.user.update({
         where: { id: payload.userId },
-        data: { saldo_carteira: { decrement: price } },
+        data: { moedas: { decrement: precoMoedas } },
       }),
       db.user.update({
         where: { id: chapter.livro.autorId },
-        data: { saldo_carteira: { increment: price } },
+        data: { moedas: { increment: precoMoedas } },
       }),
       db.transaction.create({
         data: {
           userId: payload.userId,
           tipo: 'COMPRA',
-          valor: price,
+          valor: precoMzn,
           status: 'CONCLUIDO',
-          descricao: `Compra: ${chapter.titulo}`,
+          descricao: `Compra: ${chapter.titulo} (${precoMoedas} MC)`,
         },
       }),
     ]);
 
     const updatedBuyer = await db.user.findUnique({
       where: { id: payload.userId },
-      select: { saldo_carteira: true },
+      select: { moedas: true },
     });
 
-    return NextResponse.json({ success: true, novoSaldo: updatedBuyer?.saldo_carteira ?? 0 });
+    return NextResponse.json({ success: true, novoSaldoMoedas: updatedBuyer?.moedas ?? 0 });
   } catch (error) {
     console.error('Erro na compra:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

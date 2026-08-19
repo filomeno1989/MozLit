@@ -17,6 +17,7 @@ export interface User {
   email: string;
   role: string;
   saldo_carteira: number;
+  moedas: number;
   biografia?: string;
   avatar_url?: string;
 }
@@ -114,6 +115,10 @@ export const useAppStore = create<AppState>((set) => ({
   updateBalance: (saldo) =>
     set((state) => ({
       user: state.user ? { ...state.user, saldo_carteira: saldo } : null,
+    })),
+  updateMoedas: (moedas) =>
+    set((state) => ({
+      user: state.user ? { ...state.user, moedas } : null,
     })),
 
   isDark: false,

@@ -194,13 +194,14 @@ export default function AuthorDashboard() {
   }
 
   // --- Upload helper ---
-  async function uploadFile(file: File): Promise<string> {
+  async function uploadFile(file: File, tipo: 'capa' | 'avatar' = 'capa'): Promise<string> {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (!allowed.includes(file.type)) throw new Error(`Tipo não suportado (${file.type}). Use JPG, PNG, WEBP ou GIF.`);
     if (file.size > 5 * 1024 * 1024) throw new Error(`Ficheiro demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo 5MB.`);
 
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('tipo', tipo);
     const res = await fetch('/api/upload', {
       method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData,
     });
@@ -269,7 +270,7 @@ export default function AuthorDashboard() {
     if (!file) return;
     setEditUploading(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, 'capa');
       setEditForm((f) => ({ ...f, capa_url: url }));
     } catch (err) { toast.error((err as Error).message); }
     finally { setEditUploading(false); if (editFileRef.current) editFileRef.current.value = ''; }
@@ -280,7 +281,7 @@ export default function AuthorDashboard() {
     if (!file) return;
     setProfileUploading(true);
     try {
-      const url = await uploadFile(file);
+      const url = await uploadFile(file, 'avatar');
       setProfileForm((f) => ({ ...f, avatar_url: url }));
     } catch (err) { toast.error((err as Error).message); }
     finally { setProfileUploading(false); if (profileFileRef.current) profileFileRef.current.value = ''; }

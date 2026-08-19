@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
           email: user.email,
           role: user.role,
           saldo_carteira: user.saldo_carteira,
+          moedas: user.moedas,
         },
         token,
       },

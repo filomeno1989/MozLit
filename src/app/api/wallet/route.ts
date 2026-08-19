@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
 
     const user = await db.user.findUnique({
       where: { id: payload.userId },
-      select: { saldo_carteira: true },
+      select: { saldo_carteira: true, moedas: true },
     });
     if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
 
-    return NextResponse.json({ saldo: user.saldo_carteira });
+    return NextResponse.json({ saldo: user.saldo_carteira, moedas: user.moedas });
   } catch (error) {
     console.error('Erro ao buscar saldo:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
@@ -30,13 +30,53 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token);
     if (!payload) return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
 
+    const body = await request.json();
+    const { acao, tipo, valor, moedas: qtdMoedas } = body;
+
+    // === COMPRAR MOEDAS ===
+    if (acao === 'comprar-moedas') {
+      if (!qtdMoedas || typeof qtdMoedas !== 'number' || qtdMoedas <= 0) {
+        return NextResponse.json({ error: 'Quantidade de moedas inválida.' }, { status: 400 });
+      }
+      // Calcular custo em MZN (10 moedas = 1 MZN)
+      const custoMzn = qtdMoedas / 10;
+
+      // Verificar saldo suficiente
+      const user = await db.$queryRaw<Array<{ saldo_carteira: number; id: string; moedas: number }>>`
+        SELECT id, saldo_carteira, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+      `;
+      if (!user[0] || user[0].saldo_carteira < custoMzn) {
+        return NextResponse.json({ error: 'Saldo MZN insuficiente para comprar moedas.' }, { status: 402 });
+      }
+
+      await db.$transaction([
+        db.user.update({
+          where: { id: payload.userId },
+          data: { saldo_carteira: { decrement: custoMzn }, moedas: { increment: qtdMoedas } },
+        }),
+        db.transaction.create({
+          data: {
+            userId: payload.userId,
+            tipo: 'COMPRA_MOEDAS',
+            valor: custoMzn,
+            status: 'CONCLUIDO',
+            descricao: `Compra de ${qtdMoedas.toLocaleString('pt-MZ')} MC`,
+          },
+        }),
+      ]);
+
+      const updated = await db.user.findUnique({
+        where: { id: payload.userId },
+        select: { saldo_carteira: true, moedas: true },
+      });
+      return NextResponse.json({ saldo: updated?.saldo_carteira ?? 0, moedas: updated?.moedas ?? 0 });
+    }
+
+    // === DEPÓSITO MZN ===
     const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
     if (!isDemo && payload.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Depósitos apenas disponíveis através de integração de pagamento.' }, { status: 403 });
     }
-
-    const body = await request.json();
-    const { tipo, valor } = body;
 
     if (tipo !== 'MPESA' && tipo !== 'NIB') {
       return NextResponse.json({ error: 'Tipo inválido. Use MPESA ou NIB.' }, { status: 400 });
@@ -47,7 +87,7 @@ export async function POST(request: NextRequest) {
     const user = await db.user.update({
       where: { id: payload.userId },
       data: { saldo_carteira: { increment: valorValidado } },
-      select: { saldo_carteira: true },
+      select: { saldo_carteira: true, moedas: true },
     });
 
     await db.transaction.create({
@@ -60,7 +100,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ saldo: user.saldo_carteira });
+    return NextResponse.json({ saldo: user.saldo_carteira, moedas: user.moedas });
   } catch (error) {
     if (error instanceof Error && error.name === 'ValidationError') {
       return NextResponse.json({ error: error.message }, { status: 400 });

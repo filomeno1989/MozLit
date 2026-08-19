@@ -64,7 +64,33 @@ export type FaixaEtaria = (typeof FAIXAS_ETARIAS)[number];
 /** Idade mínima para registo na plataforma */
 export const IDADE_MINIMA_REGISTO = 13;
 
-// ===================== UI CONSTANTS =====================
+/** Sistema de moedas */
+export const MOEDAS_CONFIG = {
+  NOME: 'Moedas',
+  SIMBOLO: 'MC',
+  TAXA_CONVERSAO: 10, // 1 MZN = 10 Moedas
+  PACOTES: [
+    { mzn: 50, moedas: 500, bonus: 0 },
+    { mzn: 100, moedas: 1000, bonus: 50 },
+    { mzn: 250, moedas: 2500, bonus: 200 },
+    { mzn: 500, moedas: 5000, bonus: 500 },
+  ],
+} as const;
+
+/** Converter MZN para Moedas */
+export function mznParaMoedas(mzn: number): number {
+  return Math.round(mzn * MOEDAS_CONFIG.TAXA_CONVERSAO);
+}
+
+/** Converter Moedas para MZN (para exibição) */
+export function moedasParaMzn(moedas: number): number {
+  return moedas / MOEDAS_CONFIG.TAXA_CONVERSAO;
+}
+
+/** Formatar preço em moedas para exibição */
+export function formatarMoedas(moedas: number): string {
+  return `${moedas.toLocaleString('pt-MZ')} ${MOEDAS_CONFIG.SIMBOLO}`;
+}
 
 /** Alias para uso no frontend */
 export const CATEGORIAS_SUGESTOES = CATEGORIAS_VALIDAS;

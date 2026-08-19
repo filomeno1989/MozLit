@@ -94,6 +94,7 @@ export default function NewBookPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('tipo', 'capa');
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
