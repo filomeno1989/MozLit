@@ -59,5 +59,10 @@ server.log
 # Uploaded files (now using Supabase Storage)
 /public/uploads/
 
+# Tool outputs and downloads (local only)
+/tool-results/
+/download/
+/upload/
+
 # Skills directory
 /skills/

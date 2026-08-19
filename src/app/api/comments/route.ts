@@ -11,6 +11,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'chapterId é obrigatório' }, { status: 400 });
     }
 
+    // Check chapter access for paid chapters
+    const chapter = await db.chapter.findUnique({
+      where: { id: chapterId },
+      select: { is_free: true, livroId: true },
+    });
+    if (!chapter) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    }
+
+    // For paid chapters, require auth and access
+    if (!chapter.is_free) {
+      const token = extractTokenFromHeader(request.headers.get('Authorization'));
+      const payload = token ? verifyToken(token) : null;
+      if (!payload) {
+        return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
+      }
+      const hasAccess = await db.libraryItem.findFirst({
+        where: {
+          userId: payload.userId,
+          OR: [
+            { chapterId },
+            { bookId: chapter.livroId, tipo: 'LIVRO_COMPLETO' },
+          ],
+        },
+      });
+      if (!hasAccess) {
+        return NextResponse.json({ error: 'Necessita adquirir o capítulo.' }, { status: 403 });
+      }
+    }
+
     const comments = await db.comment.findMany({
       where: { chapterId, parentId: null },
       include: {
@@ -23,9 +53,9 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 50,
     });
 
-    // Format dates to ISO strings for JSON serialization
     const formatted = comments.map((c) => ({
       ...c,
       createdAt: c.createdAt.toISOString(),
@@ -62,15 +92,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Conteúdo e chapterId são obrigatórios' }, { status: 400 });
     }
 
-    if (conteudo.trim().length < 2) {
+    const trimmed = String(conteudo).trim();
+    if (trimmed.length < 2) {
       return NextResponse.json({ error: 'O comentário deve ter pelo menos 2 caracteres.' }, { status: 400 });
     }
-
-    if (conteudo.length > 1000) {
+    if (trimmed.length > 1000) {
       return NextResponse.json({ error: 'O comentário não pode exceder 1000 caracteres.' }, { status: 400 });
     }
 
-    // If it's a reply, verify parent exists and belongs to same chapter
     if (parentId) {
       const parent = await db.comment.findUnique({ where: { id: parentId } });
       if (!parent) {
@@ -81,7 +110,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Verify user has access to the chapter (purchased or free)
     const chapter = await db.chapter.findUnique({ where: { id: chapterId } });
     if (!chapter) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
@@ -98,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     const comment = await db.comment.create({
       data: {
-        conteudo: conteudo.trim(),
+        conteudo: trimmed,
         chapterId,
         userId: payload.userId,
         parentId: parentId || null,
@@ -143,7 +171,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Comentário não encontrado' }, { status: 404 });
     }
 
-    // Only comment author, chapter author, or admin can delete
     const chapter = await db.chapter.findUnique({
       where: { id: comment.chapterId },
       include: { livro: { select: { autorId: true } } },

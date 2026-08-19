@@ -14,20 +14,58 @@ export async function GET(request: NextRequest) {
       include: {
         chapter: {
           include: {
-            livro: { select: { id: true, titulo: true, capa_url: true } },
+            livro: {
+              select: {
+                id: true,
+                titulo: true,
+                capa_url: true,
+                autorId: true,
+              },
+            },
           },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    // Find all book-level purchases (LIVRO_COMPLETO)
+    // Build unique books from purchases
+    const bookMap = new Map<string, {
+      id: string;
+      titulo: string;
+      capa_url: string;
+      autorId: string;
+      chapters: Array<{ id: string; titulo: string; livroId: string }>;
+    }>();
+
+    for (const item of items) {
+      if (item.chapter?.livro) {
+        const book = item.chapter.livro;
+        if (!bookMap.has(book.id)) {
+          bookMap.set(book.id, {
+            id: book.id,
+            titulo: book.titulo,
+            capa_url: book.capa_url,
+            autorId: book.autorId,
+            chapters: [],
+          });
+        }
+        if (item.chapterId) {
+          bookMap.get(book.id)!.chapters.push({
+            id: item.chapter.id,
+            titulo: item.chapter.titulo,
+            livroId: item.chapter.livroId,
+          });
+        }
+      }
+    }
+
     const fullBookItems = items.filter((i) => i.tipo === 'LIVRO_COMPLETO');
     const fullBookIds = new Set(fullBookItems.map((i) => i.bookId).filter(Boolean));
 
     return NextResponse.json({
       items,
       fullBookIds: Array.from(fullBookIds),
+      books: Array.from(bookMap.values()),
     });
   } catch (error) {
     console.error('Erro ao buscar biblioteca:', error);
@@ -59,6 +97,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
       }
 
+      // Prevent author from buying own book
+      if (book.autorId === payload.userId) {
+        return NextResponse.json({ error: 'Não pode comprar o seu próprio livro.' }, { status: 400 });
+      }
+
       // Check if already owns the full book
       const alreadyOwns = await db.libraryItem.findFirst({
         where: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
@@ -72,32 +115,27 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Preço inválido para o livro' }, { status: 400 });
       }
 
-      const buyer = await db.user.findUnique({
-        where: { id: payload.userId },
-        select: { saldo_carteira: true },
-      });
+      // Use raw SQL with FOR UPDATE to prevent race condition
+      const buyer = await db.$queryRaw<Array<{ saldo_carteira: number; id: string }>>`
+        SELECT id, saldo_carteira FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+      `;
 
-      if (!buyer || buyer.saldo_carteira < price) {
+      if (!buyer[0] || buyer[0].saldo_carteira < price) {
         return NextResponse.json({ error: 'Saldo insuficiente. Carregue sua carteira.' }, { status: 402 });
       }
 
-      // Atomic transaction: create book-level library item, deduct buyer, credit author, log transaction
       await db.$transaction([
-        // Create LIVRO_COMPLETO library item (no chapterId)
         db.libraryItem.create({
           data: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
         }),
-        // Deduct from buyer
         db.user.update({
           where: { id: payload.userId },
           data: { saldo_carteira: { decrement: price } },
         }),
-        // Credit to author
         db.user.update({
           where: { id: book.autorId },
           data: { saldo_carteira: { increment: price } },
         }),
-        // Log transaction
         db.transaction.create({
           data: {
             userId: payload.userId,
@@ -131,7 +169,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
-    // Check if user already has access via chapter purchase or full book
+    // Prevent author from buying own chapter
+    if (chapter.livro.autorId === payload.userId) {
+      return NextResponse.json({ error: 'Não pode comprar o seu próprio capítulo.' }, { status: 400 });
+    }
+
+    // Check if user already has access
     const alreadyPurchased = await db.libraryItem.findFirst({
       where: {
         userId: payload.userId,
@@ -157,12 +200,13 @@ export async function POST(request: NextRequest) {
     }
 
     const price = chapter.preco_capitulo;
-    const buyer = await db.user.findUnique({
-      where: { id: payload.userId },
-      select: { saldo_carteira: true },
-    });
 
-    if (!buyer || buyer.saldo_carteira < price) {
+    // Use raw SQL with FOR UPDATE to prevent race condition
+    const buyer = await db.$queryRaw<Array<{ saldo_carteira: number; id: string }>>`
+      SELECT id, saldo_carteira FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+    `;
+
+    if (!buyer[0] || buyer[0].saldo_carteira < price) {
       return NextResponse.json({ error: 'Saldo insuficiente. Carregue sua carteira.' }, { status: 402 });
     }
 

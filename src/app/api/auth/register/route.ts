@@ -1,24 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, generateToken, type Role } from '@/lib/auth';
+import {
+  validateNome,
+  validateEmail,
+  validateSenha,
+  validateRegistroRole,
+} from '@/lib/validate';
+import { IDADE_MINIMA_REGISTO } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nome, email, senha, role: requestedRole } = body;
+    const { nome, email, senha, role: requestedRole, dataNascimento } = body;
 
-    if (!nome || !email || !senha) {
-      return NextResponse.json(
-        { error: 'Nome, email e senha são obrigatórios.' },
-        { status: 400 }
-      );
+    // Validate all fields server-side
+    const nomeValidado = validateNome(nome);
+    const emailValidado = validateEmail(email);
+    const senhaValidada = validateSenha(senha);
+    const roleValido = validateRegistroRole(requestedRole);
+
+    // Age verification
+    if (dataNascimento) {
+      const birthDate = new Date(dataNascimento);
+      if (isNaN(birthDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Data de nascimento inválida.' },
+          { status: 400 }
+        );
+      }
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+      if (age < IDADE_MINIMA_REGISTO) {
+        return NextResponse.json(
+          { error: `Deve ter pelo menos ${IDADE_MINIMA_REGISTO} anos para se registar.` },
+          { status: 400 }
+        );
+      }
     }
 
-    // Only allow LEITOR or ESCRITOR from client; ADMIN is server-only
-    const safeRoles: Role[] = ['LEITOR', 'ESCRITOR'];
-    const userRole: Role = safeRoles.includes(requestedRole) ? requestedRole : 'LEITOR';
+    const userRole: Role = roleValido;
 
-    const existingUser = await db.user.findUnique({ where: { email } });
+    const existingUser = await db.user.findUnique({ where: { email: emailValidado } });
     if (existingUser) {
       return NextResponse.json(
         { error: 'Este email já está cadastrado.' },
@@ -26,10 +51,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const senha_hash = await hashPassword(senha);
+    const senha_hash = await hashPassword(senhaValidada);
 
     const user = await db.user.create({
-      data: { nome, email, senha_hash, role: userRole },
+      data: { nome: nomeValidado, email: emailValidado, senha_hash, role: userRole },
     });
 
     const token = generateToken({
@@ -52,6 +77,9 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error && error.name === 'ValidationError') {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Erro no registro:', error);
     return NextResponse.json(
       { error: 'Erro interno do servidor.' },

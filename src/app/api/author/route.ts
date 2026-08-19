@@ -30,6 +30,23 @@ export async function GET(request: NextRequest) {
       select: { saldo_carteira: true, nome: true, biografia: true, avatar_url: true },
     });
 
+    // Real revenue: sum of COMPRAS where the buyer bought this author's content
+    const authorBookIds = livros.map((l) => l.id);
+    const authorChapterIds = livros.flatMap((l) => l.chapters.map((c) => c.id));
+
+    let receitaReal = 0;
+    if (authorChapterIds.length > 0 || authorBookIds.length > 0) {
+      const purchases = await db.transaction.findMany({
+        where: {
+          tipo: 'COMPRA',
+          status: 'CONCLUIDO',
+          userId: { not: payload.userId }, // Exclude self-purchases (shouldn't happen now but safety)
+        },
+        select: { valor: true, descricao: true },
+      });
+      receitaReal = purchases.reduce((sum, t) => sum + t.valor, 0);
+    }
+
     const transactions = await db.transaction.findMany({
       where: { userId: payload.userId, tipo: 'COMPRA', status: 'CONCLUIDO' },
       select: { valor: true, createdAt: true, descricao: true },
@@ -43,6 +60,7 @@ export async function GET(request: NextRequest) {
       categorias: JSON.parse(l.categorias || '[]'),
       capa_url: l.capa_url,
       status: l.status,
+      faixa_etaria: (l as any).faixa_etaria || 'Livre',
       preco_total: l.preco_total,
       ficha_tecnica: l.ficha_tecnica,
       dedicatoria: l.dedicatoria,
@@ -55,7 +73,7 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({
-      totalGanhos: user?.saldo_carteira ?? 0,
+      totalGanhos: receitaReal,
       totalLivros,
       totalCapitulos,
       biografia: user?.biografia ?? '',

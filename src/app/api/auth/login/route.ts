@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, generateToken } from '@/lib/auth';
+import { validateEmail, validateSenha } from '@/lib/validate';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +15,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await db.user.findUnique({ where: { email } });
+    const emailValidado = validateEmail(email);
+    validateSenha(senha);
+
+    const user = await db.user.findUnique({ where: { email: emailValidado } });
 
     if (!user) {
       return NextResponse.json(
@@ -49,6 +53,9 @@ export async function POST(request: NextRequest) {
       token,
     });
   } catch (error) {
+    if (error instanceof Error && error.name === 'ValidationError') {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Erro no login:', error);
     return NextResponse.json(
       { error: 'Erro interno do servidor.' },

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
+import { validateTitulo, validateConteudo } from '@/lib/validate';
 
 export async function GET(
   request: NextRequest,
@@ -19,10 +20,12 @@ export async function GET(
             autorId: true,
             titulo: true,
             categorias: true,
+            faixa_etaria: true,
             ficha_tecnica: true,
             dedicatoria: true,
             epigrafe: true,
             epilogo: true,
+            status: true,
           },
         },
       },
@@ -32,11 +35,21 @@ export async function GET(
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
+    // Hide chapters from draft books (unless user is the author or admin)
+    if (chapter.livro.status === 'RASCUNHO') {
+      if (!payload || (payload.userId !== chapter.livro.autorId && payload.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+      }
+      // Author can always read their own draft chapters
+      return await buildChapterResponse(chapter);
+    }
+
     const livreData = {
       id: chapter.livro.id,
       titulo: chapter.livro.titulo,
       autorId: chapter.livro.autorId,
       categorias: JSON.parse(chapter.livro.categorias || '[]'),
+      faixa_etaria: chapter.livro.faixa_etaria || 'Livre',
       ficha_tecnica: chapter.livro.ficha_tecnica || '',
       dedicatoria: chapter.livro.dedicatoria || '',
       epigrafe: chapter.livro.epigrafe || '',
@@ -72,6 +85,11 @@ export async function GET(
       return NextResponse.json({ chapter: result });
     }
 
+    // Author can always read their own chapters
+    if (payload && (payload.userId === chapter.livro.autorId || payload.role === 'ADMIN')) {
+      return NextResponse.json({ chapter: result });
+    }
+
     // Check access for authenticated users
     if (payload) {
       const hasAccess = await db.libraryItem.findFirst({
@@ -98,6 +116,40 @@ export async function GET(
   }
 }
 
+async function buildChapterResponse(chapter: any) {
+  const allChapters = await db.chapter.findMany({
+    where: { livroId: chapter.livroId },
+    orderBy: { ordem: 'asc' },
+    select: { id: true, titulo: true, ordem: true, is_free: true },
+  });
+  const currentIndex = allChapters.findIndex((c) => c.id === chapter.id);
+
+  return NextResponse.json({
+    chapter: {
+      id: chapter.id,
+      titulo: chapter.titulo,
+      conteudo: chapter.conteudo,
+      ordem: chapter.ordem,
+      is_free: chapter.is_free,
+      preco_capitulo: chapter.preco_capitulo,
+      livro: {
+        id: chapter.livro.id,
+        titulo: chapter.livro.titulo,
+        autorId: chapter.livro.autorId,
+        categorias: JSON.parse(chapter.livro.categorias || '[]'),
+        faixa_etaria: chapter.livro.faixa_etaria || 'Livre',
+        ficha_tecnica: chapter.livro.ficha_tecnica || '',
+        dedicatoria: chapter.livro.dedicatoria || '',
+        epigrafe: chapter.livro.epigrafe || '',
+        epilogo: chapter.livro.epilogo || '',
+      },
+      prevChapter: currentIndex > 0 ? allChapters[currentIndex - 1] : null,
+      nextChapter: currentIndex < allChapters.length - 1 ? allChapters[currentIndex + 1] : null,
+      allChapters,
+    },
+  });
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -121,18 +173,22 @@ export async function PATCH(
     }
 
     const body = await request.json();
+    const data: Record<string, unknown> = {};
+    if (body.titulo !== undefined) data.titulo = validateTitulo(body.titulo);
+    if (body.conteudo !== undefined) data.conteudo = validateConteudo(body.conteudo);
+    if (body.preco_capitulo !== undefined) data.preco_capitulo = typeof body.preco_capitulo === 'number' ? body.preco_capitulo : 0;
+    if (body.is_free !== undefined) data.is_free = Boolean(body.is_free);
+    if (body.ordem !== undefined) data.ordem = Number(body.ordem);
+
     const updated = await db.chapter.update({
       where: { id },
-      data: {
-        ...(body.titulo !== undefined && { titulo: body.titulo }),
-        ...(body.conteudo !== undefined && { conteudo: body.conteudo }),
-        ...(body.preco_capitulo !== undefined && { preco_capitulo: body.preco_capitulo }),
-        ...(body.is_free !== undefined && { is_free: body.is_free }),
-        ...(body.ordem !== undefined && { ordem: body.ordem }),
-      },
+      data,
     });
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof Error && error.name === 'ValidationError') {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error('Erro ao atualizar capítulo:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }
