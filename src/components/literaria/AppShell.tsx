@@ -19,6 +19,7 @@ import {
   Plus,
   Coins,
   ShieldCheck,
+  UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +29,7 @@ const navItems = [
   { view: 'wallet' as ViewName, label: 'Carteira', icon: Wallet, auth: true, roles: undefined },
   { view: 'author-dashboard' as ViewName, label: 'Painel do Autor', icon: PenTool, auth: true, roles: ['ESCRITOR', 'ADMIN'] },
   { view: 'admin' as ViewName, label: 'Painel Admin', icon: ShieldCheck, auth: true, roles: ['ADMIN'] },
+  { view: 'perfil' as ViewName, label: 'Meu Perfil', icon: UserRound, auth: true, roles: undefined },
 ];
 
 function NavLinks({
@@ -117,7 +119,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <div className='pt-6 border-t mt-8'>
                 {user ? (
                   <div className='space-y-3'>
-                    <p className='text-xs text-muted-foreground'>{user.nome}</p>
+                    <button
+                      onClick={() => {
+                        navigate('perfil');
+                        setSidebarOpen(false);
+                      }}
+                      className='flex items-center gap-2 text-sm font-medium hover:text-amber-700 dark:hover:text-amber-400 transition-colors'
+                    >
+                      <UserRound className='h-4 w-4' /> {user.nome}
+                    </button>
                     <button
                       onClick={() => setShowLogoutDialog(true)}
                       className='flex items-center gap-2 text-sm text-destructive hover:underline'
@@ -195,6 +205,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <Coins className='h-3.5 w-3.5' />
                   {(user.moedas ?? 0).toLocaleString('pt-MZ')} MC
                 </button>
+                <Button variant='ghost' size='icon' onClick={() => navigate('perfil')} aria-label='Meu perfil'>
+                  <UserRound className='h-4 w-4' />
+                </Button>
                 <Button variant='ghost' size='icon' onClick={() => setShowLogoutDialog(true)} aria-label='Sair da conta'>
                   <LogOut className='h-4 w-4' />
                 </Button>

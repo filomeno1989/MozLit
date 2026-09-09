@@ -13,11 +13,12 @@ import WalletPage from '@/components/literaria/WalletPage';
 import LibraryPage from '@/components/literaria/LibraryPage';
 import NewBookPage from '@/components/literaria/NewBookPage';
 import AdminPanel from '@/components/literaria/AdminPanel';
+import PerfilPage from '@/components/literaria/PerfilPage';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
 
 /** Views that require authentication */
-const PROTECTED_VIEWS = new Set(['wallet', 'library', 'author-dashboard', 'new-book', 'admin']);
+const PROTECTED_VIEWS = new Set(['wallet', 'library', 'author-dashboard', 'new-book', 'perfil', 'admin']);
 
 /** Views that require ESCRITOR or ADMIN role */
 const WRITER_VIEWS = new Set(['author-dashboard', 'new-book']);
@@ -58,6 +59,8 @@ function ViewRouter() {
       return <LibraryPage />;
     case 'new-book':
       return <NewBookPage />;
+    case 'perfil':
+      return <PerfilPage />;
     case 'admin':
       return <AdminPanel />;
     default:

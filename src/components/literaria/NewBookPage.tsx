@@ -404,7 +404,7 @@ export default function NewBookPage() {
                     <p className="col-span-2 text-xs text-destructive">O n.º do volume não pode exceder o total.</p>
                   )}
                   <p className="col-span-2 text-xs text-muted-foreground">
-                    Ex.: NYOTA — Volume {volumeNumero || '?'} de {volumeTotal || '?'}
+                    Ex.: NYOTA, Volume {volumeNumero || '?'} de {volumeTotal || '?'}
                   </p>
                 </div>
               )}

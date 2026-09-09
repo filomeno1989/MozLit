@@ -11,10 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   Users, BookOpen, FileText, Coins, Receipt, TrendingUp,
-  CheckCircle2, XCircle, Clock, Search, Zap, Loader2, RefreshCw, Phone, Mail, ShieldCheck,
+  CheckCircle2, XCircle, Clock, Search, Zap, Loader2, RefreshCw, Phone, Mail, ShieldCheck, KeyRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -79,6 +80,12 @@ export default function AdminPanel() {
   const [creditoQtd, setCreditoQtd] = useState('');
   const [creditoNota, setCreditoNota] = useState('');
   const [creditando, setCreditando] = useState(false);
+
+  // Gestão de papel e senha dos utilizadores
+  const [papelEmMudanca, setPapelEmMudanca] = useState<string | null>(null);
+  const [senhaTarget, setSenhaTarget] = useState<UtilizadorAdmin | null>(null);
+  const [novaSenhaAdmin, setNovaSenhaAdmin] = useState('');
+  const [aRedefinir, setARedefinir] = useState(false);
 
   const loadStats = useCallback(async () => {
     try {
@@ -165,6 +172,41 @@ export default function AdminPanel() {
       toast.error((err as Error).message);
     } finally {
       setCreditando(false);
+    }
+  }
+
+  async function mudarPapel(u: UtilizadorAdmin, novoPapel: string) {
+    if (novoPapel === u.role) return;
+    setPapelEmMudanca(u.id);
+    try {
+      await apiFetch('/api/admin/utilizadores', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: u.id, acao: 'PAPEL', papel: novoPapel }),
+      });
+      toast.success(`${u.nome} agora é ${novoPapel === 'ADMIN' ? 'Administrador' : novoPapel === 'ESCRITOR' ? 'Autor' : 'Leitor'}.`);
+      buscarUtilizadores(busca);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setPapelEmMudanca(null);
+    }
+  }
+
+  async function redefinirSenha() {
+    if (!senhaTarget) return;
+    setARedefinir(true);
+    try {
+      await apiFetch('/api/admin/utilizadores', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: senhaTarget.id, acao: 'SENHA', novaSenha: novaSenhaAdmin }),
+      });
+      toast.success(`Senha de ${senhaTarget.nome} redefinida. Partilhe-a com o utilizador de forma segura.`);
+      setSenhaTarget(null);
+      setNovaSenhaAdmin('');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setARedefinir(false);
     }
   }
 
@@ -320,8 +362,8 @@ export default function AdminPanel() {
                         </div>
 
                         <div className="text-xs text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-1">
-                          <p>Enviado de: <strong className="text-foreground">{r.numeroEnvio || '—'}</strong></p>
-                          <p>Referência: <strong className="text-foreground">{r.referencia || '—'}</strong></p>
+                          <p>Enviado de: <strong className="text-foreground">{r.numeroEnvio || 'não indicado'}</strong></p>
+                          <p>Referência: <strong className="text-foreground">{r.referencia || 'não indicada'}</strong></p>
                           <p>{new Date(r.createdAt).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                         </div>
                         {r.nota && (
@@ -369,7 +411,7 @@ export default function AdminPanel() {
               <CardTitle className="text-lg flex items-center gap-2">
                 <Users className="h-4 w-4" /> Utilizadores
               </CardTitle>
-              <CardDescription>Busque por nome, email ou telefone para creditar MC directamente (testes e suporte).</CardDescription>
+              <CardDescription>Busque por nome, email ou telefone para gerir a conta: creditar MC, mudar papel ou redefinir senha.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <form
@@ -410,7 +452,30 @@ export default function AdminPanel() {
                           <span className="text-sm font-semibold text-amber-700 dark:text-amber-400">
                             {u.moedas.toLocaleString('pt-MZ')} MC
                           </span>
-                          <Button variant="outline" size="sm" onClick={() => setCreditoUser(u)}>
+                          <Select
+                            value={u.role}
+                            onValueChange={(papel) => mudarPapel(u, papel)}
+                            disabled={u.id === user?.id || papelEmMudanca === u.id}
+                          >
+                            <SelectTrigger className="h-8 w-[110px] text-xs" aria-label="Mudar papel">
+                              <SelectValue placeholder={papelEmMudanca === u.id ? '...' : u.role} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="LEITOR">Leitor</SelectItem>
+                              <SelectItem value="ESCRITOR">Autor</SelectItem>
+                              <SelectItem value="ADMIN">Admin</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => { setSenhaTarget(u); setNovaSenhaAdmin(''); }}
+                            aria-label="Redefinir senha"
+                            title="Redefinir senha"
+                          >
+                            <KeyRound className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => setCreditoUser(u)} aria-label="Creditar MC" title="Creditar MC">
                             <Zap className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -430,7 +495,7 @@ export default function AdminPanel() {
           <DialogHeader>
             <DialogTitle>Rejeitar Recarga</DialogTitle>
             <DialogDescription>
-              Solicitação de {rejeitarTarget?.moedas.toLocaleString('pt-MZ')} MC de {rejeitarTarget?.user.nome}. Indique o motivo — o usuário verá esta mensagem.
+              Solicitação de {rejeitarTarget?.moedas.toLocaleString('pt-MZ')} MC de {rejeitarTarget?.user.nome}. Indique o motivo; o usuário verá esta mensagem.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -462,7 +527,7 @@ export default function AdminPanel() {
           <DialogHeader>
             <DialogTitle>Crédito Directo de MC</DialogTitle>
             <DialogDescription>
-              {creditoUser?.nome} — saldo actual: {creditoUser?.moedas.toLocaleString('pt-MZ')} MC
+              {creditoUser?.nome}, saldo actual: {creditoUser?.moedas.toLocaleString('pt-MZ')} MC
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -498,6 +563,43 @@ export default function AdminPanel() {
               >
                 {creditando ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Zap className="h-4 w-4 mr-1" />}
                 Confirmar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de redefinição de senha */}
+      <Dialog open={!!senhaTarget} onOpenChange={(open) => !open && setSenhaTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Redefinir Senha</DialogTitle>
+            <DialogDescription>
+              Defina uma senha temporária para {senhaTarget?.nome}. Depois de entrar, o utilizador pode mudá-la em Meu Perfil.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="nova-senha-admin">Nova senha (mínimo 6 caracteres)</Label>
+              <Input
+                id="nova-senha-admin"
+                type="text"
+                value={novaSenhaAdmin}
+                onChange={(e) => setNovaSenhaAdmin(e.target.value)}
+                placeholder="ex: MozLit2026"
+                className="mt-1"
+                maxLength={128}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setSenhaTarget(null)}>Cancelar</Button>
+              <Button
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={aRedefinir || novaSenhaAdmin.length < 6}
+                onClick={redefinirSenha}
+              >
+                {aRedefinir ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <KeyRound className="h-4 w-4 mr-1" />}
+                Redefinir
               </Button>
             </div>
           </div>

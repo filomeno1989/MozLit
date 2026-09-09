@@ -534,7 +534,7 @@ export default function WalletPage() {
             {/* Passo 1: pagamento */}
             <div className="rounded-lg border border-amber-300/60 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-950/30 p-3.5 space-y-2.5">
               <p className="text-sm font-medium flex items-center gap-1.5">
-                <Smartphone className="h-4 w-4 text-amber-600" /> Passo 1 — Faça o envio
+                <Smartphone className="h-4 w-4 text-amber-600" /> Passo 1: Faça o envio
               </p>
               <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                 <li>Abra o M-Pesa no seu telefone</li>
@@ -555,7 +555,7 @@ export default function WalletPage() {
 
             {/* Passo 2: comprovativo */}
             <div className="space-y-3">
-              <p className="text-sm font-medium">Passo 2 — Confirme o envio</p>
+              <p className="text-sm font-medium">Passo 2: Confirme o envio</p>
               <div>
                 <Label htmlFor="envio-numero" className="text-xs">Número de onde enviou *</Label>
                 <Input

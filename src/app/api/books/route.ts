@@ -36,9 +36,13 @@ export async function GET(request: NextRequest) {
     // Search by title or author name
     if (search && search.trim().length > 0) {
       const term = search.trim();
+      // `mode: 'insensitive'` só existe no PostgreSQL (produção); no SQLite de dev
+      // a busca é case-sensitive — evita erro 500 local.
+      const pg = (process.env.DATABASE_URL || '').startsWith('postgres');
+      const ins = pg ? { mode: 'insensitive' as const } : {};
       (where as Record<string, unknown>).OR = [
-        { titulo: { contains: term, mode: 'insensitive' } },
-        { autor: { nome: { contains: term, mode: 'insensitive' } } },
+        { titulo: { contains: term, ...ins } },
+        { autor: { nome: { contains: term, ...ins } } },
       ];
     }
 

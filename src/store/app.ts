@@ -10,6 +10,7 @@ export type ViewName =
   | 'wallet'
   | 'library'
   | 'new-book'
+  | 'perfil'
   | 'admin';
 
 export interface User {
