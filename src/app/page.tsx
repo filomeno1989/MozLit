@@ -104,7 +104,9 @@ export default function MozLitApp() {
       })
       .then((data) => {
         if (!cancelado && data?.user) {
-          setAuth(data.user, tokenActual);
+          // Se o papel mudou na base de dados, /api/auth/me devolve um token
+          // novo — guardamos para que as permissões fiquem válidas de imediato.
+          setAuth(data.user, data.token || tokenActual);
           // Sync saldo from server
           if (typeof data.user.saldo_carteira === 'number') {
             updateBalance(data.user.saldo_carteira);
