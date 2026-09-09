@@ -49,7 +49,8 @@ export async function GET(request: NextRequest) {
 
     const transactions = await db.transaction.findMany({
       where: { userId: payload.userId, tipo: 'COMPRA', status: 'CONCLUIDO' },
-      select: { valor: true, createdAt: true, descricao: true },
+      // id e tipo são necessários no painel da carteira (chave e ícone por tipo)
+      select: { id: true, tipo: true, status: true, valor: true, createdAt: true, descricao: true },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });

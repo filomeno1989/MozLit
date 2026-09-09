@@ -480,42 +480,47 @@ export default function WalletPage() {
             </p>
           ) : (
             <div className="divide-y">
-              {transactions.map((t) => (
+              {transactions.map((t) => {
+                // Transacções antigas podem ter tipo/descrição nulos — evitar crash
+                const tipo = t.tipo || '';
+                const ehSaida = tipo === 'COMPRA' || tipo.startsWith('DEBITO');
+                return (
                 <div key={t.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-full ${
-                      t.tipo === 'COMPRA'
+                      tipo === 'COMPRA'
                         ? 'bg-red-100 dark:bg-red-900/20'
-                        : t.tipo.startsWith('DEBITO')
+                        : tipo.startsWith('DEBITO')
                         ? 'bg-red-100 dark:bg-red-900/20'
-                        : t.tipo === 'COMPRA_MOEDAS'
+                        : tipo === 'COMPRA_MOEDAS'
                         ? 'bg-amber-100 dark:bg-amber-900/20'
                         : 'bg-emerald-100 dark:bg-emerald-900/20'
                     }`}
                     >
-                      {t.tipo === 'COMPRA' || t.tipo.startsWith('DEBITO')
+                      {ehSaida
                         ? <ArrowUpRight className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
-                        : t.tipo === 'COMPRA_MOEDAS'
+                        : tipo === 'COMPRA_MOEDAS'
                         ? <Coins className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                         : <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
                     </div>
                     <div>
-                      <p className="text-sm font-medium line-clamp-1">{t.descricao || t.tipo}</p>
+                      <p className="text-sm font-medium line-clamp-1">{t.descricao || tipo || 'Transacção'}</p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(t.createdAt).toLocaleDateString('pt-MZ')}
                       </p>
                     </div>
                   </div>
                   <span className={`text-sm font-semibold ${
-                    t.tipo === 'COMPRA' || t.tipo.startsWith('DEBITO')
+                    ehSaida
                       ? 'text-red-600 dark:text-red-400'
                       : 'text-emerald-600 dark:text-emerald-400'
                   }`}
                   >
-                    {t.tipo === 'COMPRA' || t.tipo.startsWith('DEBITO') ? '-' : '+'}{t.valor.toFixed(2)}
+                    {ehSaida ? '-' : '+'}{(t.valor ?? 0).toFixed(2)}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

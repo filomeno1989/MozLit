@@ -79,6 +79,50 @@ const DDL_AUTO_REPARACAO: string[] = [
       ON "recargas_solicitacoes" ("estado", "created_at")`,
 ]
 
+/**
+ * BOOTSTRAP DO ADMIN — garante que a plataforma nunca fica sem administrador.
+ *
+ *  1. Se ADMIN_EMAIL estiver definido (variável de ambiente na Vercel), o
+ *     utilizador com esse email é promovido a ADMIN (se ainda não for).
+ *  2. Caso contrário, se NÃO existir nenhum ADMIN na base de dados, o
+ *     utilizador mais antigo (o dono da plataforma) é promovido a ADMIN.
+ *
+ * A operação nunca RETIRA o papel de admin a ninguém; apenas adiciona quando
+ * necessário. Corre para o caso "o admin perdeu o acesso" (ex: papel perdido
+ * numa alteração manual da base de dados).
+ */
+async function garantirAdmin(prisma: PrismaClient): Promise<void> {
+  const emailAdmin = (process.env.ADMIN_EMAIL || '').trim()
+  try {
+    if (emailAdmin) {
+      const resultado = await prisma.$executeRaw`
+        UPDATE "profiles" SET "role" = 'ADMIN', "updated_at" = now()
+        WHERE LOWER("email") = ${emailAdmin.toLowerCase()} AND "role" <> 'ADMIN'`
+      if (resultado > 0) {
+        console.log(`[MozLit] Bootstrap: utilizador ${emailAdmin} promovido a ADMIN.`)
+      }
+    }
+
+    const linhas = await prisma.$queryRaw<{ total: bigint | number }[]>`
+      SELECT COUNT(*)::int AS total FROM "profiles" WHERE "role" = 'ADMIN'`
+    const totalAdmins = Number(linhas[0]?.total ?? 0)
+
+    if (totalAdmins === 0) {
+      const promovidos = await prisma.$executeRaw`
+        UPDATE "profiles" SET "role" = 'ADMIN', "updated_at" = now()
+        WHERE "id" = (SELECT "id" FROM "profiles" ORDER BY "created_at" ASC LIMIT 1)`
+      if (promovidos > 0) {
+        console.log('[MozLit] Bootstrap: plataforma sem admin — utilizador mais antigo promovido a ADMIN.')
+      }
+    }
+  } catch (err) {
+    console.error(
+      '[MozLit] Bootstrap de admin falhou (não bloqueia o app):',
+      err instanceof Error ? err.message : err
+    )
+  }
+}
+
 async function aplicarAutoReparacao(prisma: PrismaClient): Promise<void> {
   if (!isPostgres()) return // dev local (SQLite) já é criado com o schema completo
 
@@ -98,6 +142,8 @@ async function aplicarAutoReparacao(prisma: PrismaClient): Promise<void> {
     }
   }
   console.log(`[MozLit] Auto-reparação do esquema concluída (${aplicadas}/${DDL_AUTO_REPARACAO.length} instruções OK).`)
+
+  await garantirAdmin(prisma)
 }
 
 const prisma = globalForPrisma.prisma ?? new PrismaClient({})
