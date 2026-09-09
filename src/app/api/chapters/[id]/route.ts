@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateConteudo } from '@/lib/validate';
+import { validateTitulo, validateConteudoCapitulo } from '@/lib/validate';
 
 export async function GET(
   request: NextRequest,
@@ -17,6 +17,7 @@ export async function GET(
       include: {
         livro: {
           select: {
+            id: true,
             autorId: true,
             titulo: true,
             categorias: true,
@@ -175,7 +176,7 @@ export async function PATCH(
     const body = await request.json();
     const data: Record<string, unknown> = {};
     if (body.titulo !== undefined) data.titulo = validateTitulo(body.titulo);
-    if (body.conteudo !== undefined) data.conteudo = validateConteudo(body.conteudo);
+    if (body.conteudo !== undefined) data.conteudo = validateConteudoCapitulo(body.conteudo);
     if (body.preco_capitulo !== undefined) data.preco_capitulo = typeof body.preco_capitulo === 'number' ? body.preco_capitulo : 0;
     if (body.is_free !== undefined) data.is_free = Boolean(body.is_free);
     if (body.ordem !== undefined) data.ordem = Number(body.ordem);

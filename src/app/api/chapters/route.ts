@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateConteudo, LIMITES } from '@/lib/validate';
+import { validateTitulo, validateConteudoCapitulo } from '@/lib/validate';
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,9 +21,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Título, conteúdo e livroId são obrigatórios' }, { status: 400 });
     }
 
-    // Validate inputs
+    // Validate inputs (conteúdo HTML é sanitizado antes de gravar)
     const tituloValidado = validateTitulo(titulo);
-    const conteudoValidado = validateConteudo(conteudo);
+    const conteudoValidado = validateConteudoCapitulo(conteudo);
 
     const book = await db.book.findUnique({ where: { id: livroId }, select: { autorId: true } });
     if (!book) {

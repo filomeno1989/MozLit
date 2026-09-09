@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookOpen, Search } from 'lucide-react';
+import { formatarMoedas } from '@/lib/constants';
 
 interface Book {
   id: string;
@@ -59,7 +60,7 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
         {book.preco_total > 0 && (
           <div className="absolute bottom-0 inset-x-0 px-2.5 py-1.5 bg-gradient-to-t from-black/70 to-transparent">
             <span className="text-white text-xs font-semibold">
-              {book.preco_total.toFixed(2)} MZN
+              {formatarMoedas(Math.round(book.preco_total))}
             </span>
           </div>
         )}

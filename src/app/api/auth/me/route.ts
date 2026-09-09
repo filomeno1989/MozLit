@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
         id: user.id,
         nome: user.nome,
         email: user.email,
+        telefone: user.telefone,
         role: user.role,
         saldo_carteira: user.saldo_carteira,
         moedas: user.moedas,

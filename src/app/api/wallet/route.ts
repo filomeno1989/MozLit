@@ -42,16 +42,18 @@ export async function POST(request: NextRequest) {
       const custoMzn = qtdMoedas / 10;
 
       const result = await db.$transaction(async (tx) => {
-        const [userRow] = await tx.$queryRaw<Array<{ saldo_carteira: number; id: string; moedas: number }>>`
-          SELECT id, saldo_carteira, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
-        `;
-        if (!userRow || userRow.saldo_carteira < custoMzn) {
+        // Débito condicional: race-safe e portável (não depende de SELECT FOR UPDATE)
+        const debit = await tx.user.updateMany({
+          where: { id: payload.userId, saldo_carteira: { gte: custoMzn } },
+          data: { saldo_carteira: { decrement: custoMzn } },
+        });
+        if (debit.count === 0) {
           throw new Error('Saldo MZN insuficiente para comprar moedas.');
         }
 
         await tx.user.update({
           where: { id: payload.userId },
-          data: { saldo_carteira: { decrement: custoMzn }, moedas: { increment: qtdMoedas } },
+          data: { moedas: { increment: qtdMoedas } },
         });
         await tx.transaction.create({
           data: {

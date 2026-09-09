@@ -5,7 +5,10 @@ import {
   EMAIL_REGEX,
   FAIXAS_ETARIAS,
   type FaixaEtaria,
+  RECARGA_CONFIG,
+  isHtmlConteudo,
 } from './constants';
+import { normalizarTelefone, validarNumeroLocal, TELEFONE_REGEX } from './paises';
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -15,13 +18,43 @@ export class ValidationError extends Error {
 }
 
 /** Validate and sanitize an email */
-export function validateEmail(email: unknown): string {
+export function validateEmail(email: unknown): string | null {
+  if (email === null || email === undefined || email === '') return null;
   if (typeof email !== 'string') throw new ValidationError('Email inválido.');
   const trimmed = email.trim().toLowerCase();
   if (trimmed.length > LIMITES.EMAIL_MAX || !EMAIL_REGEX.test(trimmed)) {
     throw new ValidationError('Formato de email inválido.');
   }
   return trimmed;
+}
+
+/**
+ * Valida e normaliza telefone. Recebe { dial, numero } ou o número completo (+258...).
+ * Retorna o número normalizado (ex: +258841234567) ou lança erro.
+ */
+export function validateTelefone(
+  telefone: unknown,
+  dial?: unknown
+): string {
+  if (typeof telefone !== 'string' || !telefone.trim()) {
+    throw new ValidationError('Número de telefone é obrigatório.');
+  }
+  const cleaned = telefone.trim();
+  // Número completo internacional
+  if (cleaned.startsWith('+')) {
+    const normalized = cleaned.replace(/[\s\-().]/g, '');
+    if (!TELEFONE_REGEX.test(normalized)) {
+      throw new ValidationError('Número de telefone inválido. Use formato internacional, ex: +258841234567.');
+    }
+    return normalized;
+  }
+  // Número local + código do país
+  if (typeof dial !== 'string' || !dial.startsWith('+')) {
+    throw new ValidationError('Código do país inválido.');
+  }
+  const erro = validarNumeroLocal(dial, cleaned);
+  if (erro) throw new ValidationError(erro);
+  return normalizarTelefone(dial, cleaned);
 }
 
 /** Validate a password */
@@ -153,7 +186,7 @@ export function validateImageFile(
   maxSize: number,
   field: string
 ): void {
-  if (!LIMITES.CAPAS_MIMETYPES.includes(file.type)) {
+  if (!(LIMITES.CAPAS_MIMETYPES as readonly string[]).includes(file.type)) {
     throw new ValidationError(
       `${field}: formato não suportado. Use JPEG, PNG ou WebP.`
     );
@@ -164,4 +197,110 @@ export function validateImageFile(
       `${field}: ficheiro demasiado grande. Máximo ${maxMB}MB.`
     );
   }
+}
+
+// ===================== RECARGAS =====================
+
+/** Valida quantidade de moedas de uma solicitação de recarga */
+export function validateMoedasRecarga(moedas: unknown): number {
+  const num = Number(moedas);
+  if (!Number.isInteger(num) || num < RECARGA_CONFIG.MOEDAS_MIN) {
+    throw new ValidationError(
+      `Mínimo de ${RECARGA_CONFIG.MOEDAS_MIN} MC por solicitação.`
+    );
+  }
+  if (num > RECARGA_CONFIG.MOEDAS_MAX) {
+    throw new ValidationError(
+      `Máximo de ${RECARGA_CONFIG.MOEDAS_MAX.toLocaleString('pt-MZ')} MC por solicitação.`
+    );
+  }
+  return num;
+}
+
+/** Valida método de pagamento da recarga */
+export function validateMetodoRecarga(metodo: unknown): string {
+  const ids = RECARGA_CONFIG.METODOS.map((m) => m.id as string);
+  if (typeof metodo === 'string' && ids.includes(metodo)) return metodo;
+  return 'MPESA';
+}
+
+/** Valida campo de texto opcional da recarga (número de envio, referência, nota) */
+export function validateTextoRecarga(valor: unknown, campo: string, max: number): string | null {
+  if (valor === null || valor === undefined || valor === '') return null;
+  if (typeof valor !== 'string') throw new ValidationError(`${campo} inválido.`);
+  const trimmed = valor.trim();
+  if (trimmed.length > max) {
+    throw new ValidationError(`${campo} não pode exceder ${max} caracteres.`);
+  }
+  return trimmed;
+}
+
+/** Valida estado alvo ao processar uma recarga */
+export function validateAcaoRecarga(acao: unknown): 'APROVADA' | 'REJEITADA' {
+  if (acao === 'APROVADA' || acao === 'REJEITADA') return acao;
+  throw new ValidationError('Acção inválida: use APROVADA ou REJEITADA.');
+}
+
+/** Valida crédito directo do admin (quantidade de MC, pode ser negativa para débito) */
+export function validateCreditoAdmin(moedas: unknown): number {
+  const num = Number(moedas);
+  if (!Number.isFinite(num) || num === 0 || !Number.isInteger(num)) {
+    throw new ValidationError('Quantidade de moedas inválida (inteiro diferente de zero).');
+  }
+  if (Math.abs(num) > 1_000_000) {
+    throw new ValidationError('Quantidade demasiado grande.');
+  }
+  return num;
+}
+
+// ===================== HTML DO EDITOR =====================
+
+/**
+ * Sanitiza HTML do editor rico (Tiptap) antes de gravar na BD.
+ * Allowlist estrita: formatação literária apenas — sem scripts, iframes, imagens externas ou estilos arbitrários.
+ * FontFamily é permitido apenas via style="font-family: ..." em span/p.
+ */
+export function sanitizeConteudoHtml(html: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const sanitizeHtml = require('sanitize-html') as typeof import('sanitize-html');
+  return sanitizeHtml(html, {
+    allowedTags: [
+      'p', 'br', 'h2', 'h3',
+      'strong', 'em', 'u', 's',
+      'ul', 'ol', 'li',
+      'blockquote',
+      'span',
+    ],
+    allowedAttributes: {
+      span: ['style'],
+      p: ['style'],
+    },
+    allowedStyles: {
+      '*': {
+        // aceita font stacks com vars CSS: var(--font-lora), Georgia, serif
+        'font-family': [/^[\w\s,'"\-()]+$/],
+      },
+    },
+    allowedSchemes: [],
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+  });
+}
+
+/**
+ * Valida conteúdo do capítulo: aceita HTML do editor (sanitiza) ou texto simples (legado).
+ */
+export function validateConteudoCapitulo(conteudo: unknown): string {
+  if (typeof conteudo !== 'string') throw new ValidationError('Conteúdo inválido.');
+  if (conteudo.length > LIMITES.CONTEUDO_CAPITULO_MAX) {
+    throw new ValidationError('Conteúdo do capítulo excede o limite permitido.');
+  }
+  const trimmed = conteudo.trim();
+  if (trimmed.length === 0) {
+    throw new ValidationError('Conteúdo do capítulo não pode ficar vazio.');
+  }
+  if (isHtmlConteudo(trimmed)) {
+    return sanitizeConteudoHtml(trimmed);
+  }
+  return trimmed;
 }

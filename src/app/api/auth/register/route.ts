@@ -4,6 +4,7 @@ import { hashPassword, generateToken, type Role } from '@/lib/auth';
 import {
   validateNome,
   validateEmail,
+  validateTelefone,
   validateSenha,
   validateRegistroRole,
 } from '@/lib/validate';
@@ -12,15 +13,24 @@ import { IDADE_MINIMA_REGISTO } from '@/lib/constants';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { nome, email, senha, role: requestedRole, dataNascimento } = body;
+    const { nome, email, telefone, dial, senha, role: requestedRole, dataNascimento } = body;
 
-    // Validate all fields server-side
+    // Validação de campos
     const nomeValidado = validateNome(nome);
-    const emailValidado = validateEmail(email);
     const senhaValidada = validateSenha(senha);
     const roleValido = validateRegistroRole(requestedRole);
 
-    // Age verification
+    // Contacto: telefone (prioritário) OU email — pelo menos um é obrigatório
+    const telefoneValidado = telefone ? validateTelefone(telefone, dial) : null;
+    const emailValidado = email ? validateEmail(email) : null;
+    if (!telefoneValidado && !emailValidado) {
+      return NextResponse.json(
+        { error: 'Forneça um número de telefone ou um email para criar a conta.' },
+        { status: 400 }
+      );
+    }
+
+    // Verificação de idade
     if (dataNascimento) {
       const birthDate = new Date(dataNascimento);
       if (isNaN(birthDate.getTime())) {
@@ -43,12 +53,24 @@ export async function POST(request: NextRequest) {
 
     const userRole: Role = roleValido;
 
-    const existingUser = await db.user.findUnique({ where: { email: emailValidado } });
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'Este email já está cadastrado.' },
-        { status: 409 }
-      );
+    // Unicidade de telefone e email
+    if (telefoneValidado) {
+      const existingByPhone = await db.user.findUnique({ where: { telefone: telefoneValidado } });
+      if (existingByPhone) {
+        return NextResponse.json(
+          { error: 'Este número de telefone já está registado.' },
+          { status: 409 }
+        );
+      }
+    }
+    if (emailValidado) {
+      const existingByEmail = await db.user.findUnique({ where: { email: emailValidado } });
+      if (existingByEmail) {
+        return NextResponse.json(
+          { error: 'Este email já está cadastrado.' },
+          { status: 409 }
+        );
+      }
     }
 
     const senha_hash = await hashPassword(senhaValidada);
@@ -56,7 +78,8 @@ export async function POST(request: NextRequest) {
     const user = await db.user.create({
       data: {
         nome: nomeValidado,
-        email: emailValidado,
+        ...(emailValidado ? { email: emailValidado } : {}),
+        ...(telefoneValidado ? { telefone: telefoneValidado } : {}),
         senha_hash,
         role: userRole,
         ...(dataNascimento ? { data_nascimento: new Date(dataNascimento) } : {}),
@@ -66,6 +89,7 @@ export async function POST(request: NextRequest) {
     const token = generateToken({
       userId: user.id,
       email: user.email,
+      telefone: user.telefone,
       role: user.role,
     });
 
@@ -75,6 +99,7 @@ export async function POST(request: NextRequest) {
           id: user.id,
           nome: user.nome,
           email: user.email,
+          telefone: user.telefone,
           role: user.role,
           saldo_carteira: user.saldo_carteira,
           moedas: user.moedas,

@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import RichTextEditor, { htmlVazio, textoLegadoParaHtml } from '@/components/literaria/RichTextEditor';
 import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS, formatarMoedas } from '@/lib/constants';
@@ -69,6 +70,7 @@ export default function AuthorDashboard() {
   const [showChapterDialog, setShowChapterDialog] = useState(false);
   const [chapterError, setChapterError] = useState('');
   const [newChapter, setNewChapter] = useState({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
+  const [editorResetKey, setEditorResetKey] = useState(0);
 
   // Edit chapter
   const [editingChapter, setEditingChapter] = useState<{ id: string; titulo: string; conteudo: string; preco_capitulo: string; is_free: boolean } | null>(null);
@@ -178,7 +180,7 @@ export default function AuthorDashboard() {
   }
 
   async function addChapter() {
-    if (!bookChapters || !newChapter.titulo || !newChapter.conteudo) {
+    if (!bookChapters || !newChapter.titulo || htmlVazio(newChapter.conteudo)) {
       setChapterError('Título e conteúdo são obrigatórios.'); return;
     }
     try {
@@ -191,19 +193,21 @@ export default function AuthorDashboard() {
         }),
       });
       setNewChapter({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
+      setEditorResetKey((k) => k + 1); // limpa o editor para o próximo capítulo
       setChapterError('');
       loadBookChapters(bookChapters.id);
       loadDashboard();
+      toast.success('Capítulo adicionado.');
     } catch (err) { setChapterError((err as Error).message); }
   }
 
   function openEditChapter(ch: { id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }) {
-    // Load full chapter content for editing
+    // Load full chapter content for editing (texto legado é convertido para HTML do editor)
     apiFetch<{ titulo: string; conteudo: string; preco_capitulo: number; is_free: boolean }>(`/api/chapters/${ch.id}`).then((full) => {
       setEditingChapter({
         id: ch.id,
         titulo: full.titulo,
-        conteudo: full.conteudo,
+        conteudo: textoLegadoParaHtml(full.conteudo),
         preco_capitulo: String(Math.round(full.preco_capitulo)),
         is_free: full.is_free,
       });
@@ -212,6 +216,10 @@ export default function AuthorDashboard() {
 
   async function saveEditChapter() {
     if (!editingChapter) return;
+    if (htmlVazio(editingChapter.conteudo)) {
+      toast.error('O conteúdo do capítulo não pode ficar vazio.');
+      return;
+    }
     setSavingChapter(true);
     try {
       await apiFetch(`/api/chapters/${editingChapter.id}`, {
@@ -511,7 +519,7 @@ export default function AuthorDashboard() {
 
       {/* Chapter Dialog */}
       <Dialog open={showChapterDialog} onOpenChange={setShowChapterDialog}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle><DialogDescription>Gerencie os capítulos desta obra.</DialogDescription></DialogHeader>
           {bookChapters && (
             <div className="space-y-4">
@@ -538,7 +546,16 @@ export default function AuthorDashboard() {
               <div className="border-t pt-4 space-y-3">
                 <p className="text-sm font-medium">Adicionar Capítulo</p>
                 <div><Label className="text-xs">Título</Label><Input value={newChapter.titulo} onChange={(e) => setNewChapter({ ...newChapter, titulo: e.target.value })} placeholder="Título do capítulo" /></div>
-                <div><Label className="text-xs">Conteúdo</Label><Textarea value={newChapter.conteudo} onChange={(e) => setNewChapter({ ...newChapter, conteudo: e.target.value })} placeholder="Escreva o conteúdo do capítulo..." rows={6} /></div>
+                <div>
+                  <Label className="text-xs">Conteúdo</Label>
+                  <RichTextEditor
+                    key={`novo-${editorResetKey}`}
+                    content=""
+                    onChange={(html) => setNewChapter({ ...newChapter, conteudo: html })}
+                    placeholder="Escreva o conteúdo do capítulo... use a barra para formatar (negrito, itálico, títulos, fontes...)"
+                    minHeight="12rem"
+                  />
+                </div>
                 <div className="flex items-center gap-4">
                   <div className="flex-1"><Label className="text-xs">Preço (MC)</Label><Input type="number" step="1" min="0" value={newChapter.preco_capitulo} onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })} disabled={newChapter.is_free} /></div>
                   <div className="flex items-center gap-2 pt-5">
@@ -742,12 +759,20 @@ export default function AuthorDashboard() {
 
       {/* Edit Chapter Dialog */}
       <Dialog open={!!editingChapter} onOpenChange={(open) => { if (!open) setEditingChapter(null); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Editar Capítulo</DialogTitle><DialogDescription>Altere o título, conteúdo e preço do capítulo.</DialogDescription></DialogHeader>
           {editingChapter && (
             <div className="space-y-4">
               <div><Label className="text-xs">Título</Label><Input value={editingChapter.titulo} onChange={(e) => setEditingChapter({ ...editingChapter, titulo: e.target.value })} /></div>
-              <div><Label className="text-xs">Conteúdo</Label><Textarea value={editingChapter.conteudo} onChange={(e) => setEditingChapter({ ...editingChapter, conteudo: e.target.value })} rows={10} /></div>
+              <div>
+                <Label className="text-xs">Conteúdo</Label>
+                <RichTextEditor
+                  key={editingChapter.id}
+                  content={editingChapter.conteudo}
+                  onChange={(html) => setEditingChapter({ ...editingChapter, conteudo: html })}
+                  minHeight="16rem"
+                />
+              </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1"><Label className="text-xs">Preço (MC)</Label><Input type="number" step="1" min="0" value={editingChapter.preco_capitulo} onChange={(e) => setEditingChapter({ ...editingChapter, preco_capitulo: e.target.value })} disabled={editingChapter.is_free} /></div>
                 <div className="flex items-center gap-2 pt-5">

@@ -18,6 +18,7 @@ import {
   PenTool,
   Plus,
   Coins,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +27,7 @@ const navItems = [
   { view: 'library' as ViewName, label: 'Minha Biblioteca', icon: Library, auth: true, roles: undefined },
   { view: 'wallet' as ViewName, label: 'Carteira', icon: Wallet, auth: true, roles: undefined },
   { view: 'author-dashboard' as ViewName, label: 'Painel do Autor', icon: PenTool, auth: true, roles: ['ESCRITOR', 'ADMIN'] },
+  { view: 'admin' as ViewName, label: 'Painel Admin', icon: ShieldCheck, auth: true, roles: ['ADMIN'] },
 ];
 
 function NavLinks({
@@ -227,6 +229,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <>
                   <span className='text-border'>|</span>
                   <button onClick={() => navigate('author-dashboard')} className='hover:text-foreground transition-colors'>Painel do Autor</button>
+                </>
+              )}
+              {user?.role === 'ADMIN' && (
+                <>
+                  <span className='text-border'>|</span>
+                  <button onClick={() => navigate('admin')} className='hover:text-foreground transition-colors'>Admin</button>
                 </>
               )}
             </nav>

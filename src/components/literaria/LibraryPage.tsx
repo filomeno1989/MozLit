@@ -160,28 +160,32 @@ export default function LibraryPage() {
                 <CardContent className="p-2 divide-y divide-border/40">
                   {individualChapters
                     .filter((item) => item.chapter)
-                    .map((item) => (
+                    .map((item) => {
+                      const ch = item.chapter;
+                      if (!ch) return null;
+                      return (
                       <div
                         key={item.id}
                         className="flex items-center justify-between p-3 rounded-lg hover:bg-accent/50 transition-colors cursor-pointer"
-                        onClick={() => navigate('reader', { chapterId: item.chapter!.id, bookId: item.chapter!.livro.id })}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('reader', { chapterId: item.chapter!.id, bookId: item.chapter!.livro.id }); } }}
+                        onClick={() => navigate('reader', { chapterId: ch.id, bookId: ch.livro.id })}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('reader', { chapterId: ch.id, bookId: ch.livro.id }); } }}
                         tabIndex={0}
                         role="button"
-                        aria-label={`Ler capítulo: ${item.chapter.titulo}`}
+                        aria-label={`Ler capítulo: ${ch.titulo}`}
                       >
                         <div className="min-w-0 flex-1 flex items-center gap-3">
                           <div className="w-8 h-8 rounded bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
                             <BookOpen className="h-4 w-4 text-amber-700 dark:text-amber-400" />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">{item.chapter.titulo}</p>
-                            <p className="text-xs text-muted-foreground">{item.chapter.livro.titulo}</p>
+                            <p className="font-medium text-sm truncate">{ch.titulo}</p>
+                            <p className="text-xs text-muted-foreground">{ch.livro.titulo}</p>
                           </div>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                       </div>
-                    ))}
+                      );
+                    })}
                 </CardContent>
               </Card>
             </section>

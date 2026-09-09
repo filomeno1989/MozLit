@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine, Calendar } from 'lucide-react';
-import { FAIXAS_ETARIAS, IDADE_MINIMA_REGISTO } from '@/lib/constants';
+import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine, Calendar, Phone, Mail } from 'lucide-react';
+import { IDADE_MINIMA_REGISTO } from '@/lib/constants';
+import CountryCodePicker from '@/components/literaria/CountryCodePicker';
+import { PAIS_PADRAO, type Pais } from '@/lib/paises';
 
 function getPasswordStrength(senha: string): { label: string; color: string; width: string } {
   if (!senha) return { label: '', color: 'bg-muted', width: 'w-0' };
@@ -24,9 +26,14 @@ function getPasswordStrength(senha: string): { label: string; color: string; wid
   return { label: 'Forte', color: 'bg-emerald-600', width: 'w-full' };
 }
 
+type ModoContacto = 'TELEFONE' | 'EMAIL';
+
 export default function RegisterPage() {
   const { navigate, setAuth } = useAppStore();
   const [nome, setNome] = useState('');
+  const [modoContacto, setModoContacto] = useState<ModoContacto>('TELEFONE');
+  const [pais, setPais] = useState<Pais>(PAIS_PADRAO);
+  const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'LEITOR' | 'ESCRITOR'>('LEITOR');
   const [dataNascimento, setDataNascimento] = useState('');
@@ -49,6 +56,17 @@ export default function RegisterPage() {
       return;
     }
 
+    if (modoContacto === 'TELEFONE' && !telefone.trim()) {
+      setError('Indique o seu número de telefone.');
+      setLoading(false);
+      return;
+    }
+    if (modoContacto === 'EMAIL' && !email.trim()) {
+      setError('Indique o seu email.');
+      setLoading(false);
+      return;
+    }
+
     // Validate age
     if (dataNascimento) {
       const birth = new Date(dataNascimento);
@@ -64,9 +82,18 @@ export default function RegisterPage() {
     }
 
     try {
+      const body = {
+        nome,
+        senha,
+        role,
+        dataNascimento: dataNascimento || undefined,
+        ...(modoContacto === 'TELEFONE'
+          ? { telefone: telefone.trim(), dial: pais.dial }
+          : { email: email.trim() }),
+      };
       const data = await apiFetch<{ user: User; token: string }>('/api/auth/register', {
         method: 'POST',
-        body: JSON.stringify({ nome, email, senha, role, dataNascimento: dataNascimento || undefined }),
+        body: JSON.stringify(body),
       });
       setAuth(data.user, data.token);
       navigate(role === 'ESCRITOR' ? 'author-dashboard' : 'home');
@@ -106,17 +133,71 @@ export default function RegisterPage() {
                 maxLength={100}
               />
             </div>
+
+            {/* Contacto: telefone (recomendado) ou email */}
             <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                required
-              />
+              <Label>Telefone ou Email</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setModoContacto('TELEFONE')}
+                  className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    modoContacto === 'TELEFONE'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200'
+                      : 'border-border/50 text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <Phone className="h-4 w-4" /> Telefone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoContacto('EMAIL')}
+                  className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    modoContacto === 'EMAIL'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200'
+                      : 'border-border/50 text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <Mail className="h-4 w-4" /> Email
+                </button>
+              </div>
+
+              {modoContacto === 'TELEFONE' ? (
+                <div className="mt-2">
+                  <div className="flex gap-2">
+                    <CountryCodePicker value={pais} onChange={setPais} />
+                    <Input
+                      id="telefone"
+                      type="tel"
+                      inputMode="tel"
+                      value={telefone}
+                      onChange={(e) => setTelefone(e.target.value)}
+                      placeholder={pais.dial === '+258' ? '84 123 4567' : 'número'}
+                      className="flex-1"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Registo por telefone: {pais.nome} ({pais.dial}). Sem email, sem complicações.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-2">
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Para quem prefere ou pode usar email.
+                  </p>
+                </div>
+              )}
             </div>
+
             <div>
               <Label htmlFor="data-nascimento">Data de Nascimento</Label>
               <div className="relative">

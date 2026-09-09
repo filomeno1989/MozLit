@@ -130,3 +130,70 @@
     visibility: hidden !important;
   }
 }
+
+/* ===================== EDITOR RICO (Tiptap) ===================== */
+.mozlit-editor .mozlit-editor-content {
+  min-height: inherit;
+}
+.mozlit-editor .mozlit-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  height: 0;
+}
+.mozlit-editor .mozlit-editor-content p {
+  margin-bottom: 0.75rem;
+  line-height: 1.8;
+}
+.mozlit-editor .mozlit-editor-content h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 1.25rem 0 0.5rem;
+}
+.mozlit-editor .mozlit-editor-content h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+}
+.mozlit-editor .mozlit-editor-content blockquote {
+  border-left: 3px solid var(--primary);
+  padding-left: 0.75rem;
+  font-style: italic;
+  margin: 0.75rem 0;
+}
+.mozlit-editor .mozlit-editor-content ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+.mozlit-editor .mozlit-editor-content ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+/* ===================== LEITOR: conteúdo HTML do editor ===================== */
+/* FontFamily permitido: Lora, Georgia, Merriweather, Inter, JetBrains Mono */
+.leitor-html [style*='font-family'] {
+  /* respeita o estilo inline definido pelo autor */
+}
+.leitor-html blockquote {
+  border-left: 2px solid var(--amber-500, #f59e0b);
+  padding-left: 1rem;
+  font-style: italic;
+  margin: 1.25rem 0;
+}
+.leitor-html ul {
+  list-style: disc;
+  padding-left: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+.leitor-html ol {
+  list-style: decimal;
+  padding-left: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+.leitor-html li {
+  margin-bottom: 0.35rem;
+}

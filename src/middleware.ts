@@ -76,6 +76,14 @@ export default function middleware(request: NextRequest) {
     maxRequests = 10; // 10 attempts per minute
     windowMs = 60_000;
     group = 'auth';
+  } else if (pathname.startsWith('/api/recargas')) {
+    maxRequests = 20; // a protecção anti-spam real é o limite de pendentes por usuário
+    windowMs = 60_000;
+    group = 'recargas';
+  } else if (pathname.startsWith('/api/admin')) {
+    maxRequests = 30;
+    windowMs = 60_000;
+    group = 'admin';
   } else if (pathname.startsWith('/api/wallet')) {
     maxRequests = 15;
     windowMs = 60_000;

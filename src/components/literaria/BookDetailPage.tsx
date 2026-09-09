@@ -76,7 +76,7 @@ export default function BookDetailPage() {
         res.items.map((i) => i.chapterId).filter(Boolean) as string[]
       );
       setPurchasedIds(chapterSet);
-      setOwnsFullBook(res.fullBookIds.includes(bookId));
+      setOwnsFullBook(bookId ? res.fullBookIds.includes(bookId) : false);
     } catch {
       // ignore
     }

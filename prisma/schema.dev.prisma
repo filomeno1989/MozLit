@@ -3,25 +3,25 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider = "sqlite"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+
 }
 
 model User {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id             String   @id @default(uuid())
   nome           String
   email          String?  @unique
   telefone       String?  @unique @map("telefone") // formato internacional: +258841234567
   senha_hash     String   // No default — must be set on creation
   role           String   @default("LEITOR") // ADMIN, ESCRITOR, LEITOR
-  data_nascimento DateTime? @map("data_nascimento") @db.Date
+  data_nascimento DateTime? @map("data_nascimento")
   saldo_carteira Float    @default(0) @map("saldo_carteira")
   moedas          Int      @default(0) @map("moedas")
   biografia      String   @default("")
   avatar_url     String   @default("") @map("avatar_url")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   books        Book[]
   transactions Transaction[]
@@ -33,7 +33,7 @@ model User {
 }
 
 model Book {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id             String   @id @default(uuid())
   titulo         String
   sinopse        String   @default("")
   capa_url       String   @default("/placeholder-cover.svg") @map("capa_url")
@@ -47,9 +47,9 @@ model Book {
   faixa_etaria   String   @default("Livre") @map("faixa_etaria")
   volume_info    Json?    @map("volume_info")
   status         String   @default("RASCUNHO")
-  autorId        String   @map("autor_id") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  autorId        String   @map("autor_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   autor      User     @relation(fields: [autorId], references: [id], onDelete: Cascade)
   chapters   Chapter[]
@@ -58,15 +58,15 @@ model Book {
 }
 
 model Chapter {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id             String   @id @default(uuid())
   titulo         String
   conteudo       String   @default("")
   preco_capitulo Float    @default(0) @map("preco_capitulo")
   is_free        Boolean  @default(false) @map("is_free")
   ordem          Int      @default(0)
-  livroId        String   @map("livro_id") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  livroId        String   @map("livro_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   livro          Book     @relation(fields: [livroId], references: [id], onDelete: Cascade)
   libraryItems   LibraryItem[]
@@ -77,14 +77,14 @@ model Chapter {
 }
 
 model Transaction {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
   tipo       String
   valor      Float
   status     String   @default("PENDENTE")
   descricao  String?
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -93,12 +93,12 @@ model Transaction {
 }
 
 model LibraryItem {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  bookId     String?  @map("book_id") @db.Uuid
-  chapterId  String?  @map("chapter_id") @db.Uuid
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  bookId     String?  @map("book_id")
+  chapterId  String?  @map("chapter_id")
   tipo       String   @default("CAPITULO")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at")
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   chapter   Chapter? @relation(fields: [chapterId], references: [id], onDelete: Cascade)
@@ -110,13 +110,13 @@ model LibraryItem {
 }
 
 model Comment {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id         String   @id @default(uuid())
   conteudo   String
-  chapterId  String   @map("chapter_id") @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  parentId   String?  @map("parent_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  chapterId  String   @map("chapter_id")
+  userId     String   @map("user_id")
+  parentId   String?  @map("parent_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   chapter   Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
@@ -127,8 +127,8 @@ model Comment {
 }
 
 model RecargaSolicitacao {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
   moedas        Int                       // quantidade de MC solicitada
   valorMzn      Float     @map("valor_mzn") // valor equivalente em MZN a pagar via M-Pesa
   metodo        String    @default("MPESA") // MPESA | EMOOLA | TRANSFERENCIA
@@ -137,10 +137,10 @@ model RecargaSolicitacao {
   nota          String?                   // observação opcional do usuário
   estado        String    @default("PENDENTE") // PENDENTE | APROVADA | REJEITADA | CANCELADA
   notaAdmin     String?   @map("nota_admin") // motivo da rejeição ou nota do admin
-  processadaPor String?   @map("processada_por") @db.Uuid // admin que processou
-  processadaEm  DateTime? @map("processada_em") @db.Timestamptz(6)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  processadaPor String?   @map("processada_por") // admin que processou
+  processadaEm  DateTime? @map("processada_em")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 

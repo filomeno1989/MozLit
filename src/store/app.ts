@@ -9,12 +9,14 @@ export type ViewName =
   | 'register'
   | 'wallet'
   | 'library'
-  | 'new-book';
+  | 'new-book'
+  | 'admin';
 
 export interface User {
   id: string;
   nome: string;
-  email: string;
+  email: string | null;
+  telefone: string | null;
   role: string;
   saldo_carteira: number;
   moedas: number;
@@ -25,10 +27,10 @@ export interface User {
 interface AppState {
   // Navigation
   currentView: ViewName;
-  viewParams: Record<string, string>;
-  navigate: (view: ViewName, params?: Record<string, string>) => void;
+  viewParams: Record<string, string | undefined>;
+  navigate: (view: ViewName, params?: Record<string, string | undefined>) => void;
   goBack: () => void;
-  _history: Array<{ view: ViewName; params: Record<string, string> }>;
+  _history: Array<{ view: ViewName; params: Record<string, string | undefined> }>;
   _popstateRegistered: boolean;
 
   // Auth
@@ -37,6 +39,7 @@ interface AppState {
   setAuth: (user: User, token: string) => void;
   clearAuth: () => void;
   updateBalance: (saldo: number) => void;
+  updateMoedas: (moedas: number) => void;
 
   // Theme
   isDark: boolean;
@@ -48,6 +51,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+
   currentView: 'home',
   viewParams: {},
   navigate: (view, params = {}) => {

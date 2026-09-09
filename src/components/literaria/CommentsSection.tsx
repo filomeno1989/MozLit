@@ -126,7 +126,7 @@ function SingleComment({
             </button>
             {canDelete && (
               <button
-                onClick={() => setDeleteTarget(comment.id)}
+                onClick={() => onDelete(comment.id)}
                 className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors px-1.5 py-0.5 rounded hover:bg-accent opacity-0 group-hover:opacity-100"
               >
                 <Trash2 className="h-3 w-3" /> Eliminar
@@ -394,7 +394,7 @@ export default function CommentsSection({
                     setReplyTo({ id, name });
                     setReplyContent('');
                   }}
-                  onDelete={handleDelete}
+                  onDelete={(id) => setDeleteTarget(id)}
                 />
 
                 {/* Replies toggle */}
@@ -426,7 +426,7 @@ export default function CommentsSection({
                               setReplyTo({ id, name });
                               setReplyContent('');
                             }}
-                            onDelete={handleDelete}
+                            onDelete={(id) => setDeleteTarget(id)}
                             isReply
                           />
                         ))}
@@ -449,7 +449,7 @@ export default function CommentsSection({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (deleteTarget) { onDelete(deleteTarget); setDeleteTarget(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={() => { if (deleteTarget) { handleDelete(deleteTarget); setDeleteTarget(null); } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>

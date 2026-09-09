@@ -2,15 +2,22 @@
 
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
-import { useAppStore } from '@/store/app';
+import { useAppStore, type User } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, LogIn, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { BookOpen, LogIn, Loader2, AlertCircle, Eye, EyeOff, Phone, Mail } from 'lucide-react';
+import CountryCodePicker from '@/components/literaria/CountryCodePicker';
+import { PAIS_PADRAO, type Pais } from '@/lib/paises';
+
+type ModoLogin = 'TELEFONE' | 'EMAIL';
 
 export default function LoginPage() {
   const { navigate, setAuth } = useAppStore();
+  const [modo, setModo] = useState<ModoLogin>('TELEFONE');
+  const [pais, setPais] = useState<Pais>(PAIS_PADRAO);
+  const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,9 +29,11 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiFetch<{ user: typeof import('@/store/app').User; token: string }>('/api/auth/login', {
+      const identificador =
+        modo === 'TELEFONE' ? `${pais.dial}${telefone.trim()}` : email.trim();
+      const data = await apiFetch<{ user: User; token: string }>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, senha }),
+        body: JSON.stringify({ identificador, senha }),
       });
       setAuth(data.user, data.token);
       navigate('home');
@@ -53,20 +62,70 @@ export default function LoginPage() {
                 <span>{error}</span>
               </div>
             )}
+
             <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                required
-              />
+              <Label>Entrar com</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => setModo('TELEFONE')}
+                  className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    modo === 'TELEFONE'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200'
+                      : 'border-border/50 text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <Phone className="h-4 w-4" /> Telefone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModo('EMAIL')}
+                  className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                    modo === 'EMAIL'
+                      ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-200'
+                      : 'border-border/50 text-muted-foreground hover:bg-accent'
+                  }`}
+                >
+                  <Mail className="h-4 w-4" /> Email
+                </button>
+              </div>
             </div>
+
+            {modo === 'TELEFONE' ? (
+              <div>
+                <Label htmlFor="telefone">Número de Telefone</Label>
+                <div className="flex gap-2 mt-1.5">
+                  <CountryCodePicker value={pais} onChange={setPais} />
+                  <Input
+                    id="telefone"
+                    type="tel"
+                    inputMode="tel"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value)}
+                    placeholder={pais.dial === '+258' ? '84 123 4567' : 'número'}
+                    className="flex-1"
+                    required
+                  />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  className="mt-1.5"
+                  required
+                />
+              </div>
+            )}
+
             <div>
               <Label htmlFor="senha">Senha</Label>
-              <div className="relative">
+              <div className="relative mt-1.5">
                 <Input
                   id="senha"
                   type={showPassword ? 'text' : 'password'}

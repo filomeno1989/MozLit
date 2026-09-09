@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Moon, Sun, ChevronLeft, ChevronRight, BookOpen, List, X } from 'lucide-react';
 import CommentsSection from '@/components/literaria/CommentsSection';
-import { type SectionKey, SECTION_LABELS } from '@/lib/constants';
+import { type SectionKey, SECTION_LABELS, isHtmlConteudo } from '@/lib/constants';
 
 interface ChapterListItem {
   id: string;
@@ -53,6 +53,23 @@ function renderProseText(text: string) {
     }
     return <p key={i}>{paragraph}</p>;
   });
+}
+
+/**
+ * Renderiza o conteúdo do capítulo:
+ * - HTML (do editor rico) → injetado directamente (já foi sanitizado no servidor antes de gravar)
+ * - Texto simples (capítulos antigos) → renderizador de prosa legado
+ */
+function renderConteudo(conteudo: string) {
+  if (isHtmlConteudo(conteudo)) {
+    return (
+      <div
+        className="leitor-html"
+        dangerouslySetInnerHTML={{ __html: conteudo }}
+      />
+    );
+  }
+  return renderProseText(conteudo);
 }
 
 export default function EReaderPage() {
@@ -246,7 +263,7 @@ export default function EReaderPage() {
             className={"prose prose-neutral dark:prose-invert max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem] [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic" + (isItalic ? ' [&_p]:italic' : '')}
             style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
           >
-            {renderProseText(sectionContent)}
+          {renderConteudo(sectionContent)}
           </div>
         </article>
 
@@ -385,7 +402,7 @@ export default function EReaderPage() {
             [&_em]:not-italic:text-amber-700 dark:[&_em]:text-amber-400"
           style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
         >
-          {renderProseText(chapter.conteudo)}
+          {renderConteudo(chapter.conteudo)}
         </div>
       </article>
 
@@ -396,10 +413,10 @@ export default function EReaderPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => goToChapter(chapter.prevChapter.id)}
+              onClick={() => goToChapter(chapter.prevChapter!.id)}
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Cap. {chapter.prevChapter.ordem + 1}</span>
+              <span className="hidden sm:inline">Cap. {chapter.prevChapter!.ordem + 1}</span>
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
@@ -415,9 +432,9 @@ export default function EReaderPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => goToChapter(chapter.nextChapter.id)}
+              onClick={() => goToChapter(chapter.nextChapter!.id)}
             >
-              <span className="hidden sm:inline">Cap. {chapter.nextChapter.ordem + 1}</span>
+              <span className="hidden sm:inline">Cap. {chapter.nextChapter!.ordem + 1}</span>
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (

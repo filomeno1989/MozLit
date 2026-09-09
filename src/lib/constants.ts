@@ -77,6 +77,28 @@ export const MOEDAS_CONFIG = {
   ],
 } as const;
 
+/** Sistema de recarga manual (M-Pesa semi-automatizado) */
+export const RECARGA_CONFIG = {
+  /** Contacto M-Pesa do admin visível ao usuário. Configurável por env na Vercel. */
+  MPESA_NUMERO: process.env.NEXT_PUBLIC_ADMIN_MPESA || '84 000 0000',
+  MPESA_NOME: process.env.NEXT_PUBLIC_ADMIN_MPESA_NOME || 'MozLit',
+  METODOS: [
+    { id: 'MPESA', label: 'M-Pesa (Vodacom)' },
+    { id: 'EMOOLA', label: 'e-Mola (Movitel)' },
+    { id: 'TRANSFERENCIA', label: 'Transferência Bancária' },
+  ] as const,
+  MOEDAS_MIN: 50, // mínimo por solicitação
+  MOEDAS_MAX: 50_000, // máximo por solicitação
+  PENDENTES_MAX: 3, // solicitações pendentes simultâneas por usuário
+  REFERENCIA_MAX: 50,
+  NOTA_MAX: 300,
+} as const;
+
+/** Detecta se o conteúdo do capítulo é HTML (do editor rico) ou texto simples (legado) */
+export function isHtmlConteudo(conteudo: string): boolean {
+  return /<(p|h[1-6]|ul|ol|blockquote|strong|em|u|s|br|span|div)\b/i.test(conteudo);
+}
+
 /** Converter MZN para Moedas */
 export function mznParaMoedas(mzn: number): number {
   return Math.round(mzn * MOEDAS_CONFIG.TAXA_CONVERSAO);

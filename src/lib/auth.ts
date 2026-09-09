@@ -15,7 +15,8 @@ const JWT_SECRET = (() => {
 
 export interface JwtPayload {
   userId: string;
-  email: string;
+  email: string | null;
+  telefone?: string | null;
   role: string;
 }
 
