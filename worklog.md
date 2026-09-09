@@ -46,3 +46,46 @@ Stage Summary:
 - Schema dev local: scripts/dev-db.mjs gera prisma/schema.dev.prisma (SQLite) para testes
 - Configurar na Vercel: NEXT_PUBLIC_ADMIN_MPESA (número M-Pesa real do admin) e NEXT_PUBLIC_ADMIN_MPESA_NOME
 - App verificada E2E em dev; pronta para deploy após migration na Supabase
+
+---
+Task ID: 3
+Agent: main (chat novo)
+Task: Corrigir login admin em produção + Meu Perfil + gestão de utilizadores + limpeza de travessões
+
+Work Log:
+- Login admin quebrado em produção: código novo (telefone no User) fazia SELECT de coluna inexistente na Supabase (migration nunca aplicada) → 500 em tudo
+- FIX AUTO-REPARAÇÃO: src/lib/db.ts — ensureSchema aplica DDL idempotente das 2 migrations antes da 1ª consulta (Proxy PrismaClient, tipagem mantida); DDL validado com parser PostgreSQL (15/15); SQLite de dev ignorado
+- NOVO /api/conta (GET+PATCH): perfil completo, edição de nome/email/telefone/biografia, mudança de senha (exige senha actual), token renovado
+- NOVA VISTA 'Meu Perfil' (PerfilPage): resumo da conta, formulário de dados com CountryCodePicker, mudança de senha; ligada ao menu e ícone do header
+- ADMIN PATCH /api/admin/utilizadores: mudar papel (guarda: não muda o próprio) e redefinir senha de utilizadores; AdminPanel com Select de papel + dialog Redefinir Senha
+- Travessões "—" removidos dos textos visíveis (WalletPage, NewBookPage, AdminPanel)
+- mode:'insensitive' agora só no PostgreSQL (evita 500 no SQLite dev) em /api/admin/utilizadores e /api/books
+- Verificação: tsc 0, eslint 0, scripts/teste-e2e-conta.mjs 17/17 PASS, E2E browser (login admin, perfil, dialog senha)
+- SECURITY: .env desrastreado (repo público tinha senha Supabase + JWT_SECRET + service key no histórico, commit 5b2c3ad); rotação pendente no utilizador
+
+Stage Summary:
+- Commits fc42aa9 e 822d067 pushed (deploy Vercel automático)
+- Após deploy: login admin volta a funcionar sem passos manuais; senha pode ser trocada em Meu Perfil
+- Pendente no utilizador: rotação de segredos Supabase/Vercel + mudar a própria senha + revogar token GitHub no fim
+
+---
+Task ID: 4
+Agent: main (chat novo)
+Task: Diagnóstico e correcção dos erros reportados em produção
+
+Work Log:
+- Varredura E2E da produção (browser real + curl em todas as APIs principais)
+- ERRO 1 (admin): conta filomeno1989@gmail.com estava com role ESCRITOR na BD Supabase — login funcionava mas rotas /api/admin/* davam 403 e o menu "Painel Admin" não aparecia
+  - FIX: db.ts — bootstrap garantirAdmin na auto-reparação: promove ADMIN_EMAIL (env, opcional) a ADMIN; se a plataforma não tiver nenhum admin, promove o utilizador mais antigo; nunca retira o papel
+  - ROLE confirmado ADMIN em produção após deploy
+- ERRO 2 (Carteira): "Algo correu mal" — TypeError startsWith de undefined: /api/author devolvia transacções sem id/tipo (select incompleto) e WalletPage chamava t.tipo.startsWith('DEBITO')
+  - FIX: select completo na API author + renderização defensiva no WalletPage (tipo/valor nulos tratados)
+- ERRO 3 (token obsoleto): JWT guardado no browser mantinha role antigo após mudança na BD — exigia logout/login para permissões novas
+  - FIX: /api/auth/me emite token novo quando detecta mudança de role; page.tsx guarda o token renovado na sincronização inicial
+- ADMIN_EMAIL documentado no .env.example
+- Verificação: tsc 0, eslint 0, E2E produção pós-deploy (login 200+ADMIN, Carteira OK, Painel Admin OK com estatísticas, Painel Autor OK, Meu Perfil OK, livro e leitor OK)
+
+Stage Summary:
+- Commits b63ac50 e f7fe67e pushed (deploy Vercel automático)
+- Produção verificada: todas as páginas e APIs principais sem erros
+- Recomendado ao utilizador: definir ADMIN_EMAIL na Vercel (protecção extra); rotação de segredos Supabase + revogação do token GitHub no fim
