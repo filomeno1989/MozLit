@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
         if (jaTem) throw new Error('CONFLITO_POSSE');
 
         const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
-          SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+          SELECT id, moedas FROM profiles WHERE id = ${payload.userId}::uuid FOR UPDATE
         `;
         if (!buyerRow || buyerRow.moedas < precoMoedas) {
           throw new Error('Moedas insuficientes. Compre moedas na carteira.');
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
 
     const result = await db.$transaction(async (tx) => {
       const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
-        SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
+        SELECT id, moedas FROM profiles WHERE id = ${payload.userId}::uuid FOR UPDATE
       `;
       if (!buyerRow || buyerRow.moedas < precoMoedas) {
         throw new Error('Moedas insuficientes. Compre moedas na carteira.');
