@@ -203,13 +203,19 @@ export default function AuthorDashboard() {
 
   function openEditChapter(ch: { id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }) {
     // Load full chapter content for editing (texto legado é convertido para HTML do editor)
-    apiFetch<{ titulo: string; conteudo: string; preco_capitulo: number; is_free: boolean }>(`/api/chapters/${ch.id}`).then((full) => {
+    // A API devolve { chapter: {...} } — aceita também formato directo por segurança
+    apiFetch<{ chapter?: { titulo: string; conteudo: string; preco_capitulo: number; is_free: boolean }; titulo?: string; conteudo?: string; preco_capitulo?: number; is_free?: boolean }>(`/api/chapters/${ch.id}`).then((res) => {
+      const full = res.chapter ?? res;
+      if (!full || typeof full.conteudo !== 'string') {
+        toast.error('Erro ao carregar capítulo');
+        return;
+      }
       setEditingChapter({
         id: ch.id,
-        titulo: full.titulo,
+        titulo: full.titulo ?? ch.titulo,
         conteudo: textoLegadoParaHtml(full.conteudo),
-        preco_capitulo: String(Math.round(full.preco_capitulo)),
-        is_free: full.is_free,
+        preco_capitulo: String(Math.round(full.preco_capitulo ?? 0)),
+        is_free: !!full.is_free,
       });
     }).catch(() => toast.error('Erro ao carregar capítulo'));
   }
@@ -280,15 +286,17 @@ export default function AuthorDashboard() {
       if (b.epigrafe) active.push('epigrafe');
       if (b.epilogo) active.push('epilogo');
       setEditActiveSections(active);
+      // Campos de texto podem estar em HTML (editor rico) ou texto simples (legado);
+      // converter legado para HTML para editar no editor rico
       setEditForm({
-        titulo: b.titulo, sinopse: b.sinopse,
+        titulo: b.titulo, sinopse: textoLegadoParaHtml(b.sinopse || ''),
         capa_url: b.capa_url || '', preco_total: b.preco_total?.toString() ?? '0',
         categorias: Array.isArray(b.categorias) ? b.categorias : [],
         categoriaInput: '',
-        ficha_tecnica: b.ficha_tecnica || '',
-        dedicatoria: b.dedicatoria || '',
-        epigrafe: b.epigrafe || '',
-        epilogo: b.epilogo || '',
+        ficha_tecnica: textoLegadoParaHtml(b.ficha_tecnica || ''),
+        dedicatoria: textoLegadoParaHtml(b.dedicatoria || ''),
+        epigrafe: textoLegadoParaHtml(b.epigrafe || ''),
+        epilogo: textoLegadoParaHtml(b.epilogo || ''),
         faixa_etaria: b.faixa_etaria || 'Livre',
         isVolume: !!(b as any).volume_info,
         volumeNumero: (b as any).volume_info?.numero?.toString() ?? '1',
@@ -577,7 +585,17 @@ export default function AuthorDashboard() {
           {editingBook && (
             <div className="space-y-4">
               <div><Label>Título</Label><Input value={editForm.titulo} onChange={(e) => setEditForm({ ...editForm, titulo: e.target.value })} /></div>
-              <div><Label>Sinopse</Label><Textarea value={editForm.sinopse} onChange={(e) => setEditForm({ ...editForm, sinopse: e.target.value })} rows={3} /></div>
+              <div>
+                <Label>Sinopse</Label>
+                <div className="mt-1.5">
+                  <RichTextEditor
+                    content={editForm.sinopse}
+                    onChange={(html) => setEditForm({ ...editForm, sinopse: html })}
+                    placeholder="Descreva brevemente a obra..."
+                    minHeight="8rem"
+                  />
+                </div>
+              </div>
 
               {/* Multi-categoria */}
               <div>
@@ -654,11 +672,11 @@ export default function AuthorDashboard() {
                         </button>
                         {isActive && (
                           <div className="px-2.5 pb-2.5">
-                            <Textarea
-                              value={editForm[key]}
-                              onChange={(e) => setEditForm({ ...editForm, [key]: e.target.value })}
+                            <RichTextEditor
+                              content={editForm[key]}
+                              onChange={(html) => setEditForm({ ...editForm, [key]: html })}
                               placeholder={`Escreva a ${info.label.toLowerCase()} aqui...`}
-                              rows={3}
+                              minHeight="7rem"
                             />
                           </div>
                         )}

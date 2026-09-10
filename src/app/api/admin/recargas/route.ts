@@ -114,6 +114,10 @@ export async function PATCH(request: NextRequest) {
     const msg = error instanceof Error ? error.message : 'Erro interno';
     const status = msg.includes('não encontrada') ? 404 : msg.includes('processada') ? 409 : 500;
     if (status === 500) console.error('Erro ao processar recarga:', error);
-    return NextResponse.json({ error: msg }, { status });
+    // Erros internos (ex: BD) não vazam detalhes técnicos ao utilizador
+    return NextResponse.json(
+      { error: status === 500 ? 'Erro ao processar a recarga. Tente novamente em instantes.' : msg },
+      { status }
+    );
   }
 }

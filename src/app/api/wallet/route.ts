@@ -108,7 +108,16 @@ export async function POST(request: NextRequest) {
     if (error instanceof Error && error.name === 'ValidationError') {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
-    console.error('Erro no carregamento:', error);
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
+    // Erros de regra de negócio (ex: saldo insuficiente) chegam ao utilizador;
+    // erros técnicos (BD) não vazam detalhes.
+    const msgErro = error instanceof Error ? error.message : '';
+    if (msgErro.includes('insuficiente')) {
+      return NextResponse.json({ error: msgErro }, { status: 400 });
+    }
+    console.error('Erro no carregamento/compra de moedas:', error);
+    return NextResponse.json(
+      { error: 'Erro ao processar a operação. Tente novamente em instantes.' },
+      { status: 500 }
+    );
   }
 }

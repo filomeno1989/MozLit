@@ -3,11 +3,12 @@ import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 import {
   validateTitulo,
-  validateSinopse,
   validateCategorias,
   validateFaixaEtaria,
   validateVolumeInfo,
+  validarCampoLivroHtml,
 } from '@/lib/validate';
+import { LIMITES } from '@/lib/constants';
 
 export async function GET(request: NextRequest) {
   try {
@@ -107,8 +108,9 @@ export async function POST(request: NextRequest) {
     const { titulo, sinopse, categorias, capa_url, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo, faixa_etaria, volume_info } = body;
 
     // Validate inputs
+    // Campos de texto: aceitam HTML do editor rico (sanitizado) ou texto simples (legado)
     const tituloValidado = validateTitulo(titulo);
-    const sinopseValidada = validateSinopse(sinopse);
+    const sinopseValidada = validarCampoLivroHtml(sinopse, 'Sinopse', LIMITES.SINOPSE_MAX, true);
     const catsValidadas = validateCategorias(categorias);
     const faixaValidada = validateFaixaEtaria(faixa_etaria);
     const volumeValidado = validateVolumeInfo(volume_info);
@@ -120,10 +122,10 @@ export async function POST(request: NextRequest) {
         categorias: JSON.stringify(catsValidadas),
         capa_url: (typeof capa_url === 'string' && capa_url.startsWith('http')) ? capa_url : '/placeholder-cover.svg',
         preco_total: typeof preco_total === 'number' && preco_total >= 0 ? preco_total : 0,
-        ficha_tecnica: typeof ficha_tecnica === 'string' ? ficha_tecnica : '',
-        dedicatoria: typeof dedicatoria === 'string' ? dedicatoria : '',
-        epigrafe: typeof epigrafe === 'string' ? epigrafe : '',
-        epilogo: typeof epilogo === 'string' ? epilogo : '',
+        ficha_tecnica: validarCampoLivroHtml(ficha_tecnica, 'Ficha técnica', LIMITES.SINOPSE_MAX),
+        dedicatoria: validarCampoLivroHtml(dedicatoria, 'Dedicatória', LIMITES.SINOPSE_MAX),
+        epigrafe: validarCampoLivroHtml(epigrafe, 'Epígrafe', LIMITES.SINOPSE_MAX),
+        epilogo: validarCampoLivroHtml(epilogo, 'Epílogo', LIMITES.SINOPSE_MAX),
         faixa_etaria: faixaValidada,
         ...(volumeValidado ? { volume_info: volumeValidado } : {}),
         status: 'RASCUNHO',

@@ -6,10 +6,10 @@ import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 import { CATEGORIAS_SUGESTOES, FAIXAS_ETARIAS, type SectionKey, SECTION_LABELS } from '@/lib/constants';
+import RichTextEditor, { htmlVazio } from '@/components/literaria/RichTextEditor';
 
 
 export default function NewBookPage() {
@@ -124,7 +124,7 @@ export default function NewBookPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!titulo || !sinopse) {
+    if (!titulo || htmlVazio(sinopse)) {
       setError('Título e sinopse são obrigatórios.');
       return;
     }
@@ -189,14 +189,14 @@ export default function NewBookPage() {
 
             <div>
               <Label htmlFor="sinopse">Sinopse</Label>
-              <Textarea
-                id="sinopse"
-                value={sinopse}
-                onChange={(e) => setSinopse(e.target.value)}
-                placeholder="Descreva brevemente a obra..."
-                rows={4}
-                required
-              />
+              <div className="mt-1.5">
+                <RichTextEditor
+                  content={sinopse}
+                  onChange={setSinopse}
+                  placeholder="Descreva brevemente a obra..."
+                  minHeight="9rem"
+                />
+              </div>
             </div>
 
             {/* Categorias - Multi-select com tags */}
@@ -343,13 +343,13 @@ export default function NewBookPage() {
                       </button>
                       {isActive && (
                         <div className="px-3 pb-3">
-                          <Textarea
-                            value={sectionContent[key]}
-                            onChange={(e) =>
-                              setSectionContent((prev) => ({ ...prev, [key]: e.target.value }))
+                          <RichTextEditor
+                            content={sectionContent[key]}
+                            onChange={(html) =>
+                              setSectionContent((prev) => ({ ...prev, [key]: html }))
                             }
                             placeholder={`Escreva a ${info.label.toLowerCase()} aqui...`}
-                            rows={4}
+                            minHeight="8rem"
                           />
                         </div>
                       )}

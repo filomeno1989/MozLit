@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatarMoedas } from '@/lib/constants';
+import { formatarMoedas, isHtmlConteudo } from '@/lib/constants';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -168,7 +168,16 @@ export default function BookDetailPage() {
   }
 
   // Clean synopsis: remove author name from the end if present, then split into paragraphs
+  // Sinopses criadas no editor rico guardam HTML sanitizado — renderizadas directamente
   function renderSinopse(text: string, authorName: string) {
+    if (isHtmlConteudo(text)) {
+      return (
+        <div
+          className="prose prose-sm prose-neutral dark:prose-invert max-w-none [&_p]:mb-3 [&_p]:leading-relaxed [&_p]:text-foreground/80"
+          dangerouslySetInnerHTML={{ __html: text }}
+        />
+      );
+    }
     // Strip trailing author name lines (e.g. "Por Autor" or just the name)
     let cleaned = text.trim();
     const nameParts = authorName.toLowerCase().split(' ');
@@ -203,6 +212,19 @@ export default function BookDetailPage() {
         <p key={i} className="text-sm leading-relaxed text-foreground/80">{p}</p>
       );
     });
+  }
+
+  // Previews (line-clamp) mostram texto simples mesmo quando o campo guarda HTML
+  function textoDeHtml(valor: string): string {
+    if (!isHtmlConteudo(valor)) return valor;
+    return valor
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   const isOwnBook = user && user.id === book.autor.id;
@@ -365,7 +387,7 @@ export default function BookDetailPage() {
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-medium">Ficha Técnica</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{book.ficha_tecnica}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{textoDeHtml(book.ficha_tecnica)}</p>
               </div>
               <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
             </button>
@@ -378,7 +400,7 @@ export default function BookDetailPage() {
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-medium">Dedicatória</p>
-                <p className="text-xs text-muted-foreground line-clamp-2 italic">{book.dedicatoria}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2 italic">{textoDeHtml(book.dedicatoria)}</p>
               </div>
               <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
             </button>
@@ -391,7 +413,7 @@ export default function BookDetailPage() {
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-medium">Epígrafe</p>
-                <p className="text-xs text-muted-foreground line-clamp-2 italic">{book.epigrafe}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2 italic">{textoDeHtml(book.epigrafe)}</p>
               </div>
               <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
             </button>
@@ -469,7 +491,7 @@ export default function BookDetailPage() {
               <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <div className="min-w-0">
                 <p className="text-sm font-medium">Epílogo</p>
-                <p className="text-xs text-muted-foreground line-clamp-2">{book.epilogo}</p>
+                <p className="text-xs text-muted-foreground line-clamp-2">{textoDeHtml(book.epilogo)}</p>
               </div>
               <BookOpen className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" />
             </button>

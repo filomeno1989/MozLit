@@ -98,6 +98,30 @@ export function validateSinopse(sinopse: unknown): string {
   return sinopse;
 }
 
+/**
+ * Campo de livro editável com editor rico (sinopse, ficha técnica, dedicatória,
+ * epígrafe, epílogo): aceita HTML do editor (sanitizado) ou texto simples (legado).
+ * Campos opcionais aceitam string vazia.
+ */
+export function validarCampoLivroHtml(campo: unknown, etiqueta: string, max: number, obrigatorio = false): string {
+  if (campo === undefined || campo === null || campo === '') {
+    if (obrigatorio) throw new ValidationError(`${etiqueta} é obrigatória.`);
+    return '';
+  }
+  if (typeof campo !== 'string') throw new ValidationError(`${etiqueta} inválida.`);
+  if (campo.length > max) throw new ValidationError(`${etiqueta} excede o limite de ${max.toLocaleString('pt-MZ')} caracteres.`);
+  const trimmed = campo.trim();
+  if (isHtmlConteudo(trimmed)) {
+    const sanitizado = sanitizeConteudoHtml(trimmed);
+    if (!sanitizado || sanitizado.replace(/<[^>]*>/g, '').trim().length === 0) {
+      if (obrigatorio) throw new ValidationError(`${etiqueta} não pode ficar vazia.`);
+      return '';
+    }
+    return sanitizado;
+  }
+  return trimmed;
+}
+
 /** Validate chapter content */
 export function validateConteudo(conteudo: unknown): string {
   if (typeof conteudo !== 'string') throw new ValidationError('Conteúdo inválido.');

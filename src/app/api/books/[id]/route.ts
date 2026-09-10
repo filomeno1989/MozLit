@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateSinopse, validateCategorias, validateFaixaEtaria, validateVolumeInfo } from '@/lib/validate';
+import { validateTitulo, validateCategorias, validateFaixaEtaria, validateVolumeInfo, validarCampoLivroHtml } from '@/lib/validate';
+import { LIMITES } from '@/lib/constants';
 
 export async function GET(
   request: NextRequest,
@@ -116,17 +117,18 @@ export async function PATCH(
     const { titulo, sinopse, categorias, capa_url, status, preco_total, ficha_tecnica, dedicatoria, epigrafe, epilogo, faixa_etaria, volume_info } = body;
 
     // Validate inputs if provided
+    // Campos de texto: aceitam HTML do editor rico (sanitizado) ou texto simples (legado)
     const data: Record<string, unknown> = {};
     if (titulo !== undefined) data.titulo = validateTitulo(titulo);
-    if (sinopse !== undefined) data.sinopse = validateSinopse(sinopse);
+    if (sinopse !== undefined) data.sinopse = validarCampoLivroHtml(sinopse, 'Sinopse', LIMITES.SINOPSE_MAX);
     if (categorias !== undefined) data.categorias = JSON.stringify(validateCategorias(categorias));
     if (capa_url !== undefined) data.capa_url = capa_url;
     if (status !== undefined) data.status = status;
     if (preco_total !== undefined) data.preco_total = typeof preco_total === 'number' ? preco_total : 0;
-    if (ficha_tecnica !== undefined) data.ficha_tecnica = String(ficha_tecnica);
-    if (dedicatoria !== undefined) data.dedicatoria = String(dedicatoria);
-    if (epigrafe !== undefined) data.epigrafe = String(epigrafe);
-    if (epilogo !== undefined) data.epilogo = String(epilogo);
+    if (ficha_tecnica !== undefined) data.ficha_tecnica = validarCampoLivroHtml(ficha_tecnica, 'Ficha técnica', LIMITES.SINOPSE_MAX);
+    if (dedicatoria !== undefined) data.dedicatoria = validarCampoLivroHtml(dedicatoria, 'Dedicatória', LIMITES.SINOPSE_MAX);
+    if (epigrafe !== undefined) data.epigrafe = validarCampoLivroHtml(epigrafe, 'Epígrafe', LIMITES.SINOPSE_MAX);
+    if (epilogo !== undefined) data.epilogo = validarCampoLivroHtml(epilogo, 'Epílogo', LIMITES.SINOPSE_MAX);
     if (faixa_etaria !== undefined) data.faixa_etaria = validateFaixaEtaria(faixa_etaria);
     if (volume_info !== undefined) data.volume_info = validateVolumeInfo(volume_info);
 

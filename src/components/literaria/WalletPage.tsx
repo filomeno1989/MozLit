@@ -85,9 +85,14 @@ export default function WalletPage() {
     }
   }, [updateBalance, updateMoedas]);
 
+  // Dependemos apenas do id (identidade): updateBalance/updateMoedas criam um
+  // novo objecto "user" — se o objecto fosse dependência, este efeito corria em
+  // loop infinito (a lista "Minhas Recargas" ficava a piscar).
+  const userId = user?.id;
+
   useEffect(() => {
-    if (user) loadTransactions();
-  }, [user, loadTransactions]);
+    if (userId) loadTransactions();
+  }, [userId, loadTransactions]);
 
   async function handleDeposit() {
     const valor = parseFloat(depositAmount);

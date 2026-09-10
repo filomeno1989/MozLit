@@ -77,6 +77,14 @@ const DDL_AUTO_REPARACAO: string[] = [
       ON "recargas_solicitacoes" ("user_id", "estado")`,
   `CREATE INDEX IF NOT EXISTS "recargas_solicitacoes_estado_created_at_idx"
       ON "recargas_solicitacoes" ("estado", "created_at")`,
+
+  // ===== Correcção 2026-09-10b: constraint antiga do tipo de transacção =====
+  // A BD original criou CHECK "transactions_tipo_check" com uma lista fechada de
+  // tipos (ex: COMPRA, MPESA, NIB). Os tipos novos RECARGA e COMPRA_MOEDAS
+  // violavam a constraint e faziam falhar a aprovação de recargas e a conversão
+  // de saldo em MC. A aplicação é a fonte da verdade dos tipos — removemos a
+  // lista fechada para não voltar a bloquear tipos futuros.
+  `ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_tipo_check"`,
 ]
 
 /**
@@ -123,8 +131,48 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
   }
 }
 
+/**
+ * Verificação rápida do esquema (1 consulta): evita correr os ~30 DDLs em cada
+ * instância nova do servidor. Devolve true se o esquema já está actualizado.
+ */
+async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
+  try {
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; recargas: number; idx: number; tipo_check: number }[]>`
+      SELECT
+        (SELECT COUNT(*)::int FROM information_schema.columns
+          WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
+        (SELECT COUNT(*)::int FROM information_schema.columns
+          WHERE table_name = 'books' AND column_name = 'faixa_etaria') AS books,
+        (SELECT COUNT(*)::int FROM information_schema.columns
+          WHERE table_name = 'recargas_solicitacoes') AS recargas,
+        (SELECT COUNT(*)::int FROM pg_indexes
+          WHERE indexname IN ('chapters_livroId_ordem_idx', 'transactions_userId_tipo_idx',
+            'library_items_userId_bookId_idx', 'library_items_userId_tipo_idx',
+            'recargas_solicitacoes_user_id_estado_idx', 'recargas_solicitacoes_estado_created_at_idx',
+            'profiles_telefone_key')) AS idx,
+        (SELECT COUNT(*)::int FROM pg_constraint
+          WHERE conname = 'transactions_tipo_check') AS tipo_check`
+    const r = linhas[0]
+    return (
+      Number(r?.perfil ?? 0) === 2 &&
+      Number(r?.books ?? 0) === 1 &&
+      Number(r?.recargas ?? 0) >= 12 &&
+      Number(r?.idx ?? 0) === 7 &&
+      Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida
+    )
+  } catch {
+    return false // tabelas nem sequer existem — precisa de reparação completa
+  }
+}
+
 async function aplicarAutoReparacao(prisma: PrismaClient): Promise<void> {
   if (!isPostgres()) return // dev local (SQLite) já é criado com o schema completo
+
+  // Caminho rápido: esquema já actualizado → sem DDLs (1 consulta apenas)
+  if (await esquemaActualizado(prisma)) {
+    await garantirAdmin(prisma)
+    return
+  }
 
   let aplicadas = 0
   for (const sql of DDL_AUTO_REPARACAO) {
@@ -148,7 +196,10 @@ async function aplicarAutoReparacao(prisma: PrismaClient): Promise<void> {
 
 const prisma = globalForPrisma.prisma ?? new PrismaClient({})
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
+// Cache global também em produção: em serverless (Vercel) a instância é reutilizada
+// entre pedidos, e recriar o PrismaClient a cada invocação abre uma conexão nova
+// (TCP + TLS + PgBouncer) por pedido — principal causa da lentidão das APIs.
+globalForPrisma.prisma = prisma
 
 /** Promessa que garante o esquema aplicado antes da primeira consulta. */
 function esquemaPronto(): Promise<void> {
