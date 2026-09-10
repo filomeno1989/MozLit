@@ -39,6 +39,65 @@ interface ChapterData {
 
 const getSectionLabel = (key: SectionKey) => SECTION_LABELS[key].label;
 
+/** Ordem de leitura das secções de abertura: Ficha Técnica -> Dedicatória -> Epígrafe */
+const ORDEM_SECOES: SectionKey[] = ['ficha_tecnica', 'dedicatoria', 'epigrafe'];
+
+interface CapituloResumo {
+  id: string;
+  titulo: string;
+  ordem: number;
+  is_free: boolean;
+}
+
+interface SecaoLivro {
+  id: string;
+  titulo: string;
+  autorId: string;
+  categorias: string;
+  ficha_tecnica: string;
+  dedicatoria: string;
+  epigrafe: string;
+  epilogo: string;
+  chapters: CapituloResumo[];
+}
+
+/** Próximo passo da leitura (secção seguinte, capítulo ou epílogo) */
+type ProximoAlvo =
+  | { tipo: 'secao'; key: SectionKey; label: string }
+  | { tipo: 'capitulo'; id: string; label: string };
+
+/** O que vem depois de uma secção: secção de abertura seguinte -> 1.º capítulo -> epílogo */
+function proximoAposSecao(secao: SectionKey, livro: SecaoLivro | null): ProximoAlvo | null {
+  if (!livro) return null;
+  if (secao === 'epilogo') return null;
+  const idx = ORDEM_SECOES.indexOf(secao);
+  if (idx >= 0) {
+    for (let i = idx + 1; i < ORDEM_SECOES.length; i++) {
+      if (livro[ORDEM_SECOES[i]]) {
+        return { tipo: 'secao', key: ORDEM_SECOES[i], label: SECTION_LABELS[ORDEM_SECOES[i]].label };
+      }
+    }
+  }
+  const primeiro = livro.chapters && livro.chapters[0];
+  if (primeiro) {
+    return { tipo: 'capitulo', id: primeiro.id, label: `Cap. ${primeiro.ordem + 1} - ${primeiro.titulo}` };
+  }
+  if (livro.epilogo) {
+    return { tipo: 'secao', key: 'epilogo', label: SECTION_LABELS.epilogo.label };
+  }
+  return null;
+}
+
+/** Última secção de abertura existente (botão anterior no 1.º capítulo) */
+function secaoAnteriorAoCapitulo(livro: ChapterData['livro']): { key: SectionKey; label: string } | null {
+  for (let i = ORDEM_SECOES.length - 1; i >= 0; i--) {
+    if (livro[ORDEM_SECOES[i]]) {
+      return { key: ORDEM_SECOES[i], label: SECTION_LABELS[ORDEM_SECOES[i]].label };
+    }
+  }
+  return null;
+}
+
 function renderProseText(text: string) {
   return text.split('\n').map((paragraph, i) => {
     if (!paragraph.trim()) return <br key={i} />;
@@ -101,8 +160,8 @@ export default function EReaderPage() {
   const [error, setError] = useState<string | null>(null);
   const [chapterMenuOpen, setChapterMenuOpen] = useState(false);
 
-  // For section reading, we need book data
-  const [sectionBook, setSectionBook] = useState<ChapterData['livro'] | null>(null);
+  // For section reading, we need book data (com capítulos para o botão Seguinte)
+  const [sectionBook, setSectionBook] = useState<SecaoLivro | null>(null);
   const [sectionLoading, setSectionLoading] = useState(false);
 
   const isSectionView = !!section && !chapterId;
@@ -128,13 +187,11 @@ export default function EReaderPage() {
     setSectionLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<{
-        id: string; titulo: string; autorId: string; categorias: string;
-        ficha_tecnica: string; dedicatoria: string; epigrafe: string; epilogo: string;
-      }>(`/api/books/${bookId}`);
+      const data = await apiFetch<SecaoLivro>(`/api/books/${bookId}`);
       setSectionBook({
         ...data,
         categorias: typeof data.categorias === 'string' ? JSON.parse(data.categorias) : data.categorias,
+        chapters: data.chapters || [],
       });
     } catch (err) {
       setError((err as Error).message);
@@ -212,6 +269,16 @@ export default function EReaderPage() {
     }
 
     const isItalic = section === 'dedicatoria' || section === 'epigrafe';
+    const proximo = proximoAposSecao(section, sectionBook);
+
+    function irProximo() {
+      if (!proximo) return;
+      if (proximo.tipo === 'secao') {
+        navigate('reader', { bookId, section: proximo.key });
+      } else {
+        navigate('reader', { chapterId: proximo.id, bookId });
+      }
+    }
 
     return (
       <div
@@ -267,12 +334,22 @@ export default function EReaderPage() {
           </div>
         </article>
 
-        {/* Bottom nav */}
-        <div className="max-w-2xl mx-auto px-4 pb-4 flex justify-between items-center">
-          <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Índice
-          </Button>
-          <span className="text-xs text-muted-foreground">Fim da secção</span>
+        {/* Bottom nav: próximo passo da leitura */}
+        <div className="max-w-2xl mx-auto px-4 pb-4">
+          <div className="flex justify-between items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Índice</span>
+            </Button>
+            {proximo ? (
+              <Button variant="outline" size="sm" onClick={irProximo} className="min-w-0">
+                <span className="truncate max-w-[10rem] sm:max-w-xs">Seguinte: {proximo.label}</span>
+                <ChevronRight className="h-4 w-4 ml-1 shrink-0" />
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground shrink-0">Fim do livro</span>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -291,6 +368,7 @@ export default function EReaderPage() {
   }
 
   const { livro } = chapter;
+  const secaoAnterior = chapter.prevChapter ? null : secaoAnteriorAoCapitulo(livro);
 
   return (
     <div
@@ -418,6 +496,15 @@ export default function EReaderPage() {
               <ChevronLeft className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Cap. {chapter.prevChapter!.ordem + 1}</span>
             </Button>
+          ) : secaoAnterior ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('reader', { bookId, section: secaoAnterior.key })}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">{secaoAnterior.label}</span>
+            </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
               <ArrowLeft className="h-4 w-4 mr-1" /> Índice
@@ -435,6 +522,15 @@ export default function EReaderPage() {
               onClick={() => goToChapter(chapter.nextChapter!.id)}
             >
               <span className="hidden sm:inline">Cap. {chapter.nextChapter!.ordem + 1}</span>
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          ) : livro.epilogo ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('reader', { bookId, section: 'epilogo' })}
+            >
+              <span className="hidden sm:inline">Epílogo</span>
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : (

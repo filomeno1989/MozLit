@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookOpen, Search } from 'lucide-react';
-import { formatarMoedas } from '@/lib/constants';
+import { formatarMoedas, textoSimplesDeHtml } from '@/lib/constants';
 
 interface Book {
   id: string;
@@ -82,10 +82,10 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
           {book.autor.nome}
         </p>
 
-        {/* Synopsis - visually distinct */}
+        {/* Synopsis - visually distinct (texto simples, sem código HTML à vista) */}
         {book.sinopse && (
           <p className="text-[11px] leading-relaxed text-muted-foreground/80 line-clamp-2 border-t border-border/40 pt-2">
-            {book.sinopse}
+            {textoSimplesDeHtml(book.sinopse)}
           </p>
         )}
       </div>

@@ -108,3 +108,23 @@ Work Log:
 Stage Summary:
 - Commit d5a70ee pushed (deploy Vercel automático)
 - 5 dos 6 bugs corrigidos e verificados em produção; bug 6 parcialmente corrigido (código) com acção de configuração pendente no utilizador (região Vercel = região Supabase)
+
+---
+Task ID: 6
+Agent: main (chat novo, ambiente reiniciado)
+Task: 4 pedidos do utilizador: alinhamento de texto no editor, botão Seguinte entre secções do leitor, prévia da sinopse a mostrar HTML crua nos cartazes, dúvida sobre o Vercel Toolbar.
+
+Work Log:
+- ISSUE 1 (alinhamento): extensão TextAlign implementada localmente no RichTextEditor (atributo global style="text-align" em p/h2/blockquote, comandos setTextAlign/unsetTextAlign com module augmentation) - sem dependência nova, para não partir o lockfile do deploy. Barra ganhou 4 botões (esquerda, centrar, direita, justificado) com estado activo
+- Sanitizador (validate.ts): allowlist alargada a text-align (left/center/right/justify) e a style em h2/h3/blockquote; testes unitários confirmam que cor/onclick/script continuam removidos e font-family continua a passar
+- ISSUE 2 (navegação): EReaderPage com cadeia de leitura completa: Ficha Técnica -> Dedicatória -> Epígrafe -> Cap. 1 -> ... -> Epílogo -> "Fim do livro"; botão "Seguinte: X" no fundo de cada secção (só oferece secções que existem); no 1.º capítulo o botão anterior volta à última secção de abertura; no último capítulo o seguinte leva ao Epílogo
+- loadSectionBook passa a transportar chapters (a API /api/books/[id] já os devolvia)
+- ISSUE 3 (prévia): helper textoSimplesDeHtml em constants.ts (strip de tags + entidades &quot; &amp; etc.); HomePage passa a usá-lo - o cartaz do NYOTA deixa de mostrar <p><span style=...
+- ISSUE 4 (Vercel Toolbar): explicado ao utilizador - só aparece a quem tem sessão iniciada na Vercel no mesmo browser (dono da conta); visitantes nunca veem
+- Validação: tsc 0, eslint 0; E2E Playwright local (SQLite + seed) com 17 verificações OK: prévias limpas, cadeia Seguinte completa, alinhamentos right/justify renderizados no leitor, login de autora, 4 botões na barra, text-align:center e justify aplicados no DOM do editor
+- db/custom.db de teste restaurado antes do commit
+
+Stage Summary:
+- Push pendente (commit único com os 5 ficheiros alterados); deploy Vercel automático
+- Alinhamento disponível em todos os campos com editor rico; sanitização mantida
+- Nota ao utilizador: repo MozLit está PÚBLICO - recomendação de tornar privado como no danmo-hub

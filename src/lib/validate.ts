@@ -282,7 +282,7 @@ export function validateCreditoAdmin(moedas: unknown): number {
 /**
  * Sanitiza HTML do editor rico (Tiptap) antes de gravar na BD.
  * Allowlist estrita: formatação literária apenas — sem scripts, iframes, imagens externas ou estilos arbitrários.
- * FontFamily é permitido apenas via style="font-family: ..." em span/p.
+ * Permitidos: font-family (span/p) e text-align (p, h2, h3, blockquote).
  */
 export function sanitizeConteudoHtml(html: string): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -298,11 +298,16 @@ export function sanitizeConteudoHtml(html: string): string {
     allowedAttributes: {
       span: ['style'],
       p: ['style'],
+      h2: ['style'],
+      h3: ['style'],
+      blockquote: ['style'],
     },
     allowedStyles: {
       '*': {
         // aceita font stacks com vars CSS: var(--font-lora), Georgia, serif
         'font-family': [/^[\w\s,'"\-()]+$/],
+        // alinhamento do editor: left, center, right, justify
+        'text-align': [/^(left|center|right|justify)$/],
       },
     },
     allowedSchemes: [],

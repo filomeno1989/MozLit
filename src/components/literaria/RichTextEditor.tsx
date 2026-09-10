@@ -1,6 +1,7 @@
 'use client';
 
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
+import { Extension } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { TextStyle, FontFamily } from '@tiptap/extension-text-style';
@@ -8,8 +9,62 @@ import { isHtmlConteudo } from '@/lib/constants';
 import {
   Bold, Italic, Underline, Strikethrough,
   Heading2, Heading3, List, ListOrdered, Quote,
+  AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Undo2, Redo2, RemoveFormatting, Type,
 } from 'lucide-react';
+
+/**
+ * Alinhamento de texto (esquerda, centro, direita, justificado).
+ * Implementação local via atributo global style="text-align" nos blocos,
+ * equivalente à extensão oficial sem depedência extra.
+ */
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    textAlign: {
+      /** Define o alinhamento dos blocos selecionados */
+      setTextAlign: (alinhamento: 'left' | 'center' | 'right' | 'justify') => ReturnType;
+      /** Volta ao alinhamento padrão (esquerda) */
+      unsetTextAlign: () => ReturnType;
+    };
+  }
+}
+
+const TextAlign = Extension.create({
+  name: 'textAlign',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['heading', 'paragraph', 'blockquote'],
+        attributes: {
+          textAlign: {
+            default: null as string | null,
+            parseHTML: (element) => element.style.textAlign || null,
+            renderHTML: (attributes) => {
+              if (!attributes.textAlign) return {};
+              return { style: `text-align: ${attributes.textAlign}` };
+            },
+          },
+        },
+      },
+    ];
+  },
+  addCommands() {
+    return {
+      setTextAlign:
+        (alinhamento) =>
+        ({ commands }) => {
+          const tipos = ['paragraph', 'heading', 'blockquote'] as const;
+          return tipos.every((tipo) => commands.updateAttributes(tipo, { textAlign: alinhamento }));
+        },
+      unsetTextAlign:
+        () =>
+        ({ commands }) => {
+          const tipos = ['paragraph', 'heading', 'blockquote'] as const;
+          return tipos.every((tipo) => commands.resetAttributes(tipo, 'textAlign'));
+        },
+    };
+  },
+});
 
 /** Fontes literárias oferecidas no editor e no leitor (vars de next/font com fallback de sistema) */
 export const FONTES_LITERARIAS = [
@@ -88,6 +143,10 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       bulletList: e?.isActive('bulletList') ?? false,
       orderedList: e?.isActive('orderedList') ?? false,
       blockquote: e?.isActive('blockquote') ?? false,
+      alignLeft: e?.isActive({ textAlign: 'left' }) ?? false,
+      alignCenter: e?.isActive({ textAlign: 'center' }) ?? false,
+      alignRight: e?.isActive({ textAlign: 'right' }) ?? false,
+      alignJustify: e?.isActive({ textAlign: 'justify' }) ?? false,
       canUndo: e?.can().undo() ?? false,
       canRedo: e?.can().redo() ?? false,
       fonteAtual:
@@ -135,6 +194,21 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       </ToolbarButton>
       <ToolbarButton title="Citação" active={state.blockquote} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
         <Quote className="h-4 w-4" />
+      </ToolbarButton>
+
+      <span className="w-px h-5 bg-border mx-1" aria-hidden="true" />
+
+      <ToolbarButton title="Alinhar à esquerda" active={state.alignLeft} onClick={() => editor.chain().focus().setTextAlign('left').run()}>
+        <AlignLeft className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Centrar" active={state.alignCenter} onClick={() => editor.chain().focus().setTextAlign('center').run()}>
+        <AlignCenter className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Alinhar à direita" active={state.alignRight} onClick={() => editor.chain().focus().setTextAlign('right').run()}>
+        <AlignRight className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton title="Justificado" active={state.alignJustify} onClick={() => editor.chain().focus().setTextAlign('justify').run()}>
+        <AlignJustify className="h-4 w-4" />
       </ToolbarButton>
 
       <span className="w-px h-5 bg-border mx-1" aria-hidden="true" />
@@ -192,6 +266,7 @@ export default function RichTextEditor({
       }),
       TextStyle,
       FontFamily.configure({ types: ['textStyle'] }),
+      TextAlign,
       Placeholder.configure({ placeholder }),
     ],
     content,

@@ -99,6 +99,22 @@ export function isHtmlConteudo(conteudo: string): boolean {
   return /<(p|h[1-6]|ul|ol|blockquote|strong|em|u|s|br|span|div)\b/i.test(conteudo);
 }
 
+/** Converte HTML do editor em texto simples para previews (cartões, listas, cartazes) */
+export function textoSimplesDeHtml(valor: string): string {
+  if (!valor) return '';
+  if (!isHtmlConteudo(valor)) return valor;
+  return valor
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Converter MZN para Moedas */
 export function mznParaMoedas(mzn: number): number {
   return Math.round(mzn * MOEDAS_CONFIG.TAXA_CONVERSAO);
