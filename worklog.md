@@ -89,3 +89,22 @@ Stage Summary:
 - Commits b63ac50 e f7fe67e pushed (deploy Vercel automático)
 - Produção verificada: todas as páginas e APIs principais sem erros
 - Recomendado ao utilizador: definir ADMIN_EMAIL na Vercel (protecção extra); rotação de segredos Supabase + revogação do token GitHub no fim
+
+---
+Task ID: 5
+Agent: main (chat novo, ambiente reiniciado)
+Task: Corrigir 6 bugs reportados pelo utilizador em produção
+
+Work Log:
+- BUG 1 (aprovar recarga não faz nada): constraint antiga "transactions_tipo_check" na Supabase rejeitava tipo RECARGA (PostgreSQL 23514) → 500. FIX: DROP CONSTRAINT IF EXISTS na auto-reparação + mensagem de erro limpa (sem vazar detalhes Prisma). Verificado em produção: recarga de teste aprovada, 100 MC creditadas.
+- BUG 2 (editar capítulo não abre): GET /api/chapters/[id] devolve {chapter:{...}} mas openEditChapter lia campos directos → conteudo undefined → textoLegadoParaHtml(undefined) crashava antes de abrir o dialog. FIX: aceitar formato {chapter} ou directo + validar conteudo string.
+- BUG 3 (formatação nos campos do livro): RichTextEditor (Tiptap) integrado em sinopse/ficha técnica/dedicatória/epígrafe/epílogo no NewBookPage e no dialog Editar Obra (AuthorDashboard, com textoLegadoParaHtml para legado). API books POST/PATCH sanitiza com novo validarCampoLivroHtml (allowlist + font-family). BookDetailPage renderiza HTML sanitizado e previews fazem strip de tags. EReaderPage já era retrocompatível.
+- BUG 4 (Minhas Recargas a piscar): WalletPage useEffect dependia do objecto user, que updateBalance recria a cada fetch → loop infinito de recarregamento. FIX: dependência apenas de user?.id.
+- BUG 5 (Converter Saldo em MC falhava): mesma constraint (tipo COMPRA_MOEDAS). FIX pelo DROP. + saldo insuficiente agora devolve 400 com mensagem clara (antes 500 genérico). Verificado em produção: 500 saldo → 100 MC convertidas (saldo 490, moedas 200).
+- BUG 6 (abrir livro lento ~1s): (a) PrismaClient só era cacheado em dev — em produção nova conexão TCP+TLS+PgBouncer por pedido; agora cache global sempre. (b) auto-reparação saltava os ~30 DDLs com 1 consulta de verificação (esquemaActualizado via information_schema/pg_indexes/pg_constraint). (c) CAUSA RESTANTE CONFIRMADA: função Vercel fixada em iad1 (EUA) e Supabase noutra região — round-trips transatlânticos (~600ms por pedido). Requer troca da Function Region na Vercel para a região da Supabase (acção do utilizador).
+- Sanitização verificada: <script> removido, formatação mantida; livro de teste criado e eliminado em produção.
+- Verificação: tsc 0, eslint 0, smoke test E2E em dev SQLite (login, livro com HTML, recarga aprovar, converter saldo) e testes de produção via curl.
+
+Stage Summary:
+- Commit d5a70ee pushed (deploy Vercel automático)
+- 5 dos 6 bugs corrigidos e verificados em produção; bug 6 parcialmente corrigido (código) com acção de configuração pendente no utilizador (região Vercel = região Supabase)
