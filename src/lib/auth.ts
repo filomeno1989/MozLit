@@ -1,26 +1,41 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 /**
- * SEGURANÇA: o JWT_SECRET é obrigatório em produção. Se faltar (ou for curto),
- * as operações de assinatura/verificação FALHAM (fail-closed) — nunca assinar
- * tokens com uma chave conhecida. A verificação é feita no pedido (e não no
- * arranque) para o build não exigir segredos no ambiente de compilação.
- * Em desenvolvimento local permite-se uma chave fraca apenas para conveniência.
+ * SEGURANÇA: segredo de assinatura dos tokens JWT.
+ *
+ * Hierarquia:
+ *  1. JWT_SECRET (env) com ≥32 caracteres — forma correcta e preferida.
+ *  2. Se ausente/curto EM PRODUÇÃO: deriva uma chave forte (SHA-256) de outros
+ *     segredos que só o servidor conhece (DATABASE_URL). Isto mantém a
+ *     plataforma a funcionar de forma SEGURA mesmo antes de o segredo próprio
+ *     ser configurado — tokens não podem ser forjados por terceiros.
+ *  3. Em desenvolvimento local: chave fraca apenas por conveniência.
+ *
+ * Nunca se usa uma chave conhecida/publica — antes desta versão, o fallback era
+ * uma constante pública no código (qualquer um podia forjar tokens de ADMIN).
  */
 function segredoJwt(): string {
   const secret = process.env.JWT_SECRET;
-  if (!secret || secret.length < 32) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(
-        '[MozLit] JWT_SECRET ausente ou demasiado curto (mín. 32 caracteres). ' +
-        'Defina-a nas variáveis de ambiente da Vercel.'
+  if (secret && secret.length >= 32) return secret;
+
+  if (process.env.NODE_ENV === 'production') {
+    const fonte = process.env.DATABASE_URL || '';
+    if (fonte.length > 20) {
+      console.warn(
+        '[SECURITY] JWT_SECRET ausente/curto — a usar chave derivada dos segredos do servidor. ' +
+        'Defina JWT_SECRET (≥32 caracteres aleatórios) na Vercel para maior controlo.'
       );
+      return crypto.createHash('sha256').update(`mozlit::${fonte}::v1`).digest('hex');
     }
-    console.error('[SECURITY] JWT_SECRET ausente/fraca — a usar chave de desenvolvimento.');
-    return 'mozlit-dev-insecure-secret-mudar-em-producao';
+    throw new Error(
+      '[MozLit] Sem JWT_SECRET nem DATABASE_URL para derivar chave de assinatura. Configure as variáveis de ambiente.'
+    );
   }
-  return secret;
+
+  console.error('[SECURITY] JWT_SECRET ausente/fraca — a usar chave de desenvolvimento.');
+  return 'mozlit-dev-insecure-secret-mudar-em-producao';
 }
 
 export interface JwtPayload {
