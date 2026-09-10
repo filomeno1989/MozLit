@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 import { validateTitulo, validateConteudoCapitulo } from '@/lib/validate';
+import { LIMITES } from '@/lib/constants';
 
 export async function GET(
   request: NextRequest,
@@ -177,9 +178,29 @@ export async function PATCH(
     const data: Record<string, unknown> = {};
     if (body.titulo !== undefined) data.titulo = validateTitulo(body.titulo);
     if (body.conteudo !== undefined) data.conteudo = validateConteudoCapitulo(body.conteudo);
-    if (body.preco_capitulo !== undefined) data.preco_capitulo = typeof body.preco_capitulo === 'number' ? body.preco_capitulo : 0;
+    if (body.preco_capitulo !== undefined) {
+      // SEGURANÇA: preço entre 0 e PRECO_CAPITULO_MAX — preço negativo permitia
+      // "comprar" capítulos e GANHAR moedas (impressão de MC fora da economia)
+      if (typeof body.preco_capitulo !== 'number' || !Number.isFinite(body.preco_capitulo)) {
+        return NextResponse.json({ error: 'Preço do capítulo inválido.' }, { status: 400 });
+      }
+      const preco = Math.round(body.preco_capitulo);
+      if (preco < 0 || preco > LIMITES.PRECO_CAPITULO_MAX) {
+        return NextResponse.json(
+          { error: `O preço do capítulo deve estar entre 0 e ${LIMITES.PRECO_CAPITULO_MAX} MC.` },
+          { status: 400 }
+        );
+      }
+      data.preco_capitulo = preco;
+    }
     if (body.is_free !== undefined) data.is_free = Boolean(body.is_free);
-    if (body.ordem !== undefined) data.ordem = Number(body.ordem);
+    if (body.ordem !== undefined) {
+      const ordem = Number(body.ordem);
+      if (!Number.isFinite(ordem) || ordem < 0) {
+        return NextResponse.json({ error: 'Ordem inválida.' }, { status: 400 });
+      }
+      data.ordem = Math.floor(ordem);
+    }
 
     const updated = await db.chapter.update({
       where: { id },

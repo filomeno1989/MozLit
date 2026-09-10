@@ -15,11 +15,17 @@ async function reset() {
 
   console.log('Tabelas limpas.');
 
-  const senha_hash = await bcrypt.hash('Filas1989', 12);
+  // SEGURANÇA: senha lida de variável de ambiente (nunca no código)
+  const ADMIN_SENA = process.env.ADMIN_SENA_INICIAL;
+  if (!ADMIN_SENA) {
+    console.error('Defina ADMIN_SENA_INICIAL no .env.local');
+    process.exit(1);
+  }
+  const senha_hash = await bcrypt.hash(ADMIN_SENA, 12);
   const admin = await prisma.user.create({
     data: {
       nome: 'Filomeno',
-      email: 'filomeno1989@gmail.com',
+      email: process.env.ADMIN_EMAIL || 'admin@exemplo.local',
       senha_hash,
       role: 'ADMIN',
       saldo_carteira: 1000,

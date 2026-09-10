@@ -54,6 +54,8 @@ model Book {
   autor      User     @relation(fields: [autorId], references: [id], onDelete: Cascade)
   chapters   Chapter[]
 
+  @@index([autorId])
+  @@index([status, createdAt])
   @@map("books")
 }
 
@@ -83,12 +85,16 @@ model Transaction {
   valor      Float
   status     String   @default("PENDENTE")
   descricao  String?
+  chapterId  String?  @map("chapter_id") @db.Uuid // auditoria: capítulo comprado/vendido
+  bookId     String?  @map("book_id") @db.Uuid   // auditoria: obra comprada/vendida
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, tipo])
+  @@index([chapterId])
+  @@index([bookId])
   @@map("transactions")
 }
 
@@ -106,6 +112,8 @@ model LibraryItem {
   @@unique([userId, chapterId])
   @@index([userId, bookId])
   @@index([userId, tipo])
+  @@index([bookId])
+  @@index([chapterId])
   @@map("library_items")
 }
 
@@ -123,6 +131,9 @@ model Comment {
   parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("CommentReplies")
 
+  @@index([chapterId])
+  @@index([userId])
+  @@index([parentId])
   @@map("comments")
 }
 

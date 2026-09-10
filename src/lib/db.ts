@@ -85,24 +85,48 @@ const DDL_AUTO_REPARACAO: string[] = [
   // de saldo em MC. A aplicação é a fonte da verdade dos tipos — removemos a
   // lista fechada para não voltar a bloquear tipos futuros.
   `ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_tipo_check"`,
+
+  // ===== Reforço 2026-09-10c: performance + auditoria de vendas =====
+  // Índices para as consultas mais frequentes (Postgres não indexa FKs sozinho)
+  `CREATE INDEX IF NOT EXISTS "books_autorId_idx" ON "books" ("autor_id")`,
+  `CREATE INDEX IF NOT EXISTS "books_status_createdAt_idx" ON "books" ("status", "created_at")`,
+  `CREATE INDEX IF NOT EXISTS "comments_chapterId_idx" ON "comments" ("chapter_id")`,
+  `CREATE INDEX IF NOT EXISTS "comments_parentId_idx" ON "comments" ("parent_id")`,
+  `CREATE INDEX IF NOT EXISTS "comments_userId_idx" ON "comments" ("user_id")`,
+  `CREATE INDEX IF NOT EXISTS "library_items_bookId_idx" ON "library_items" ("book_id")`,
+  `CREATE INDEX IF NOT EXISTS "library_items_chapterId_idx" ON "library_items" ("chapter_id")`,
+  // Auditoria de vendas: liga a transacção ao conteúdo comprado (relatórios por obra)
+  `ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "chapter_id" UUID`,
+  `ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "book_id" UUID`,
+  `CREATE INDEX IF NOT EXISTS "transactions_chapterId_idx" ON "transactions" ("chapter_id")`,
+  `CREATE INDEX IF NOT EXISTS "transactions_bookId_idx" ON "transactions" ("book_id")`,
 ]
 
 /**
  * BOOTSTRAP DO ADMIN — garante que a plataforma nunca fica sem administrador.
  *
- *  1. Se ADMIN_EMAIL estiver definido (variável de ambiente na Vercel), o
- *     utilizador com esse email é promovido a ADMIN (se ainda não for).
- *  2. Caso contrário, se NÃO existir nenhum ADMIN na base de dados, o
- *     utilizador mais antigo (o dono da plataforma) é promovido a ADMIN.
+ *  1. Se ADMIN_USER_ID estiver definido (id fixo, imutável — forma recomendada),
+ *     esse utilizador é promovido a ADMIN (se ainda não for).
+ *  2. Alternativa (menos segura): ADMIN_EMAIL — promove por email. Como o email
+ *     pode ser alterado por um utilizador, a rota /api/conta bloqueia a
+ *     apropriação do email configurado (ver PATCH /api/conta).
+ *  3. Numa base de dados nova (até 3 contas), o utilizador mais antigo é
+ *     promovido para o arranque nunca deixar a plataforma órfã.
  *
- * A operação nunca RETIRA o papel de admin a ninguém; apenas adiciona quando
- * necessário. Corre para o caso "o admin perdeu o acesso" (ex: papel perdido
- * numa alteração manual da base de dados).
+ * A operação nunca RETIRA o papel de admin a ninguém; apenas adiciona.
  */
 async function garantirAdmin(prisma: PrismaClient): Promise<void> {
+  const idAdmin = (process.env.ADMIN_USER_ID || '').trim()
   const emailAdmin = (process.env.ADMIN_EMAIL || '').trim()
   try {
-    if (emailAdmin) {
+    if (idAdmin) {
+      const resultado = await prisma.$executeRaw`
+        UPDATE "profiles" SET "role" = 'ADMIN', "updated_at" = now()
+        WHERE "id"::text = ${idAdmin} AND "role" <> 'ADMIN'`
+      if (resultado > 0) {
+        console.log('[MozLit] Bootstrap: utilizador ADMIN_USER_ID promovido a ADMIN.')
+      }
+    } else if (emailAdmin) {
       const resultado = await prisma.$executeRaw`
         UPDATE "profiles" SET "role" = 'ADMIN', "updated_at" = now()
         WHERE LOWER("email") = ${emailAdmin.toLowerCase()} AND "role" <> 'ADMIN'`
@@ -116,9 +140,13 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
     const totalAdmins = Number(linhas[0]?.total ?? 0)
 
     if (totalAdmins === 0) {
+      // Guarda: só promove o utilizador mais antigo quando a plataforma está a
+      // começar (até 3 contas). Num sistema maduro, um atacante que se registe
+      // primeiro numa BD nova não pode ganhar ADMIN.
       const promovidos = await prisma.$executeRaw`
         UPDATE "profiles" SET "role" = 'ADMIN', "updated_at" = now()
-        WHERE "id" = (SELECT "id" FROM "profiles" ORDER BY "created_at" ASC LIMIT 1)`
+        WHERE "id" = (SELECT "id" FROM "profiles" ORDER BY "created_at" ASC LIMIT 1)
+          AND (SELECT COUNT(*) FROM "profiles") <= 3`
       if (promovidos > 0) {
         console.log('[MozLit] Bootstrap: plataforma sem admin — utilizador mais antigo promovido a ADMIN.')
       }
@@ -137,7 +165,7 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
  */
 async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
   try {
-    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; recargas: number; idx: number; tipo_check: number }[]>`
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; recargas: number; idx: number; tipo_check: number; trans: number }[]>`
       SELECT
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
@@ -145,11 +173,17 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
           WHERE table_name = 'books' AND column_name = 'faixa_etaria') AS books,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'recargas_solicitacoes') AS recargas,
+        (SELECT COUNT(*)::int FROM information_schema.columns
+          WHERE table_name = 'transactions' AND column_name IN ('chapter_id', 'book_id')) AS trans,
         (SELECT COUNT(*)::int FROM pg_indexes
           WHERE indexname IN ('chapters_livroId_ordem_idx', 'transactions_userId_tipo_idx',
             'library_items_userId_bookId_idx', 'library_items_userId_tipo_idx',
             'recargas_solicitacoes_user_id_estado_idx', 'recargas_solicitacoes_estado_created_at_idx',
-            'profiles_telefone_key')) AS idx,
+            'profiles_telefone_key',
+            'books_autorId_idx', 'books_status_createdAt_idx',
+            'comments_chapterId_idx', 'comments_parentId_idx', 'comments_userId_idx',
+            'library_items_bookId_idx', 'library_items_chapterId_idx',
+            'transactions_chapterId_idx', 'transactions_bookId_idx')) AS idx,
         (SELECT COUNT(*)::int FROM pg_constraint
           WHERE conname = 'transactions_tipo_check') AS tipo_check`
     const r = linhas[0]
@@ -157,7 +191,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
       Number(r?.perfil ?? 0) === 2 &&
       Number(r?.books ?? 0) === 1 &&
       Number(r?.recargas ?? 0) >= 12 &&
-      Number(r?.idx ?? 0) === 7 &&
+      Number(r?.trans ?? 0) === 2 &&
+      Number(r?.idx ?? 0) === 16 &&
       Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida
     )
   } catch {

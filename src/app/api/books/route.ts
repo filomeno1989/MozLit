@@ -16,7 +16,9 @@ export async function GET(request: NextRequest) {
     const categoria = searchParams.get('categoria');
     const search = searchParams.get('search');
     const cursor = searchParams.get('cursor');
-    const limit = Math.min(Number(searchParams.get('limit')) || 20, 50);
+    const limitRaw = Number(searchParams.get('limit')) || 20;
+    // Entre 1 e 50 — valores negativos/NaN faziam o Prisma falhar com erro 500
+    const limit = Math.max(1, Math.min(Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 20, 50));
 
     const where: Record<string, unknown> = { status: 'PUBLICADO' };
 
@@ -47,9 +49,22 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    // SELECT magro: a grelha de cartões usa só estes campos — devolver os 5
+    // campos HTML longos (sinopse completa, ficha técnica, etc.) multiplicava
+    // o payload por dezenas de KB sem qualquer uso.
     const books = await db.book.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        titulo: true,
+        capa_url: true,
+        categorias: true,
+        preco_total: true,
+        faixa_etaria: true,
+        volume_info: true,
+        sinopse: true,
+        status: true,
+        createdAt: true,
         autor: {
           select: { id: true, nome: true, biografia: true, avatar_url: true },
         },

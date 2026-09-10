@@ -110,7 +110,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const chapter = await db.chapter.findUnique({ where: { id: chapterId } });
+    // SELECT leve: só precisamos de is_free — o conteúdo do capítulo pode ter 500KB
+    const chapter = await db.chapter.findUnique({
+      where: { id: chapterId },
+      select: { id: true, is_free: true, livroId: true },
+    });
     if (!chapter) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
@@ -173,7 +177,7 @@ export async function DELETE(request: NextRequest) {
 
     const chapter = await db.chapter.findUnique({
       where: { id: comment.chapterId },
-      include: { livro: { select: { autorId: true } } },
+      select: { id: true, livro: { select: { autorId: true } } },
     });
 
     const canDelete =

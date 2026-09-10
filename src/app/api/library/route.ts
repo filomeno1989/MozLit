@@ -59,12 +59,27 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // CORRECÇÃO: livros comprados COMPLETOS não têm chapterId, por isso nunca
+    // entravam no bookMap — a secção "Livros Completos" da Biblioteca ficava
+    // vazia para quem comprava o pack. Vamos buscá-los directamente.
     const fullBookItems = items.filter((i) => i.tipo === 'LIVRO_COMPLETO');
-    const fullBookIds = new Set(fullBookItems.map((i) => i.bookId).filter(Boolean));
+    const fullBookIds = Array.from(
+      new Set(fullBookItems.map((i) => i.bookId).filter(Boolean) as string[])
+    );
+    const missingFullBooks = fullBookIds.filter((id) => !bookMap.has(id));
+    if (missingFullBooks.length > 0) {
+      const livrosCompletos = await db.book.findMany({
+        where: { id: { in: missingFullBooks } },
+        select: { id: true, titulo: true, capa_url: true, autorId: true },
+      });
+      for (const b of livrosCompletos) {
+        bookMap.set(b.id, { ...b, chapters: [] });
+      }
+    }
 
     return NextResponse.json({
       items,
-      fullBookIds: Array.from(fullBookIds),
+      fullBookIds,
       books: Array.from(bookMap.values()),
     });
   } catch (error) {
@@ -93,8 +108,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // status vem no select por omissão do findUnique
+
       if (!book) {
         return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
+      }
+
+      // Livros em rascunho não são compráveis (excepto pelo próprio autor/admin,
+      // que nem sequer passa daqui — já bloqueado acima)
+      if (book.status === 'RASCUNHO') {
+        return NextResponse.json({ error: 'Este livro ainda não está publicado.' }, { status: 400 });
       }
 
       if (book.autorId === payload.userId) {
@@ -114,6 +137,14 @@ export async function POST(request: NextRequest) {
       }
 
       const result = await db.$transaction(async (tx) => {
+        // Re-verifica a posse DENTRO da transacção: a unique (userId, chapterId)
+        // não protege LIVRO_COMPLETO (chapterId é null), e duas compras
+        // concorrentes cobrariam o leitor duas vezes sem esta guarda.
+        const jaTem = await tx.libraryItem.findFirst({
+          where: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
+        });
+        if (jaTem) throw new Error('CONFLITO_POSSE');
+
         const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
           SELECT id, moedas FROM profiles WHERE id = ${payload.userId} FOR UPDATE
         `;
@@ -139,6 +170,18 @@ export async function POST(request: NextRequest) {
             valor: precoMoedas,
             status: 'CONCLUIDO',
             descricao: `Livro completo: ${book.titulo} (${precoMoedas} MC)`,
+            bookId,
+          },
+        });
+        // Auditoria de vendas: registo para o autor (base dos relatórios de ganhos)
+        await tx.transaction.create({
+          data: {
+            userId: book.autorId,
+            tipo: 'VENDA',
+            valor: precoMoedas,
+            status: 'CONCLUIDO',
+            descricao: `Venda: ${book.titulo} — livro completo (${precoMoedas} MC)`,
+            bookId,
           },
         });
 
@@ -157,13 +200,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'chapterId ou bookId é obrigatório' }, { status: 400 });
     }
 
+    // SELECT leve: não arrastar conteudo (até 500KB) numa operação de compra
     const chapter = await db.chapter.findUnique({
       where: { id: chapterId },
-      include: { livro: { select: { autorId: true, id: true, titulo: true } } },
+      select: {
+        id: true,
+        titulo: true,
+        preco_capitulo: true,
+        is_free: true,
+        livroId: true,
+        livro: { select: { autorId: true, id: true, titulo: true, status: true } },
+      },
     });
 
     if (!chapter) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    }
+
+    // Capítulos de livros em rascunho não são compráveis
+    if (chapter.livro.status === 'RASCUNHO') {
+      return NextResponse.json({ error: 'Este livro ainda não está publicado.' }, { status: 400 });
     }
 
     if (chapter.livro.autorId === payload.userId) {
@@ -195,6 +251,14 @@ export async function POST(request: NextRequest) {
     }
 
     const precoMoedas = Math.round(chapter.preco_capitulo);
+    // Capítulo pago tem de ter preço válido — preço ≤ 0 é configuração errada
+    // (e historicamente permitiu o exploit de preços negativos que "mintava" MC)
+    if (!precoMoedas || precoMoedas <= 0) {
+      return NextResponse.json(
+        { error: 'Este capítulo tem um preço não configurado. Contacte a administração.' },
+        { status: 400 }
+      );
+    }
 
     const result = await db.$transaction(async (tx) => {
       const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
@@ -222,6 +286,20 @@ export async function POST(request: NextRequest) {
           valor: precoMoedas,
           status: 'CONCLUIDO',
           descricao: `Compra: ${chapter.titulo} (${precoMoedas} MC)`,
+          chapterId,
+          bookId: chapter.livroId,
+        },
+      });
+      // Auditoria de vendas: registo para o autor (base dos relatórios de ganhos)
+      await tx.transaction.create({
+        data: {
+          userId: chapter.livro.autorId,
+          tipo: 'VENDA',
+          valor: precoMoedas,
+          status: 'CONCLUIDO',
+          descricao: `Venda: ${chapter.titulo} (${precoMoedas} MC)`,
+          chapterId,
+          bookId: chapter.livroId,
         },
       });
 
@@ -234,6 +312,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, novoSaldoMoedas: result?.moedas ?? 0 });
   } catch (error) {
+    // Erros de regra de negócio chegam ao utilizador com o código certo;
+    // erros técnicos não vazam detalhes.
+    const msg = error instanceof Error ? error.message : '';
+    if (msg === 'CONFLITO_POSSE') {
+      return NextResponse.json({ error: 'Já possui este livro completo' }, { status: 409 });
+    }
+    if (msg.includes('insuficientes')) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     console.error('Erro na compra:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
   }

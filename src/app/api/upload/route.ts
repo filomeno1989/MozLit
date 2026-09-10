@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import sharp from 'sharp';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
 import { validateImageFile } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
@@ -45,21 +46,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Serviço de upload não configurado.' }, { status: 500 });
     }
 
-    const ext = sanitizeFileName(file.name);
+    const ext = 'jpg'; // conteúdo re-encodado para JPEG (comprimido)
     const folder = tipo === 'capa' ? 'covers' : 'avatars';
     const fileName = `${payload.userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const raw = Buffer.from(bytes);
+
+    // PERFORMANCE: re-encoda a imagem — redimensiona (capas a 900px de largura
+    // chegam e sobram para ecrãs grandes) e comprime. Uma capa de 2MB passa a
+    // ~100-200KB, poupando dezenas de MB por visita à grelha da home.
+    let buffer: Buffer<ArrayBufferLike> = raw;
+    try {
+      const maxWidth = tipo === 'capa' ? 900 : 400;
+      buffer = await sharp(raw)
+        .rotate() // respeita a orientação EXIF
+        .resize({ width: maxWidth, withoutEnlargement: true })
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer();
+    } catch {
+      // Ficheiro não é uma imagem decodificável → rejeita (valida o conteúdo,
+      // não só o mimetype declarado pelo cliente)
+      return NextResponse.json({ error: 'O ficheiro não é uma imagem válida.' }, { status: 400 });
+    }
 
     const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/${folder}/${fileName}`, {
       method: 'POST',
       headers: {
-        'Content-Type': file.type,
+        'Content-Type': 'image/jpeg',
         Authorization: `Bearer ${serviceKey}`,
         'x-upsert': 'false',
       },
-      body: buffer,
+      body: new Uint8Array(buffer),
     });
 
     if (!uploadRes.ok) {

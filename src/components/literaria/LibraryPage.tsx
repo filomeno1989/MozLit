@@ -125,7 +125,7 @@ export default function LibraryPage() {
                     >
                       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
                         {hasCover ? (
-                          <img src={fb.capa_url} alt={fb.titulo} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                          <img src={fb.capa_url} alt={fb.titulo} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = '/placeholder-cover.svg'; }} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                         ) : (
                           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-amber-800/20 to-amber-900/40">
                             <BookOpen className="h-10 w-10 text-amber-700/50 dark:text-amber-500/50" />

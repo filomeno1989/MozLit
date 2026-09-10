@@ -44,6 +44,8 @@ export const LIMITES = {
   CAPA_MAX_SIZE_BYTES: 2 * 1024 * 1024, // 2MB
   AVATAR_MAX_SIZE_BYTES: 1 * 1024 * 1024, // 1MB
   CATEGORIAS_MAX: 5,
+  PRECO_CAPITULO_MAX: 500, // MC — tecto por capítulo (impede preços absurdos/negativos)
+  PRECO_TOTAL_MAX: 5_000, // MC — tecto para o preço do livro completo
 } as const;
 
 /** Regex de validação de email */
@@ -81,6 +83,7 @@ export const MOEDAS_CONFIG = {
 export const RECARGA_CONFIG = {
   /** Contacto M-Pesa do admin visível ao usuário. Configurável por env na Vercel. */
   MPESA_NUMERO: process.env.NEXT_PUBLIC_ADMIN_MPESA || '84 000 0000',
+  MPESA_NUMERO_PLACEHOLDER: '84 000 0000', // usado pela UI para detectar configuração em falta
   MPESA_NOME: process.env.NEXT_PUBLIC_ADMIN_MPESA_NOME || 'MozLit',
   METODOS: [
     { id: 'MPESA', label: 'M-Pesa (Vodacom)' },

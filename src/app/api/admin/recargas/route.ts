@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
 import { validateAcaoRecarga, validateTextoRecarga } from '@/lib/validate';
 import { MOEDAS_CONFIG } from '@/lib/constants';
+
+const ESTADOS_VALIDOS = ['PENDENTE', 'APROVADA', 'REJEITADA', 'CANCELADA'];
 
 /**
  * GET /api/admin/recargas?estado=PENDENTE — lista solicitações (todas as estados)
@@ -16,12 +18,14 @@ export async function GET(request: NextRequest) {
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     if (!token) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
     const payload = verifyToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
+    // Dupla verificação: papel no token E papel actual na base de dados
+    // (um token antigo de um utilizador despromovido deixa de funcionar)
+    if (!payload || !(await verificarAdminActivo(payload))) {
       return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
     }
 
     const estado = request.nextUrl.searchParams.get('estado');
-    const where = estado ? { estado } : {};
+    const where = estado && ESTADOS_VALIDOS.includes(estado) ? { estado } : {};
 
     const recargas = await db.recargaSolicitacao.findMany({
       where,
@@ -44,7 +48,8 @@ export async function PATCH(request: NextRequest) {
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     if (!token) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
     const payload = verifyToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
+    // Dupla verificação: papel no token E papel actual na base de dados
+    if (!payload || !(await verificarAdminActivo(payload))) {
       return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
     }
 
@@ -65,15 +70,35 @@ export async function PATCH(request: NextRequest) {
     }
 
     const resultado = await db.$transaction(async (tx) => {
-      // Re-lê dentro da transacção e bloqueia por estado (idempotência)
+      // RECLAMAÇÃO ATÓMICA: só a PRIMEIRA transacção consegue alterar o estado
+      // de PENDENTE (updateMany condicional). Elimina o duplo crédito por dois
+      // cliques rápidos ou dois admins a aprovar em simultâneo.
+      const claim = await tx.recargaSolicitacao.updateMany({
+        where: { id, estado: 'PENDENTE' },
+        data: {
+          estado: acaoValidada,
+          notaAdmin: notaAdminValidada,
+          processadaPor: payload.userId,
+          processadaEm: new Date(),
+        },
+      });
+      if (claim.count === 0) {
+        const existente = await tx.recargaSolicitacao.findUnique({
+          where: { id },
+          select: { estado: true },
+        });
+        throw new Error(
+          existente
+            ? `Esta recarga já foi processada (estado: ${existente.estado}).`
+            : 'Recarga não encontrada.'
+        );
+      }
+
       const recarga = await tx.recargaSolicitacao.findUnique({
         where: { id },
         include: { user: { select: { id: true, nome: true, moedas: true } } },
       });
       if (!recarga) throw new Error('Recarga não encontrada.');
-      if (recarga.estado !== 'PENDENTE') {
-        throw new Error(`Esta recarga já foi processada (estado: ${recarga.estado}).`);
-      }
 
       if (acaoValidada === 'APROVADA') {
         await tx.user.update({
@@ -91,18 +116,12 @@ export async function PATCH(request: NextRequest) {
         });
       }
 
-      const atualizada = await tx.recargaSolicitacao.update({
+      const recargaFinal = await tx.recargaSolicitacao.findUnique({
         where: { id },
-        data: {
-          estado: acaoValidada,
-          notaAdmin: notaAdminValidada,
-          processadaPor: payload.userId,
-          processadaEm: new Date(),
-        },
         include: { user: { select: { id: true, nome: true, email: true, telefone: true, moedas: true } } },
       });
-
-      return atualizada;
+      if (!recargaFinal) throw new Error('Recarga não encontrada.');
+      return recargaFinal;
     });
 
     return NextResponse.json({

@@ -60,24 +60,21 @@ export default function WalletPage() {
   const [enviando, setEnviando] = useState(false);
   const [copiado, setCopiado] = useState(false);
 
-  const loadTransactions = useCallback(async () => {
-    setLoading(true);
+  const loadTransactions = useCallback(async (primeiraVez = false) => {
+    // Só mostra skeleton na 1.ª carga — nas actualizações seguintes (após uma
+    // compra/recarga) os dados refrescam em silêncio, sem as secções piscarem.
+    if (primeiraVez) setLoading(true);
     try {
-      const saldoData = await apiFetch<{ saldo: number; moedas: number }>('/api/wallet');
+      // Em paralelo: saldo+transacções e recargas (2 pedidos em vez de 3 —
+      // as transacções agora vêm de /api/wallet, não de /api/author)
+      const [saldoData, recargasData] = await Promise.all([
+        apiFetch<{ saldo: number; moedas: number; transacoes: typeof transactions }>('/api/wallet'),
+        apiFetch<{ recargas: Recarga[] }>('/api/recargas').catch(() => ({ recargas: [] as Recarga[] })),
+      ]);
       updateBalance(saldoData.saldo);
       updateMoedas(saldoData.moedas);
-      try {
-        const authorData = await apiFetch<{ transacoes: typeof transactions }>('/api/author');
-        setTransactions(authorData.transacoes || []);
-      } catch {
-        setTransactions([]);
-      }
-      try {
-        const recargasData = await apiFetch<{ recargas: Recarga[] }>('/api/recargas');
-        setRecargas(recargasData.recargas || []);
-      } catch {
-        setRecargas([]);
-      }
+      setTransactions(saldoData.transacoes || []);
+      setRecargas(recargasData.recargas || []);
     } catch {
       // ignore
     } finally {
@@ -91,7 +88,7 @@ export default function WalletPage() {
   const userId = user?.id;
 
   useEffect(() => {
-    if (userId) loadTransactions();
+    if (userId) loadTransactions(true);
   }, [userId, loadTransactions]);
 
   async function handleDeposit() {
@@ -561,6 +558,13 @@ export default function WalletPage() {
                   {copiado ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
                 </Button>
               </div>
+              {/* Guarda de segurança: avisa se o número de recebimento ainda é o placeholder */}
+              {RECARGA_CONFIG.MPESA_NUMERO === RECARGA_CONFIG.MPESA_NUMERO_PLACEHOLDER && (
+                <p className="text-xs flex items-start gap-1.5 text-destructive bg-destructive/10 rounded-md p-2">
+                  <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  Atenção: o número de recebimento ainda não foi configurado pela administração. NÃO envie dinheiro antes de confirmar o número oficial com o suporte MozLit.
+                </p>
+              )}
             </div>
 
             {/* Passo 2: comprovativo */}

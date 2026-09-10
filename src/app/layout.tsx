@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Lora, Merriweather, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +40,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mozlit.vercel.app"),
   title: "MozLit - Plataforma Literária Moçambicana",
   description: "Descubra, leia e publique literatura moçambicana. Uma plataforma de leitura, publicação e monetização.",
   keywords: ["MozLit", "literatura", "Moçambique", "livros", "escritores", "leitura"],
@@ -48,8 +49,20 @@ export const metadata: Metadata = {
     title: "MozLit - Plataforma Literária Moçambicana",
     description: "Descubra, leia e publique literatura moçambicana.",
     type: "website",
-    images: ["/og-image.png"],
+    siteName: "MozLit",
+    locale: "pt_MZ",
+    images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "MozLit" }],
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "MozLit - Plataforma Literária Moçambicana",
+    description: "Descubra, leia e publique literatura moçambicana.",
+  },
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
+  },
+  manifest: "/manifest.webmanifest",
   other: {
     "theme-color": "#d97706",
   },

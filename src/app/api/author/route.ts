@@ -30,25 +30,66 @@ export async function GET(request: NextRequest) {
       select: { saldo_carteira: true, nome: true, biografia: true, avatar_url: true },
     });
 
-    // Real revenue: sum of COMPRAS where the buyer bought this author's content
+    // ===== GANHOS REAIS DO AUTOR =====
+    // Antes: somava TODAS as compras da plataforma (número falso).
+    // Agora: (1) soma as transacções VENDA registadas desde a implementação;
+    //        (2) estima as vendas antigas (antes do registo VENDA) pelas
+    //            aquisições existentes, ao preço actual, cortando na data da
+    //            1ª VENDA para nunca contar duas vezes.
     const authorBookIds = livros.map((l) => l.id);
     const authorChapterIds = livros.flatMap((l) => l.chapters.map((c) => c.id));
 
-    let receitaReal = 0;
+    const vendas = await db.transaction.aggregate({
+      where: { userId: payload.userId, tipo: 'VENDA', status: 'CONCLUIDO' },
+      _sum: { valor: true },
+    });
+    let receitaReal = Number(vendas._sum?.valor ?? 0);
+
+    // Preço de referência dos conteúdos do autor (capítulos pagos e livros)
+    const precoCapitulo = new Map<string, number>();
+    for (const l of livros) {
+      for (const c of l.chapters) {
+        if (!c.is_free && c.preco_capitulo > 0) precoCapitulo.set(c.id, c.preco_capitulo);
+      }
+    }
+    const precoLivro = new Map<string, number>(
+      livros.filter((l) => l.preco_total > 0).map((l) => [l.id, l.preco_total])
+    );
+
     if (authorChapterIds.length > 0 || authorBookIds.length > 0) {
-      const purchases = await db.transaction.findMany({
-        where: {
-          tipo: 'COMPRA',
-          status: 'CONCLUIDO',
-          userId: { not: payload.userId }, // Exclude self-purchases (shouldn't happen now but safety)
-        },
-        select: { valor: true, descricao: true },
+      const primeiraVenda = await db.transaction.findFirst({
+        where: { userId: payload.userId, tipo: 'VENDA' },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
       });
-      receitaReal = purchases.reduce((sum, t) => sum + t.valor, 0);
+      const cortaEm = primeiraVenda?.createdAt ?? null;
+      const compras = await db.libraryItem.findMany({
+        where: {
+          userId: { not: payload.userId },
+          ...(cortaEm ? { createdAt: { lt: cortaEm } } : {}),
+          OR: [
+            ...(authorChapterIds.length > 0
+              ? [{ chapterId: { in: authorChapterIds } }]
+              : []),
+            ...(authorBookIds.length > 0
+              ? [{ bookId: { in: authorBookIds }, tipo: 'LIVRO_COMPLETO' }]
+              : []),
+          ],
+        },
+        select: { chapterId: true, bookId: true, tipo: true },
+        take: 500,
+      });
+      for (const item of compras) {
+        if (item.chapterId && precoCapitulo.has(item.chapterId)) {
+          receitaReal += precoCapitulo.get(item.chapterId)!;
+        } else if (item.tipo === 'LIVRO_COMPLETO' && item.bookId && precoLivro.has(item.bookId)) {
+          receitaReal += precoLivro.get(item.bookId)!;
+        }
+      }
     }
 
     const transactions = await db.transaction.findMany({
-      where: { userId: payload.userId, tipo: 'COMPRA', status: 'CONCLUIDO' },
+      where: { userId: payload.userId, tipo: { in: ['COMPRA', 'VENDA'] }, status: 'CONCLUIDO' },
       // id e tipo são necessários no painel da carteira (chave e ícone por tipo)
       select: { id: true, tipo: true, status: true, valor: true, createdAt: true, descricao: true },
       orderBy: { createdAt: 'desc' },

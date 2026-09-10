@@ -75,6 +75,9 @@ export default function AuthorDashboard() {
   // Edit chapter
   const [editingChapter, setEditingChapter] = useState<{ id: string; titulo: string; conteudo: string; preco_capitulo: string; is_free: boolean } | null>(null);
   const [savingChapter, setSavingChapter] = useState(false);
+  const [aAdicionarCapitulo, setAAdicionarCapitulo] = useState(false);
+  const [aSalvarObra, setASalvarObra] = useState(false);
+  const [aSalvarPerfil, setASalvarPerfil] = useState(false);
 
   // Edit book dialog
   const [editingBook, setEditingBook] = useState<BookWithChapters | null>(null);
@@ -92,6 +95,7 @@ export default function AuthorDashboard() {
 
   // Delete confirmation dialog
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteChapterTarget, setDeleteChapterTarget] = useState<{ id: string; titulo: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Error state for dashboard
@@ -183,6 +187,7 @@ export default function AuthorDashboard() {
     if (!bookChapters || !newChapter.titulo || htmlVazio(newChapter.conteudo)) {
       setChapterError('Título e conteúdo são obrigatórios.'); return;
     }
+    setAAdicionarCapitulo(true);
     try {
       await apiFetch('/api/chapters', {
         method: 'POST',
@@ -199,6 +204,7 @@ export default function AuthorDashboard() {
       loadDashboard();
       toast.success('Capítulo adicionado.');
     } catch (err) { setChapterError((err as Error).message); }
+    finally { setAAdicionarCapitulo(false); }
   }
 
   function openEditChapter(ch: { id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }) {
@@ -250,9 +256,10 @@ export default function AuthorDashboard() {
     try {
       await apiFetch(`/api/chapters/${chapterId}`, { method: 'DELETE' });
       if (editingChapter?.id === chapterId) setEditingChapter(null);
+      setDeleteChapterTarget(null);
       loadBookChapters(bookChapters.id);
       loadDashboard();
-      toast.success('Capítulo excluído.');
+      toast.success('Capítulo eliminado.');
     } catch (err) { toast.error((err as Error).message); }
   }
 
@@ -354,6 +361,7 @@ export default function AuthorDashboard() {
 
   async function saveEditBook() {
     if (!editingBook) return;
+    setASalvarObra(true);
     try {
       const payload: Record<string, unknown> = {
         titulo: editForm.titulo,
@@ -379,15 +387,18 @@ export default function AuthorDashboard() {
       loadDashboard();
       toast.success('Obra actualizada com sucesso.');
     } catch (err) { toast.error((err as Error).message); }
+    finally { setASalvarObra(false); }
   }
 
   async function saveProfile() {
+    setASalvarPerfil(true);
     try {
       await apiFetch('/api/author/profile', { method: 'PATCH', body: JSON.stringify(profileForm) });
       setShowProfileDialog(false);
       loadDashboard();
       toast.success('Perfil actualizado com sucesso.');
     } catch (err) { toast.error((err as Error).message); }
+    finally { setASalvarPerfil(false); }
   }
 
   if (loading) {
@@ -545,7 +556,7 @@ export default function AuthorDashboard() {
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                       <span className="text-xs text-muted-foreground mr-1">{ch.is_free ? 'Grátis' : `${Math.round(ch.preco_capitulo)} MC`}</span>
                       <button onClick={() => openEditChapter(ch)} className="p-1 rounded hover:bg-accent transition-colors" title="Editar capítulo"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button>
-                      <button onClick={() => deleteChapter(ch.id)} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="Excluir capítulo"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
+                      <button onClick={() => setDeleteChapterTarget({ id: ch.id, titulo: ch.titulo })} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="Excluir capítulo"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
                     </div>
                   </div>
                 ))}
@@ -571,7 +582,7 @@ export default function AuthorDashboard() {
                     <Label htmlFor="free-check" className="text-xs cursor-pointer">Grátis</Label>
                   </div>
                 </div>
-                <Button onClick={addChapter} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Plus className="h-4 w-4 mr-1" /> Adicionar Capítulo</Button>
+                <Button onClick={addChapter} disabled={aAdicionarCapitulo} className="w-full bg-amber-600 hover:bg-amber-700 text-white">{aAdicionarCapitulo ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />} Adicionar Capítulo</Button>
               </div>
             </div>
           )}
@@ -736,7 +747,7 @@ export default function AuthorDashboard() {
                 <Input type="number" step="1" min="0" value={editForm.preco_total} onChange={(e) => setEditForm({ ...editForm, preco_total: e.target.value })} />
                 <p className="text-xs text-muted-foreground mt-1">0 = apenas venda por capítulo avulso</p>
               </div>
-              <Button onClick={saveEditBook} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Save className="h-4 w-4 mr-1" /> Salvar Alterações</Button>
+              <Button onClick={saveEditBook} disabled={aSalvarObra} className="w-full bg-amber-600 hover:bg-amber-700 text-white">{aSalvarObra ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />} Salvar Alterações</Button>
             </div>
           )}
         </DialogContent>
@@ -768,7 +779,7 @@ export default function AuthorDashboard() {
                 )}
               </div>
             </div>
-            <Button onClick={saveProfile} className="w-full bg-amber-600 hover:bg-amber-700 text-white"><Save className="h-4 w-4 mr-1" /> Salvar Perfil</Button>
+            <Button onClick={saveProfile} disabled={aSalvarPerfil} className="w-full bg-amber-600 hover:bg-amber-700 text-white">{aSalvarPerfil ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />} Salvar Perfil</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -809,6 +820,24 @@ export default function AuthorDashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirmação de eliminação de CAPÍTULO — horas de escrita exigem travão */}
+      <AlertDialog open={!!deleteChapterTarget} onOpenChange={(open) => !open && setDeleteChapterTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar capítulo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja eliminar «{deleteChapterTarget?.titulo}»? O conteúdo deste capítulo será apagado permanentemente. Esta acção não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteChapterTarget && deleteChapter(deleteChapterTarget.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

@@ -1,21 +1,36 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useAppStore } from '@/store/app';
 import AppShell from '@/components/literaria/AppShell';
 import HomePage from '@/components/literaria/HomePage';
 import BookDetailPage from '@/components/literaria/BookDetailPage';
-import EReaderPage from '@/components/literaria/EReaderPage';
-import AuthorDashboard from '@/components/literaria/AuthorDashboard';
-import LoginPage from '@/components/literaria/LoginPage';
-import RegisterPage from '@/components/literaria/RegisterPage';
-import WalletPage from '@/components/literaria/WalletPage';
-import LibraryPage from '@/components/literaria/LibraryPage';
-import NewBookPage from '@/components/literaria/NewBookPage';
-import AdminPanel from '@/components/literaria/AdminPanel';
-import PerfilPage from '@/components/literaria/PerfilPage';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Loader2 } from 'lucide-react';
+
+/**
+ * PERFORMANCE: as vistas pesadas (Tiptap/ProseMirror, painéis admin, leitor)
+ * são carregadas SOB DEMANDA. Assim o leitor comum deixa de descarregar
+ * ~200-300KB de editor e painéis que nunca abre — decisivo em dados móveis.
+ */
+function CarregandoVista() {
+  return (
+    <div className="flex items-center justify-center min-h-[50vh]">
+      <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+    </div>
+  );
+}
+
+const EReaderPage = dynamic(() => import('@/components/literaria/EReaderPage'), { ssr: false, loading: CarregandoVista });
+const AuthorDashboard = dynamic(() => import('@/components/literaria/AuthorDashboard'), { ssr: false, loading: CarregandoVista });
+const LoginPage = dynamic(() => import('@/components/literaria/LoginPage'), { ssr: false, loading: CarregandoVista });
+const RegisterPage = dynamic(() => import('@/components/literaria/RegisterPage'), { ssr: false, loading: CarregandoVista });
+const WalletPage = dynamic(() => import('@/components/literaria/WalletPage'), { ssr: false, loading: CarregandoVista });
+const LibraryPage = dynamic(() => import('@/components/literaria/LibraryPage'), { ssr: false, loading: CarregandoVista });
+const NewBookPage = dynamic(() => import('@/components/literaria/NewBookPage'), { ssr: false, loading: CarregandoVista });
+const AdminPanel = dynamic(() => import('@/components/literaria/AdminPanel'), { ssr: false, loading: CarregandoVista });
+const PerfilPage = dynamic(() => import('@/components/literaria/PerfilPage'), { ssr: false, loading: CarregandoVista });
 
 /** Views that require authentication */
 const PROTECTED_VIEWS = new Set(['wallet', 'library', 'author-dashboard', 'new-book', 'perfil', 'admin']);

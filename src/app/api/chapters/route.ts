@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 import { validateTitulo, validateConteudoCapitulo } from '@/lib/validate';
+import { LIMITES } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,9 +40,11 @@ export async function POST(request: NextRequest) {
         titulo: tituloValidado,
         conteudo: conteudoValidado,
         livroId,
-        preco_capitulo: typeof preco_capitulo === 'number' && preco_capitulo >= 0 ? preco_capitulo : 0,
+        preco_capitulo: typeof preco_capitulo === 'number' && Number.isFinite(preco_capitulo)
+          ? Math.min(LIMITES.PRECO_CAPITULO_MAX, Math.max(0, Math.round(preco_capitulo)))
+          : 0,
         is_free: Boolean(is_free),
-        ordem: typeof ordem === 'number' ? ordem : chapterCount,
+        ordem: typeof ordem === 'number' && Number.isFinite(ordem) && ordem >= 0 ? Math.floor(ordem) : chapterCount,
       },
     });
 

@@ -108,6 +108,16 @@ export async function PATCH(request: NextRequest) {
     if (email !== undefined) {
       emailValidado = email === '' ? null : validateEmail(email);
       if (emailValidado && emailValidado !== user.email) {
+        // SEGURANÇA — escalada de privilégios: o bootstrap do servidor promove a
+        // ADMIN a conta cujo email = ADMIN_EMAIL. Um utilizador mal-intencionado
+        // não pode apropriar-se desse email (a menos que já seja o admin).
+        const emailAdminConfig = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+        if (emailAdminConfig && emailValidado.toLowerCase() === emailAdminConfig && user.role !== 'ADMIN') {
+          return NextResponse.json(
+            { error: 'Este email está reservado pela administração da plataforma.' },
+            { status: 403 }
+          );
+        }
         const existente = await db.user.findUnique({ where: { email: emailValidado } });
         if (existente && existente.id !== user.id) {
           return NextResponse.json({ error: 'Este email já está em uso por outra conta.' }, { status: 409 });

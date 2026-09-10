@@ -38,6 +38,9 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
           <img
             src={book.capa_url}
             alt={book.titulo}
+            loading="lazy"
+            decoding="async"
+            onError={(e) => { e.currentTarget.src = '/placeholder-cover.svg'; }}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (

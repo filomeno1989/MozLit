@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { extractTokenFromHeader, verifyToken, hashPassword } from '@/lib/auth';
+import { extractTokenFromHeader, verifyToken, hashPassword, verificarAdminActivo } from '@/lib/auth';
 import { validateSenha } from '@/lib/validate';
 
 const PAPEIS_VALIDOS = ['LEITOR', 'ESCRITOR', 'ADMIN'];
@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     if (!token) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
     const payload = verifyToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
+    // Dupla verificação: papel no token E papel actual na base de dados
+    if (!payload || !(await verificarAdminActivo(payload))) {
       return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
     }
 
@@ -71,7 +72,8 @@ export async function PATCH(request: NextRequest) {
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     if (!token) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
     const payload = verifyToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
+    // Dupla verificação: papel no token E papel actual na base de dados
+    if (!payload || !(await verificarAdminActivo(payload))) {
       return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
     }
 

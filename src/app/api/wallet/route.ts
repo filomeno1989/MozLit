@@ -16,7 +16,16 @@ export async function GET(request: NextRequest) {
     });
     if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 });
 
-    return NextResponse.json({ saldo: user.saldo_carteira, moedas: user.moedas });
+    // Transacções devolvidas aqui (antes vinham de /api/author, que é pesado e
+    // só diz respeito a autores) — a Carteira faz 1 pedido em vez de 2-3.
+    const transacoes = await db.transaction.findMany({
+      where: { userId: payload.userId, status: 'CONCLUIDO' },
+      select: { id: true, tipo: true, status: true, valor: true, createdAt: true, descricao: true },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+    });
+
+    return NextResponse.json({ saldo: user.saldo_carteira, moedas: user.moedas, transacoes });
   } catch (error) {
     console.error('Erro ao buscar saldo:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

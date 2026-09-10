@@ -1,13 +1,15 @@
 const { Client } = require('pg');
 
+// SEGURANÇA: ligação lida de DATABASE_URL (.env.local, nunca no git)
 const c = new Client({
-  host: 'aws-0-eu-west-1.pooler.supabase.com',
-  port: 5432,
-  database: 'postgres',
-  user: 'postgres.jeyjzfpnersgfbavamsa',
-  password: 'Filom3no1989',
+  connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+
+if (!c.connectionString) {
+  console.error('Defina DIRECT_URL ou DATABASE_URL no .env.local');
+  process.exit(1);
+}
 
 async function migrate() {
   await c.connect();

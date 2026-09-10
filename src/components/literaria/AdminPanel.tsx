@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   Users, BookOpen, FileText, Coins, Receipt, TrendingUp,
   CheckCircle2, XCircle, Clock, Search, Zap, Loader2, RefreshCw, Phone, Mail, ShieldCheck, KeyRound,
@@ -70,6 +71,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [processando, setProcessando] = useState<string | null>(null);
   const [rejeitarTarget, setRejeitarTarget] = useState<RecargaAdmin | null>(null);
+  const [aprovarTarget, setAprovarTarget] = useState<RecargaAdmin | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState('');
 
   // Crédito directo
@@ -379,7 +381,7 @@ export default function AdminPanel() {
                               size="sm"
                               className="bg-emerald-600 hover:bg-emerald-700 text-white"
                               disabled={processando === r.id}
-                              onClick={() => processarRecarga(r.id, 'APROVADA')}
+                              onClick={() => setAprovarTarget(r)}
                             >
                               {processando === r.id ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
                               Aprovar e Creditar
@@ -488,6 +490,35 @@ export default function AdminPanel() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de confirmação de APROVAÇÃO — dinheiro real exige travão */}
+      <AlertDialog open={!!aprovarTarget} onOpenChange={(open) => !open && setAprovarTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Aprovar e Creditar Recarga</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vai creditar <strong>{aprovarTarget?.moedas.toLocaleString('pt-MZ')} MC</strong> na conta de{' '}
+              <strong>{aprovarTarget?.user.nome}</strong> ({aprovarTarget?.moedas.toLocaleString('pt-MZ')} MC ≈{' '}
+              {(aprovarTarget ? aprovarTarget.moedas / 10 : 0).toLocaleString('pt-MZ')} MZN).
+              Confirme que o pagamento M-Pesa aparece na sua conta antes de continuar.
+              {aprovarTarget?.referencia && (
+                <> Referência indicada: <strong>{aprovarTarget.referencia}</strong>.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={processando === aprovarTarget?.id}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={processando === aprovarTarget?.id}
+              onClick={() => aprovarTarget && processarRecarga(aprovarTarget.id, 'APROVADA')}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {processando === aprovarTarget?.id ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+              Sim, creditar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de rejeição */}
       <Dialog open={!!rejeitarTarget} onOpenChange={(open) => !open && setRejeitarTarget(null)}>

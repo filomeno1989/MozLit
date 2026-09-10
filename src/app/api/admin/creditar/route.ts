@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
 import { validateCreditoAdmin, validateTextoRecarga } from '@/lib/validate';
 
 /**
@@ -13,7 +13,8 @@ export async function POST(request: NextRequest) {
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     if (!token) return NextResponse.json({ error: 'Autenticação necessária' }, { status: 401 });
     const payload = verifyToken(token);
-    if (!payload || payload.role !== 'ADMIN') {
+    // Dupla verificação: papel no token E papel actual na base de dados
+    if (!payload || !(await verificarAdminActivo(payload))) {
       return NextResponse.json({ error: 'Acesso restrito ao administrador.' }, { status: 403 });
     }
 

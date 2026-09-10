@@ -1,4 +1,6 @@
 /**
+ * SEGURANÇA: preencha TESTE_ADMIN_EMAIL e TESTE_ADMIN_SENA no .env.local antes de correr.
+
  * Teste E2E das APIs do MozLit (corre contra o servidor dev local, porta 3000).
  * Cenários:
  *  1. Login do admin por EMAIL + senha (fluxo que falhou em produção)
@@ -35,7 +37,7 @@ async function main() {
   console.log('== 1. Login admin por email ==');
   const login = await api('/api/auth/login', {
     metodo: 'POST',
-    body: { identificador: 'filomeno1989@gmail.com', senha: 'Filas1989' },
+    body: { identificador: process.env.TESTE_ADMIN_EMAIL, senha: process.env.TESTE_ADMIN_SENA },
   });
   ok('login 200', login.status === 200, JSON.stringify(login.data));
   ok('role ADMIN', login.data?.user?.role === 'ADMIN');
@@ -51,19 +53,19 @@ async function main() {
   const mudar = await api('/api/conta', {
     metodo: 'PATCH',
     token: tokenAdmin,
-    body: { senhaAtual: 'Filas1989', novaSenha: 'NovaSenha123' },
+    body: { senhaAtual: process.env.TESTE_ADMIN_SENA, novaSenha: 'NovaSenha123' },
   });
   ok('patch 200', mudar.status === 200, JSON.stringify(mudar.data));
   const loginNovo = await api('/api/auth/login', {
     metodo: 'POST',
-    body: { identificador: 'filomeno1989@gmail.com', senha: 'NovaSenha123' },
+    body: { identificador: process.env.TESTE_ADMIN_EMAIL, senha: 'NovaSenha123' },
   });
   ok('login com nova senha', loginNovo.status === 200, JSON.stringify(loginNovo.data));
   // Repor a senha original para o estado inicial
   const repor = await api('/api/conta', {
     metodo: 'PATCH',
     token: loginNovo.data?.token,
-    body: { senhaAtual: 'NovaSenha123', novaSenha: 'Filas1989' },
+    body: { senhaAtual: 'NovaSenha123', novaSenha: process.env.TESTE_ADMIN_SENA },
   });
   ok('reposição da senha', repor.status === 200, JSON.stringify(repor.data));
 

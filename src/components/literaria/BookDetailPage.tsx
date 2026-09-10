@@ -50,12 +50,17 @@ export default function BookDetailPage() {
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseConfirm, setPurchaseConfirm] = useState<{ type: 'chapter' | 'full'; id?: string; price: number; name: string } | null>(null);
 
+  const userId = user?.id;
+
   useEffect(() => {
     if (bookId) {
       loadBook();
-      if (user) loadPurchased();
+      if (userId) loadPurchased();
     }
-  }, [bookId, user]);
+    // Depende apenas do bookId e do ID do utilizador (não do objecto user,
+    // que muda de identidade a cada compra/sync — isso fazia a página
+    // inteira piscar de volta ao skeleton após cada ação).
+  }, [bookId, userId]);
 
   async function loadBook() {
     setLoading(true);
@@ -242,6 +247,9 @@ export default function BookDetailPage() {
             <img
               src={book.capa_url}
               alt={book.titulo}
+              loading="lazy"
+              decoding="async"
+              onError={(e) => { e.currentTarget.src = '/placeholder-cover.svg'; }}
               className="w-full aspect-[3/4] rounded-xl object-cover border border-border/50 shadow-md"
             />
           ) : (
@@ -327,8 +335,8 @@ export default function BookDetailPage() {
             </div>
           </div>
 
-          {/* Full book purchase button */}
-          {!isOwnBook && !ownsFullBook && book.preco_total > 0 && user && (
+          {/* Full book purchase button — visível também a visitantes (convite a entrar) */}
+          {!isOwnBook && !ownsFullBook && book.preco_total > 0 && (
             <Card className="mb-4 border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
