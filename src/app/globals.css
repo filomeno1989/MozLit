@@ -197,3 +197,10 @@
 .leitor-html li {
   margin-bottom: 0.35rem;
 }
+/* ===== Safe-areas iOS (item 23) — conteúdo nunca fica sob o notch/barra home ===== */
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}

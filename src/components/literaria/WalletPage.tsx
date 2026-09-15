@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
@@ -11,9 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Wallet as WalletIcon, Plus, Loader2, ArrowDownLeft, ArrowUpRight, Coins, Banknote, Zap, Gift, Smartphone, Copy, CheckCircle2, XCircle, Clock, Receipt, Info } from 'lucide-react';
+import { Wallet as WalletIcon, Plus, Loader2, ArrowDownLeft, ArrowUpRight, Coins, Banknote, Zap, Gift, Smartphone, Copy, CheckCircle2, XCircle, Clock, Receipt, Info, ImagePlus, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { MOEDAS_CONFIG, RECARGA_CONFIG } from '@/lib/constants';
+import { MOEDAS_CONFIG, RECARGA_CONFIG, LIMITES } from '@/lib/constants';
 
 interface Recarga {
   id: string;
@@ -22,6 +22,7 @@ interface Recarga {
   metodo: string;
   estado: string;
   notaAdmin?: string | null;
+  comprovativoUrl?: string | null;
   createdAt: string;
   processadaEm?: string | null;
 }
@@ -69,6 +70,14 @@ export default function WalletPage() {
   const [envioNota, setEnvioNota] = useState('');
   const [enviando, setEnviando] = useState(false);
   const [copiado, setCopiado] = useState(false);
+
+  // Comprovativo em imagem (item 20) — enviado na hora da escolha, à prova de
+  // falhas: se o upload falhar, o ficheiro fica guardado para tentar de novo
+  const [comprovativoUrl, setComprovativoUrl] = useState<string | null>(null);
+  const [comprovativoNome, setComprovativoNome] = useState<string | null>(null);
+  const [aEnviarComprovativo, setAEnviarComprovativo] = useState(false);
+  const ficheiroComprovativoRef = useRef<File | null>(null);
+  const inputComprovativoRef = useRef<HTMLInputElement | null>(null);
 
   const loadTransactions = useCallback(async (primeiraVez = false) => {
     // Só mostra skeleton na 1.ª carga — nas actualizações seguintes (após uma
@@ -181,12 +190,14 @@ export default function WalletPage() {
           numeroEnvio: envioNumero.trim(),
           referencia: envioReferencia.trim() || undefined,
           nota: envioNota.trim() || undefined,
+          comprovativoUrl: comprovativoUrl || undefined,
         }),
       });
       setShowRecargaDialog(false);
       setEnvioNumero('');
       setEnvioReferencia('');
       setEnvioNota('');
+      removerComprovativo();
       setRecargaMoedas(null);
       toast.success('Solicitação enviada!', {
         description: 'O admin vai confirmar o pagamento e as suas MC serão creditadas.',
@@ -205,6 +216,57 @@ export default function WalletPage() {
       toast.success('Número copiado.');
       setTimeout(() => setCopiado(false), 2000);
     });
+  }
+
+  async function enviarComprovativo(f: File) {
+    const tokenActual = useAppStore.getState().token;
+    if (!tokenActual) { toast.error('Sessão expirada. Entre de novo.'); return; }
+    setAEnviarComprovativo(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('tipo', 'comprovativo');
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokenActual}` },
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Não foi possível enviar a imagem.');
+      setComprovativoUrl(data.url as string);
+      ficheiroComprovativoRef.current = null;
+      toast.success('Comprovativo anexado.');
+    } catch (err) {
+      // O ficheiro fica em ref — o botão "tentar novamente" aparece abaixo
+      toast.error((err as Error).message);
+    } finally {
+      setAEnviarComprovativo(false);
+    }
+  }
+
+  function escolherComprovativo(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = ''; // permite reescolher o mesmo ficheiro após remover
+    if (!f) return;
+    if (!(LIMITES.CAPAS_MIMETYPES as readonly string[]).includes(f.type)) {
+      toast.error('Use uma imagem JPEG, PNG ou WebP.');
+      return;
+    }
+    if (f.size > LIMITES.COMPROVATIVO_MAX_SIZE_BYTES) {
+      toast.error('Imagem demasiado grande (máximo 6MB).');
+      return;
+    }
+    ficheiroComprovativoRef.current = f;
+    setComprovativoNome(f.name);
+    setComprovativoUrl(null);
+    enviarComprovativo(f);
+  }
+
+  function removerComprovativo() {
+    ficheiroComprovativoRef.current = null;
+    setComprovativoNome(null);
+    setComprovativoUrl(null);
+    if (inputComprovativoRef.current) inputComprovativoRef.current.value = '';
   }
 
   const saldo = user?.saldo_carteira ?? 0;
@@ -363,7 +425,25 @@ export default function WalletPage() {
                         {new Date(r.createdAt).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
-                    <EstadoBadge estado={r.estado} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      {r.comprovativoUrl && (
+                        <a
+                          href={r.comprovativoUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Ver comprovativo"
+                          className="rounded"
+                        >
+                          <img
+                            src={r.comprovativoUrl}
+                            alt="Comprovativo da recarga"
+                            loading="lazy"
+                            className="w-9 h-9 rounded object-cover border border-border/60 hover:ring-2 hover:ring-amber-400 transition-all"
+                          />
+                        </a>
+                      )}
+                      <EstadoBadge estado={r.estado} />
+                    </div>
                   </div>
                   {r.estado === 'REJEITADA' && r.notaAdmin && (
                     <p className="text-xs text-destructive bg-destructive/5 rounded px-2 py-1.5">
@@ -615,6 +695,58 @@ export default function WalletPage() {
                   maxLength={RECARGA_CONFIG.NOTA_MAX}
                   className="mt-1"
                 />
+              </div>
+
+              {/* Comprovativo em imagem (item 20) — sobe à hora da escolha */}
+              <div>
+                <Label className="text-xs">Comprovativo em imagem (recomendado)</Label>
+                <input
+                  ref={inputComprovativoRef}
+                  id="envio-comprovativo"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={escolherComprovativo}
+                />
+                {aEnviarComprovativo ? (
+                  <div className="mt-1 flex items-center gap-2 rounded-md border border-border px-3 py-2.5 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> A enviar imagem…
+                  </div>
+                ) : comprovativoUrl ? (
+                  <div className="mt-1 flex items-center gap-2.5 rounded-md border border-emerald-300/70 dark:border-emerald-700/50 bg-emerald-50/60 dark:bg-emerald-950/25 px-3 py-2">
+                    <img src={comprovativoUrl} alt="Comprovativo anexado" className="w-10 h-10 object-cover rounded border border-border/60" />
+                    <p className="flex-1 min-w-0 text-xs font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1 truncate">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Anexado{comprovativoNome ? `: ${comprovativoNome}` : ''}</span>
+                    </p>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={removerComprovativo} aria-label="Remover comprovativo">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => inputComprovativoRef.current?.click()}
+                      className="mt-1 w-full flex items-center justify-center gap-2 rounded-md border border-dashed border-amber-400/70 dark:border-amber-700/60 bg-amber-50/50 dark:bg-amber-950/20 px-3 py-3 text-sm text-amber-800 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-950/40 transition-colors"
+                    >
+                      <ImagePlus className="h-4 w-4" /> Anexar captura do SMS/M-Pesa
+                    </button>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      Screenshot do SMS de confirmação agiliza a aprovação (JPEG/PNG, até 6MB).
+                    </p>
+                    {comprovativoNome && ficheiroComprovativoRef.current && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-1.5 w-full"
+                        onClick={() => { const f = ficheiroComprovativoRef.current; if (f) enviarComprovativo(f); }}
+                      >
+                        Tentar enviar «{comprovativoNome}» novamente
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 

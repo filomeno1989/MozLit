@@ -43,6 +43,7 @@ export const LIMITES = {
   CAPAS_MIMETYPES: ['image/jpeg', 'image/png', 'image/webp'],
   CAPA_MAX_SIZE_BYTES: 2 * 1024 * 1024, // 2MB
   AVATAR_MAX_SIZE_BYTES: 1 * 1024 * 1024, // 1MB
+  COMPROVATIVO_MAX_SIZE_BYTES: 6 * 1024 * 1024, // 6MB — screenshots de SMS são pesados
   CATEGORIAS_MAX: 5,
   PRECO_CAPITULO_MAX: 500, // MC — tecto por capítulo (impede preços absurdos/negativos)
   PRECO_TOTAL_MAX: 5_000, // MC — tecto para o preço do livro completo
@@ -95,6 +96,7 @@ export const RECARGA_CONFIG = {
   PENDENTES_MAX: 3, // solicitações pendentes simultâneas por usuário
   REFERENCIA_MAX: 50,
   NOTA_MAX: 300,
+  COMPROVATIVO_URL_MAX: 600,
 } as const;
 
 /** Detecta se o conteúdo do capítulo é HTML (do editor rico) ou texto simples (legado) */

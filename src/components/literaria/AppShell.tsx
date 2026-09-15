@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore, type ViewName } from '@/store/app';
+import { apiFetch } from '@/lib/api';
+import { toast } from 'sonner';
+import { recargasNaoVistas, marcarRecargasVistas, type RecargaParaNotificar } from '@/lib/notificacoes';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -84,6 +87,42 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setShowLogoutDialog(false);
   }
 
+  // NOTIFICAÇÃO DE RECARGA (item 19): quando o admin aprova/rejeita uma
+  // recarga, o leitor fica a saber — no arranque e a cada 30s com sessão
+  // activa. Moeda de troca: confiança ("as minhas MC chegaram!").
+  const userIdNotif = user?.id;
+  useEffect(() => {
+    if (!userIdNotif) return;
+    let vivo = true;
+    async function verificarRecargas() {
+      if (!vivo || !userIdNotif) return;
+      try {
+        const d = await apiFetch<{ recargas: RecargaParaNotificar[] }>('/api/recargas');
+        const novas = recargasNaoVistas(userIdNotif, d.recargas || []);
+        if (novas.length === 0) return;
+        marcarRecargasVistas(userIdNotif);
+        for (const r of novas) {
+          if (r.estado === 'APROVADA') {
+            toast.success(`Recarga aprovada: +${r.moedas.toLocaleString('pt-MZ')} MC`, {
+              description: 'As suas moedas já estão disponíveis. Boa leitura!',
+              action: { label: 'Ver carteira', onClick: () => useAppStore.getState().navigate('wallet') },
+            });
+          } else if (r.estado === 'REJEITADA') {
+            toast.error(`Recarga de ${r.moedas.toLocaleString('pt-MZ')} MC rejeitada`, {
+              description: r.notaAdmin ? `Motivo: ${r.notaAdmin}` : 'Contacte o suporte para mais detalhes.',
+              duration: 8000,
+            });
+          }
+        }
+      } catch {
+        // offline/falha: tenta de novo no próximo ciclo — nunca intrusivo
+      }
+    }
+    const t = setTimeout(verificarRecargas, 2500); // após o arranque da página
+    const iv = setInterval(verificarRecargas, 30_000);
+    return () => { vivo = false; clearTimeout(t); clearInterval(iv); };
+  }, [userIdNotif]);
+
   return (
     <div className='min-h-screen flex flex-col bg-background text-foreground'>
       {/* Logout confirmation dialog */}
@@ -100,8 +139,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </DialogContent>
       </Dialog>
 
-      {/* Header */}
-      <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60'>
+      {/* Header (safe-area iOS: não fica por baixo do notch — item 23) */}
+      <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pt-safe'>
         <div className='max-w-7xl mx-auto flex h-14 items-center px-4 gap-3'>
           {/* Mobile menu */}
           <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -226,8 +265,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className='border-t py-8 mt-auto'>
+      {/* Footer (safe-area iOS: barra home do iPhone) */}
+      <footer className='border-t py-8 mt-auto pb-safe'>
         <div className='max-w-7xl mx-auto px-4'>
           <div className='flex flex-col sm:flex-row items-center justify-between gap-4'>
             <div className='text-center sm:text-left'>

@@ -39,6 +39,7 @@ interface RecargaAdmin {
   estado: string;
   numeroEnvio: string | null;
   referencia: string | null;
+  comprovativoUrl: string | null;
   nota: string | null;
   notaAdmin: string | null;
   createdAt: string;
@@ -84,6 +85,8 @@ export default function AdminPanel() {
   const [rejeitarTarget, setRejeitarTarget] = useState<RecargaAdmin | null>(null);
   const [aprovarTarget, setAprovarTarget] = useState<RecargaAdmin | null>(null);
   const [motivoRejeicao, setMotivoRejeicao] = useState('');
+  // Comprovativo em imagem (item 20) — visualização em tela cheia
+  const [comprovativoVer, setComprovativoVer] = useState<string | null>(null);
 
   // Crédito directo
   const [busca, setBusca] = useState('');
@@ -451,6 +454,24 @@ export default function AdminPanel() {
                         {r.nota && (
                           <p className="text-xs bg-muted rounded px-2 py-1.5">Nota do usuário: {r.nota}</p>
                         )}
+                        {r.comprovativoUrl && (
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={r.comprovativoUrl}
+                              alt="Comprovativo da recarga"
+                              loading="lazy"
+                              className="w-10 h-10 rounded object-cover border border-border/60"
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              onClick={() => setComprovativoVer(r.comprovativoUrl)}
+                            >
+                              <Search className="h-3.5 w-3.5 mr-1" /> Ver comprovativo
+                            </Button>
+                          </div>
+                        )}
                         {r.estado === 'REJEITADA' && r.notaAdmin && (
                           <p className="text-xs text-destructive">Motivo da rejeição: {r.notaAdmin}</p>
                         )}
@@ -800,6 +821,25 @@ export default function AdminPanel() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de visualização do comprovativo (item 20) */}
+      <Dialog open={!!comprovativoVer} onOpenChange={(open) => { if (!open) setComprovativoVer(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Comprovativo da recarga</DialogTitle>
+            <DialogDescription>
+              Compare a imagem com o número de envio e a referência antes de aprovar.
+            </DialogDescription>
+          </DialogHeader>
+          {comprovativoVer && (
+            <img
+              src={comprovativoVer}
+              alt="Comprovativo da recarga em tamanho completo"
+              className="max-h-[70vh] w-auto mx-auto rounded-lg border border-border/60"
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

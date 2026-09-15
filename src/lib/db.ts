@@ -92,6 +92,11 @@ const DDL_AUTO_REPARACAO: string[] = [
   `ALTER TABLE "chapters" ADD COLUMN IF NOT EXISTS "arquivado" BOOLEAN NOT NULL DEFAULT false`,
   `CREATE INDEX IF NOT EXISTS "chapters_livroId_arquivado_idx" ON "chapters" ("livro_id", "arquivado")`,
 
+  // ===== Fase 3 2026-09-15: comprovativo em imagem nas recargas (item 20) =====
+  // O leitor anexa o screenshot do SMS/M-Pesa; o admin valida a prova visual
+  // antes de aprovar — reduz recargas rejeitadas por referência errada.
+  `ALTER TABLE "recargas_solicitacoes" ADD COLUMN IF NOT EXISTS "comprovativo_url" TEXT`,
+
   // ===== Fase 1 2026-09-15: recuperação de senha (esqueci-me da senha) =====
   // O utilizador pede ajuda no ecrã de login; o admin vê o pedido no painel,
   // valida a identidade pelo contacto e define uma senha temporária.
@@ -201,7 +206,7 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
  */
 async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
   try {
-    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number }[]>`
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number; comprovativo: number }[]>`
       SELECT
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
@@ -213,6 +218,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
           WHERE table_name = 'pedidos_recuperacao') AS recuperacoes,
         (SELECT COUNT(*)::int FROM information_schema.tables
           WHERE table_name = 'recargas_solicitacoes') AS recargas,
+        (SELECT COUNT(*)::int FROM information_schema.columns
+          WHERE table_name = 'recargas_solicitacoes' AND column_name = 'comprovativo_url') AS comprovativo,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'transactions' AND column_name IN ('chapter_id', 'book_id')) AS trans,
         (SELECT COUNT(*)::int FROM pg_indexes
@@ -235,6 +242,7 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
       Number(r?.arquivado ?? 0) === 1 &&
       Number(r?.recuperacoes ?? 0) === 1 &&
       Number(r?.recargas ?? 0) >= 12 &&
+      Number(r?.comprovativo ?? 0) === 1 &&
       Number(r?.trans ?? 0) === 2 &&
       Number(r?.idx ?? 0) === 19 &&
       Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida

@@ -9,6 +9,32 @@ import {
 import { RECARGA_CONFIG, MOEDAS_CONFIG } from '@/lib/constants';
 
 /**
+ * Valida o URL do comprovativo anexado (defesa em profundidade: a imagem tem
+ * de vir do nosso próprio bucket "comprovativos" — impede que alguém injecte
+ * URLs externos/trackers no painel do admin).
+ */
+function validarComprovativoUrl(url: unknown): string | null {
+  if (url === undefined || url === null || url === '') return null;
+  if (typeof url !== 'string') {
+    throw Object.assign(new Error('Comprovativo inválido.'), { name: 'ValidationError' });
+  }
+  if (url.length > RECARGA_CONFIG.COMPROVATIVO_URL_MAX) {
+    throw Object.assign(new Error('Comprovativo inválido.'), { name: 'ValidationError' });
+  }
+  const supa = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const prefixo = supa
+    ? `${supa}/storage/v1/object/public/comprovativos/`
+    : '/storage/v1/object/public/comprovativos/';
+  if (!url.startsWith(prefixo)) {
+    throw Object.assign(
+      new Error('O comprovativo tem de ser uma imagem enviada pela plataforma.'),
+      { name: 'ValidationError' }
+    );
+  }
+  return url;
+}
+
+/**
  * GET /api/recargas — histórico de recargas do usuário autenticado
  */
 export async function GET(request: NextRequest) {
@@ -29,6 +55,7 @@ export async function GET(request: NextRequest) {
         metodo: true,
         estado: true,
         notaAdmin: true,
+        comprovativoUrl: true,
         createdAt: true,
         processadaEm: true,
       },
@@ -57,7 +84,7 @@ export async function POST(request: NextRequest) {
     if (!payload) return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
 
     const body = await request.json();
-    const { moedas, metodo, numeroEnvio, referencia, nota } = body;
+    const { moedas, metodo, numeroEnvio, referencia, nota, comprovativoUrl } = body;
 
     // Limite de solicitações pendentes para evitar spam
     const pendentes = await db.recargaSolicitacao.count({
@@ -84,6 +111,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Comprovativo em imagem (opcional, mas recomendado na UI)
+    let comprovativoValidado: string | null = null;
+    try {
+      comprovativoValidado = validarComprovativoUrl(comprovativoUrl);
+    } catch (err) {
+      return NextResponse.json({ error: (err as Error).message }, { status: 400 });
+    }
+
     const valorMzn = moedasValidadas / MOEDAS_CONFIG.TAXA_CONVERSAO;
 
     const recarga = await db.recargaSolicitacao.create({
@@ -95,6 +130,7 @@ export async function POST(request: NextRequest) {
         numeroEnvio: numeroEnvioValidado,
         referencia: referenciaValidada,
         nota: notaValidada,
+        comprovativoUrl: comprovativoValidado,
         estado: 'PENDENTE',
       },
       select: {

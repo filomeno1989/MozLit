@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins } from 'lucide-react';
+import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatarMoedas, isHtmlConteudo } from '@/lib/constants';
+import { lerProgresso, percentagemObra, type ItemProgresso } from '@/lib/progresso';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -50,6 +51,8 @@ export default function BookDetailPage() {
   const [ownsFullBook, setOwnsFullBook] = useState(false);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseConfirm, setPurchaseConfirm] = useState<{ type: 'chapter' | 'full'; id?: string; price: number; name: string } | null>(null);
+  // Progresso de leitura guardado no dispositivo (item 15)
+  const [progresso, setProgresso] = useState<ItemProgresso | null>(null);
 
   const userId = user?.id;
 
@@ -71,6 +74,17 @@ export default function BookDetailPage() {
     try {
       const data = await apiFetch<BookDetail>(`/api/books/${bookId}`);
       setBook(data);
+
+      // PROGRESSO (item 15): se o leitor já esteve aqui, valida que o ponto
+      // guardado ainda existe (capítulo pode ter sido arquivado/eliminado)
+      const p = lerProgresso(userId, data.id);
+      if (p) {
+        const seccaoExiste = p.section && !!(data[p.section as keyof BookDetail]);
+        const capExiste = p.capituloId && data.chapters.some((c) => c.id === p.capituloId);
+        setProgresso(seccaoExiste || capExiste ? p : null);
+      } else {
+        setProgresso(null);
+      }
     } catch {
       setBook(null);
     } finally {
@@ -136,6 +150,16 @@ export default function BookDetailPage() {
       navigate('reader', { chapterId: chapter.id, bookId: bookId });
     } else {
       handlePurchase(chapter.id);
+    }
+  }
+
+  /** Retoma a leitura no capítulo/secção guardado no dispositivo (item 15) */
+  function continuarLeitura() {
+    if (!progresso) return;
+    if (progresso.capituloId) {
+      navigate('reader', { chapterId: progresso.capituloId, bookId, retomar: '1' });
+    } else if (progresso.section) {
+      navigate('reader', { bookId, section: progresso.section, retomar: '1' });
     }
   }
 
@@ -381,6 +405,36 @@ export default function BookDetailPage() {
           )}
         </div>
       </div>
+
+      {/* CONTINUAR A LER (item 15) — retoma exactamente onde parou */}
+      {progresso && (
+        <button
+          onClick={continuarLeitura}
+          className="mb-8 w-full flex items-center gap-4 p-4 rounded-xl border border-amber-300/60 dark:border-amber-700/40 bg-gradient-to-r from-amber-50 to-orange-50/60 dark:from-amber-950/30 dark:to-orange-950/20 hover:shadow-md transition-shadow text-left group"
+        >
+          <div className="p-2.5 rounded-full bg-amber-100 dark:bg-amber-900/40 shrink-0">
+            <BookOpen className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-amber-700 dark:text-amber-400">
+              Continuar a ler
+            </p>
+            <p className="text-sm font-medium truncate">
+              {progresso.posicao ? `Cap. ${progresso.posicao} · ${progresso.label || 'continuar'}` : (progresso.label || 'Retomar leitura')}
+            </p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="h-1.5 flex-1 max-w-[220px] rounded-full bg-amber-200/70 dark:bg-amber-900/40 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600" style={{ width: `${Math.max(3, percentagemObra(progresso))}%` }} />
+              </div>
+              <span className="text-[11px] text-muted-foreground shrink-0">{percentagemObra(progresso)}% da obra</span>
+            </div>
+          </div>
+          <span className="shrink-0 inline-flex items-center text-sm font-semibold text-amber-700 dark:text-amber-400">
+            Continuar
+            <ChevronRight className="h-4 w-4 ml-0.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </button>
+      )}
 
       {/* Capítulos + Secções */}
       <Card>

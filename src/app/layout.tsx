@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Lora, Merriweather, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
+import RegistrarServiceWorker from "@/components/literaria/RegistrarServiceWorker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -62,10 +63,25 @@ export const metadata: Metadata = {
     icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/icon-192.png", sizes: "192x192" }],
   },
-  manifest: "/manifest.webmanifest",
-  other: {
-    "theme-color": "#d97706",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "MozLit",
   },
+  manifest: "/manifest.webmanifest",
+};
+
+/**
+ * Safe-areas iOS (item 23): viewport-fit=cover permite o conteúdo esticar-se
+ * até às bordas do ecrã (pago/entalhe), e os utilitários pt-safe/pb-safe no
+ * header/footer/leitor empurram o conteúdo para fora das zonas seguras.
+ * appleWebApp completa a sensação de app quando instalado no iPhone/iPad.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#d97706",
 };
 
 export default function RootLayout({
@@ -80,6 +96,7 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
+        <RegistrarServiceWorker />
       </body>
     </html>
   );

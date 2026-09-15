@@ -147,6 +147,7 @@ model RecargaSolicitacao {
   metodo        String    @default("MPESA") // MPESA | EMOOLA | TRANSFERENCIA
   numeroEnvio   String?   @map("numero_envio") // número de onde foi feito o envio
   referencia    String?                   // ID / referência da transacção (comprovativo)
+  comprovativoUrl String? @map("comprovativo_url") // imagem do comprovativo (screenshot do SMS/M-Pesa)
   nota          String?                   // observação opcional do usuário
   estado        String    @default("PENDENTE") // PENDENTE | APROVADA | REJEITADA | CANCELADA
   notaAdmin     String?   @map("nota_admin") // motivo da rejeição ou nota do admin

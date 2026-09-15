@@ -6,8 +6,10 @@ import { useAppStore } from '@/store/app';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { BookOpen, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { BookOpen, Search, X } from 'lucide-react';
 import { formatarMoedas, textoSimplesDeHtml } from '@/lib/constants';
+import { progressoMaisRecente, limparProgresso, percentagemObra, haQuanto, type ItemProgresso } from '@/lib/progresso';
 
 interface Book {
   id: string;
@@ -108,16 +110,105 @@ function BookSkeleton() {
   );
 }
 
+/**
+ * CARTÃO "CONTINUAR A LER" (item 15) — mostra o livro mais recentemente lido
+ * no dispositivo, com % da obra e retorno ao ponto exacto. A capa/título vêm
+ * da API no momento da exibição; se o livro já não existir, o cartão some.
+ */
+function ContinuarLerCard() {
+  const { user, navigate } = useAppStore();
+  const userId = user?.id;
+  const [item, setItem] = useState<{
+    p: ItemProgresso;
+    livro: { id: string; titulo: string; capa_url: string; autor: { nome: string } };
+  } | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    const p = progressoMaisRecente(userId);
+    if (!p) return;
+    let vivo = true;
+    apiFetch<{ id: string; titulo: string; capa_url: string; autor: { nome: string } }>(`/api/books/${p.bookId}`)
+      .then((livro) => { if (vivo) setItem({ p, livro }); })
+      .catch(() => { /* despublicado ou offline — o cartão simplesmente não aparece */ });
+    return () => { vivo = false; };
+  }, [userId]);
+
+  if (!item) return null;
+  const { p, livro } = item;
+  const pct = percentagemObra(p);
+  const legenda = p.posicao ? `Cap. ${p.posicao} · ${p.label || 'continuar'}` : (p.label || 'Início da leitura');
+  const temCapa = livro.capa_url && livro.capa_url !== '/placeholder-cover.svg';
+
+  function continuar() {
+    if (p.capituloId) navigate('reader', { chapterId: p.capituloId, bookId: p.bookId, retomar: '1' });
+    else if (p.section) navigate('reader', { bookId: p.bookId, section: p.section, retomar: '1' });
+    else navigate('book-detail', { bookId: p.bookId });
+  }
+
+  return (
+    <section className="mb-8">
+      <div className="rounded-2xl border border-amber-200/70 dark:border-amber-800/40 bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/15 dark:to-amber-950/30 p-4 sm:p-5">
+        <div className="flex items-center gap-4">
+          {/* Capa */}
+          {temCapa ? (
+            <img
+              src={livro.capa_url}
+              alt={livro.titulo}
+              className="w-16 aspect-[3/4] object-cover rounded-lg shadow-md border border-border/40 shrink-0"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          ) : (
+            <div className="w-16 aspect-[3/4] rounded-lg shadow-md shrink-0 bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center">
+              <BookOpen className="h-6 w-6 text-white/90" />
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+              <BookOpen className="h-3 w-3" /> Continuar a ler
+            </p>
+            <h3 className="mt-0.5 font-bold text-sm sm:text-base leading-snug line-clamp-1">{livro.titulo}</h3>
+            <p className="text-xs text-muted-foreground truncate">{legenda} · {livro.autor.nome}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 flex-1 max-w-[260px] rounded-full bg-amber-200/70 dark:bg-amber-900/40 overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-600" style={{ width: `${Math.max(3, pct)}%` }} />
+              </div>
+              <span className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 shrink-0">{pct}%</span>
+              <span className="text-[11px] text-muted-foreground shrink-0">· {haQuanto(p.actualizadoEm)}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <Button onClick={continuar} className="bg-amber-600 hover:bg-amber-700 text-white" size="sm">
+              <BookOpen className="h-4 w-4 mr-1.5" /> Continuar
+            </Button>
+            <button
+              onClick={() => { limparProgresso(userId, p.bookId); setItem(null); }}
+              aria-label="Remover este livro dos seus progressos"
+              title="Remover dos meus progressos"
+              className="text-muted-foreground/70 hover:text-destructive transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function HomePage() {
   const [books, setBooks] = useState<Book[]>([]);
   const [allBooks, setAllBooks] = useState<Book[]>([]);
+  const { navigate, user } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const { navigate } = useAppStore();
+  // (user/navigate já obtidos no topo)
 
   // Extract unique categories from all published books
   const categorias = Array.from(
@@ -187,6 +278,9 @@ export default function HomePage() {
           </form>
         </div>
       </section>
+
+      {/* Continuar a ler (item 15) — só aparece se houver leitura em curso */}
+      <ContinuarLerCard key={user?.id || 'anon'} />
 
       {/* Categorias */}
       <section className="mb-8">

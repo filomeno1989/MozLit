@@ -6,10 +6,12 @@ import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, Moon, Sun, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck, Minus, Plus } from 'lucide-react';
 import CommentsSection from '@/components/literaria/CommentsSection';
 import { toast } from 'sonner';
 import { type SectionKey, SECTION_LABELS, isHtmlConteudo, formatarMoedas } from '@/lib/constants';
+import { lerPrefsLeitura, guardarPrefsLeitura, TEMAS_LEITOR, familiaFonte, LEITURA_DEFAULTS, LEITURA_MIN, LEITURA_MAX, type PrefsLeitura } from '@/lib/leitura-prefs';
+import { guardarProgresso, guardarScroll, lerProgresso } from '@/lib/progresso';
 
 interface ChapterListItem {
   id: string;
@@ -212,6 +214,129 @@ function PaywallConteudo({
   );
 }
 
+/**
+ * Painel "Aa" — controlos de leitura do profissional (item 16):
+ * tema (claro/sépia/escuro), tamanho da letra e tipografia. As preferências
+ * vivem no dispositivo e aplicam-se só à área de leitura (imersiva), mesmo
+ * que o resto do app esteja noutro tema.
+ */
+function ControlosLeitura({ prefs, onChange }: { prefs: PrefsLeitura; onChange: (p: PrefsLeitura) => void }) {
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <div className="relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setAberto(!aberto)}
+        aria-label="Ecrã e letra"
+        aria-expanded={aberto}
+        title="Ecrã e letra"
+        className={aberto ? 'bg-accent' : ''}
+      >
+        <span className="text-[13px] font-bold tracking-tight">Aa</span>
+      </Button>
+
+      {aberto && (
+        <div className="absolute right-0 top-10 z-50 w-72 rounded-xl border border-[color:var(--leitor-borda)] bg-[var(--leitor-bg)] text-[color:var(--leitor-fg)] shadow-xl p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Ecrã e letra</span>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setAberto(false)} aria-label="Fechar">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
+          {/* Tema */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-[color:var(--leitor-suave)] mb-2">Fundo</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(TEMAS_LEITOR) as Array<keyof typeof TEMAS_LEITOR>).map((key) => {
+                const t = TEMAS_LEITOR[key];
+                const activo = prefs.tema === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => onChange({ ...prefs, tema: key })}
+                    aria-pressed={activo}
+                    className={`rounded-lg border p-2 flex flex-col items-center gap-1.5 transition-all ${
+                      activo
+                        ? 'border-amber-500 ring-2 ring-amber-500/40'
+                        : 'border-[color:var(--leitor-borda)] hover:border-amber-400'
+                    }`}
+                    style={{ background: t.bg, color: t.fg }}
+                  >
+                    <span className="text-xs font-semibold" style={{ color: t.acento }}>Aa</span>
+                    <span className="text-[10px] leading-none">{t.nome}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Tamanho da letra */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-[color:var(--leitor-suave)] mb-2">Tamanho</p>
+            <div className="flex items-center justify-between rounded-lg border border-[color:var(--leitor-borda)] px-1 py-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Diminuir letra"
+                disabled={prefs.tamanhoFonte <= LEITURA_MIN}
+                onClick={() => onChange({ ...prefs, tamanhoFonte: Math.max(LEITURA_MIN, prefs.tamanhoFonte - 1) })}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-semibold tabular-nums">{prefs.tamanhoFonte}px</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                aria-label="Aumentar letra"
+                disabled={prefs.tamanhoFonte >= LEITURA_MAX}
+                onClick={() => onChange({ ...prefs, tamanhoFonte: Math.min(LEITURA_MAX, prefs.tamanhoFonte + 1) })}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Tipografia */}
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-[color:var(--leitor-suave)] mb-2">Letra</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => onChange({ ...prefs, tipografia: 'serif' })}
+                aria-pressed={prefs.tipografia === 'serif'}
+                className={`rounded-lg border p-2 transition-all ${
+                  prefs.tipografia === 'serif'
+                    ? 'border-amber-500 ring-2 ring-amber-500/40'
+                    : 'border-[color:var(--leitor-borda)] hover:border-amber-400'
+                }`}
+              >
+                <span className="block text-base leading-tight" style={{ fontFamily: familiaFonte('serif') }}>Aa</span>
+                <span className="text-[10px] text-[color:var(--leitor-suave)]">Serifada</span>
+              </button>
+              <button
+                onClick={() => onChange({ ...prefs, tipografia: 'sans' })}
+                aria-pressed={prefs.tipografia === 'sans'}
+                className={`rounded-lg border p-2 transition-all ${
+                  prefs.tipografia === 'sans'
+                    ? 'border-amber-500 ring-2 ring-amber-500/40'
+                    : 'border-[color:var(--leitor-borda)] hover:border-amber-400'
+                }`}
+              >
+                <span className="block text-base leading-tight" style={{ fontFamily: familiaFonte('sans') }}>Aa</span>
+                <span className="text-[10px] text-[color:var(--leitor-suave)]">Moderna</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function renderProseText(text: string) {
   return text.split('\n').map((paragraph, i) => {
     if (!paragraph.trim()) return <br key={i} />;
@@ -246,10 +371,11 @@ function renderConteudo(conteudo: string) {
 }
 
 export default function EReaderPage() {
-  const { viewParams, navigate, user, isDark, toggleDark } = useAppStore();
+  const { viewParams, navigate, user } = useAppStore();
   const chapterId = viewParams.chapterId as string | undefined;
   const bookId = viewParams.bookId as string | undefined;
   const section = viewParams.section as SectionKey | undefined;
+  const userId = user?.id;
 
   // Block PrintScreen, Ctrl+Shift+I/J/S/C, Ctrl+P, and DevTools shortcuts
   useEffect(() => {
@@ -274,6 +400,29 @@ export default function EReaderPage() {
   const [error, setError] = useState<string | null>(null);
   const [chapterMenuOpen, setChapterMenuOpen] = useState(false);
 
+  // Preferências de leitura (tema/tamanho/tipografia — item 16)
+  const [prefs, setPrefsEstado] = useState<PrefsLeitura>(LEITURA_DEFAULTS);
+  useEffect(() => {
+    setPrefsEstado(lerPrefsLeitura());
+  }, []);
+  function atualizarPrefs(p: PrefsLeitura) {
+    setPrefsEstado(p);
+    guardarPrefsLeitura(p);
+  }
+
+  // Variáveis CSS do tema do leitor — aplicadas na raiz de cada vista
+  const temaLeitor = TEMAS_LEITOR[prefs.tema];
+  const varsLeitor = {
+    '--leitor-bg': temaLeitor.bg,
+    '--leitor-fg': temaLeitor.fg,
+    '--leitor-suave': temaLeitor.suave,
+    '--leitor-borda': temaLeitor.borda,
+    '--leitor-acento': temaLeitor.acento,
+    '--leitor-marca': temaLeitor.marca,
+    '--leitor-fonte': `${prefs.tamanhoFonte}px`,
+    '--leitor-familia': familiaFonte(prefs.tipografia),
+  } as React.CSSProperties;
+
   // Paywall "Gostaste? Continua a ler" — estado do popup de desbloqueio
   const [paywall, setPaywall] = useState<PaywallData | null>(null);
   const [aComprarPaywall, setAComprarPaywall] = useState(false);
@@ -293,6 +442,29 @@ export default function EReaderPage() {
     try {
       const data = await apiFetch<{ chapter: ChapterData }>(`/api/chapters/${chapterId}`);
       setChapter(data.chapter);
+
+      // PROGRESSO (item 15): regista onde o leitor está — dispositivo apenas
+      const ch = data.chapter;
+      const pos = Math.max(1, ch.allChapters.findIndex((c) => c.id === ch.id) + 1);
+      guardarProgresso(userId, {
+        bookId: ch.livro.id,
+        capituloId: ch.id,
+        label: ch.titulo,
+        posicao: pos,
+        totalCapitulos: ch.allChapters.length,
+      });
+
+      // "Continuar a ler" volta ao ponto exacto do scroll dentro do capítulo
+      if (useAppStore.getState().viewParams.retomar === '1') {
+        const p = lerProgresso(userId, ch.livro.id);
+        const pct = p?.capituloId === ch.id ? p.scrollPct : undefined;
+        if (pct && pct > 0.01) {
+          setTimeout(() => {
+            const max = document.documentElement.scrollHeight - window.innerHeight;
+            if (max > 200) window.scrollTo({ top: max * pct });
+          }, 250);
+        }
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 403 && err.data?.paywall) {
         // 403 paywall: mantém o capítulo actual por trás do popup (se houver)
@@ -306,7 +478,7 @@ export default function EReaderPage() {
     } finally {
       setLoading(false);
     }
-  }, [chapterId]);
+  }, [chapterId, userId]);
 
   const loadSectionBook = useCallback(async () => {
     if (!bookId || !section) return;
@@ -319,12 +491,20 @@ export default function EReaderPage() {
         categorias: typeof data.categorias === 'string' ? JSON.parse(data.categorias) : data.categorias,
         chapters: data.chapters || [],
       });
+      // PROGRESSO (item 15): secções de abertura/epílogo também contam
+      guardarProgresso(userId, {
+        bookId,
+        section,
+        label: SECTION_LABELS[section].label,
+        posicao: 0,
+        totalCapitulos: data.chapters?.length || 0,
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setSectionLoading(false);
     }
-  }, [bookId, section]);
+  }, [bookId, section, userId]);
 
   useEffect(() => {
     if (isSectionView) {
@@ -338,6 +518,21 @@ export default function EReaderPage() {
   useEffect(() => {
     setChapterMenuOpen(false);
   }, [chapterId]);
+
+  // PROGRESSO (item 15): guarda a posição de scroll no capítulo (1x/segundo)
+  useEffect(() => {
+    if (!chapter || isSectionView) return;
+    let ultima = 0;
+    const aoScroll = () => {
+      const agora = Date.now();
+      if (agora - ultima < 1000) return;
+      ultima = agora;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max > 200) guardarScroll(userId, chapter.livro.id, window.scrollY / max);
+    };
+    window.addEventListener('scroll', aoScroll, { passive: true });
+    return () => window.removeEventListener('scroll', aoScroll);
+  }, [chapter, isSectionView, userId]);
 
 
 
@@ -450,7 +645,8 @@ export default function EReaderPage() {
 
     return (
       <div
-        className="relative min-h-[calc(100vh-7rem)]"
+        className="relative min-h-[calc(100vh-7rem)] bg-[var(--leitor-bg)] text-[color:var(--leitor-fg)] transition-colors"
+        style={varsLeitor}
         onContextMenu={(e) => e.preventDefault()}
       >
         <div
@@ -464,17 +660,17 @@ export default function EReaderPage() {
           }}
         ></div>
 
-        <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b">
+        <div
+          className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-[var(--leitor-bg)] border-b border-[color:var(--leitor-borda)]"
+        >
           <div className="max-w-2xl mx-auto px-4 h-12 flex items-center justify-between">
             <Button variant="ghost" size="sm" onClick={() => navigate('book-detail', { bookId })}>
               <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
             </Button>
-            <span className="text-xs text-muted-foreground truncate max-w-[40%] text-center">
+            <span className="text-xs text-[color:var(--leitor-suave)] truncate max-w-[40%] text-center">
               {sectionBook.titulo}
             </span>
-            <Button variant="ghost" size="icon" onClick={toggleDark} aria-label="Alternar modo claro/escuro" title="Modo noturno">
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
+            <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
           </div>
         </div>
 
@@ -495,15 +691,15 @@ export default function EReaderPage() {
           </header>
 
           <div
-            className={"prose prose-neutral dark:prose-invert max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem] [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_em]:text-amber-700 [&_i]:text-amber-700 dark:[&_em]:text-amber-400 dark:[&_i]:text-amber-400" + (isItalic ? ' [&_p]:italic' : '')}
-            style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+            className={"max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[length:var(--leitor-fonte)]\n              [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[1.35em] [&_h2]:font-bold\n              [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[1.18em] [&_h3]:font-semibold\n              [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]\n              [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]\n              [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline" + (isItalic ? ' [&_p]:italic' : '')}
+            style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
           >
           {renderConteudo(sectionContent)}
           </div>
         </article>
 
         {/* Bottom nav: próximo passo da leitura */}
-        <div className="max-w-2xl mx-auto px-4 pb-4">
+        <div className="max-w-2xl mx-auto px-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
           <div className="flex justify-between items-center gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate('book-detail', { bookId })}>
               <ArrowLeft className="h-4 w-4 mr-1" />
@@ -551,7 +747,8 @@ export default function EReaderPage() {
 
   return (
     <div
-      className="relative min-h-[calc(100vh-7rem)]"
+      className="relative min-h-[calc(100vh-7rem)] bg-[var(--leitor-bg)] text-[color:var(--leitor-fg)] transition-colors"
+      style={varsLeitor}
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* Watermark overlay - denser for screenshot protection */}
@@ -560,7 +757,7 @@ export default function EReaderPage() {
           Array.from({ length: 5 }).map((_, col) => (
             <div
               key={`c-${row}-${col}`}
-              className="absolute text-foreground/[0.04] dark:text-foreground/[0.05] font-semibold whitespace-nowrap select-none"
+              className="absolute font-semibold whitespace-nowrap select-none text-[color:var(--leitor-marca)]"
               style={{
                 top: `${row * 7}%`,
                 left: `${col * 25 - 5}%`,
@@ -576,12 +773,14 @@ export default function EReaderPage() {
       </div>
 
       {/* Top bar */}
-      <div className="sticky top-14 z-30 bg-background/95 backdrop-blur border-b">
+      <div
+        className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-[var(--leitor-bg)] border-b border-[color:var(--leitor-borda)]"
+      >
         <div className="max-w-2xl mx-auto px-4 h-12 flex items-center justify-between">
           <Button variant="ghost" size="sm" onClick={() => navigate('book-detail', { bookId })}>
             <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
           </Button>
-          <span className="text-xs text-muted-foreground truncate max-w-[40%] text-center">
+          <span className="text-xs text-[color:var(--leitor-suave)] truncate max-w-[40%] text-center">
             {chapter.titulo}
           </span>
           <div className="flex items-center gap-1">
@@ -597,16 +796,14 @@ export default function EReaderPage() {
             >
               <List className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={toggleDark} aria-label="Alternar modo claro/escuro" title="Modo noturno">
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
+            <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
           </div>
         </div>
 
         {/* Chapter dropdown menu */}
         {chapterMenuOpen && chapter.allChapters.length > 0 && (
-          <div className="border-b bg-background absolute left-0 right-0 mx-auto max-w-2xl shadow-lg z-50">
-            <div className="px-4 py-2 flex items-center justify-between border-b">
+          <div className="border-b bg-[var(--leitor-bg)] border-[color:var(--leitor-borda)] absolute left-0 right-0 mx-auto max-w-2xl shadow-lg z-50">
+            <div className="px-4 py-2 flex items-center justify-between border-b border-[color:var(--leitor-borda)]">
               <span className="text-sm font-medium">Capítulos</span>
               <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setChapterMenuOpen(false)}>
                 <X className="h-3.5 w-3.5" />
@@ -617,7 +814,7 @@ export default function EReaderPage() {
                 <button
                   key={ch.id}
                   onClick={() => goToChapter(ch.id)}
-                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors flex items-center gap-3 border-b border-border/30 last:border-0 ${ch.id === chapter.id ? 'bg-accent font-medium text-amber-700 dark:text-amber-400' : ''}`}
+                  className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors flex items-center gap-3 border-b border-[color:var(--leitor-borda)] last:border-0 ${ch.id === chapter.id ? 'bg-accent font-medium text-amber-700 dark:text-amber-400' : ''}`}
                 >
                   {/* Numeração por posição na lista visível: 1,2,3… sem buracos
                       após eliminar/arquivar (ordem crua da BD pode ter falhas) */}
@@ -646,23 +843,23 @@ export default function EReaderPage() {
         onDragStart={(e) => e.preventDefault()}
       >
         {/* CHAPTER CONTENT - no pre/post sections here */}
-        <header className="mb-10 pb-8 border-b border-border/30">
+        <header className="mb-10 pb-8 border-b border-[color:var(--leitor-borda)]">
           <h1 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">
             {chapter.titulo}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-[color:var(--leitor-suave)]">
             Capítulo {posicaoActual} - {chapter.livro.titulo}
           </p>
         </header>
 
         <div
-          className="prose prose-neutral dark:prose-invert max-w-none
-            [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem]
-            [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold
-            [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold
-            [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic
-            [&_em]:text-amber-700 [&_i]:text-amber-700 dark:[&_em]:text-amber-400 dark:[&_i]:text-amber-400"
-          style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+          className="max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[length:var(--leitor-fonte)]
+            [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[1.35em] [&_h2]:font-bold
+            [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[1.18em] [&_h3]:font-semibold
+            [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]
+            [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]
+            [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline"
+          style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
         >
           {renderConteudo(chapter.conteudo)}
         </div>
@@ -685,7 +882,7 @@ export default function EReaderPage() {
       </Dialog>
 
       {/* Bottom nav with prev/next */}
-      <div className="max-w-2xl mx-auto px-4 pb-4">
+      <div className="max-w-2xl mx-auto px-4" style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}>
         <div className="flex justify-between items-center">
           {chapter.prevChapter ? (
             <Button
