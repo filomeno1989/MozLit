@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import RichTextEditor, { htmlVazio, textoLegadoParaHtml } from '@/components/literaria/RichTextEditor';
-import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2, Archive, ArchiveRestore } from 'lucide-react';
+import { chavesRascunho, guardarRascunho, lerRascunho, limparRascunho, formatarMomentoRascunho, type Rascunho } from '@/lib/rascunhos';
+import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2, Archive, ArchiveRestore, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS, formatarMoedas } from '@/lib/constants';
 
@@ -62,6 +63,14 @@ interface BookWithChapters {
   chapters: Array<{ id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean; arquivado?: boolean }>;
 }
 
+/** Dados que o autosave guarda de um capítulo (novo ou em edição) */
+interface RascunhoCapituloDados {
+  titulo?: string;
+  conteudo?: string;
+  preco_capitulo?: string;
+  is_free?: boolean;
+}
+
 export default function AuthorDashboard() {
   const { user, navigate, token } = useAppStore();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -71,6 +80,16 @@ export default function AuthorDashboard() {
   const [chapterError, setChapterError] = useState('');
   const [newChapter, setNewChapter] = useState({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
   const [editorResetKey, setEditorResetKey] = useState(0);
+
+  // FASE 2 — Blindar autores: autosave local + recuperação de rascunhos (itens 10-12)
+  const [novoCapituloSujo, setNovoCapituloSujo] = useState(false);
+  const [tsRascunhoNovo, setTsRascunhoNovo] = useState<number | null>(null);
+  const [rascunhoNovo, setRascunhoNovo] = useState<Rascunho<RascunhoCapituloDados> | null>(null);
+  const [rascunhoEdicao, setRascunhoEdicao] = useState<Rascunho<RascunhoCapituloDados> | null>(null);
+  const [tsRascunhoEdicao, setTsRascunhoEdicao] = useState<number | null>(null);
+  const [nonceEdicao, setNonceEdicao] = useState(0);
+  // Reordenar capítulos (item 14)
+  const [aMoverCapitulo, setAMoverCapitulo] = useState<string | null>(null);
 
   // Edit chapter
   const [editingChapter, setEditingChapter] = useState<{ id: string; titulo: string; conteudo: string; preco_capitulo: string; is_free: boolean } | null>(null);
@@ -135,6 +154,15 @@ export default function AuthorDashboard() {
       const b = await apiFetch<BookWithChapters>(`/api/books/${bookId}`);
       setBookChapters(b);
       setShowChapterDialog(true);
+      // Recuperação de rascunho (item 11): texto escrito mas nunca salvo fica no
+      // dispositivo — ao reabrir, oferecemos restaurar em vez de o autor notar falta
+      if (user?.id) {
+        const r = lerRascunho<RascunhoCapituloDados>(chavesRascunho.capituloNovo(user.id, bookId));
+        const temTexto = !!r && (!!r.dados.titulo?.trim() || (!!r.dados.conteudo && !htmlVazio(r.dados.conteudo)));
+        setRascunhoNovo(temTexto ? r : null);
+      } else {
+        setRascunhoNovo(null);
+      }
     } catch (err) {
       setChapterError((err as Error).message);
     }
@@ -204,6 +232,10 @@ export default function AuthorDashboard() {
       });
       setNewChapter({ titulo: '', conteudo: '', preco_capitulo: '0', is_free: false });
       setEditorResetKey((k) => k + 1); // limpa o editor para o próximo capítulo
+      // Capítulo salvo na plataforma — o rascunho local já cumpriu a sua função
+      if (user) limparRascunho(chavesRascunho.capituloNovo(user.id, bookChapters.id));
+      setRascunhoNovo(null);
+      setTsRascunhoNovo(null);
       setChapterError('');
       loadBookChapters(bookChapters.id);
       loadDashboard();
@@ -232,7 +264,20 @@ export default function AuthorDashboard() {
       // marca a edição como "suja"
       setSnapshotEdicao(JSON.stringify(carregado));
       setEdicaoSuja(false);
+      setNonceEdicao((k) => k + 1); // editor remonta limpo com o conteúdo do servidor
       setEditingChapter(carregado);
+      setTsRascunhoEdicao(null);
+      // Recuperação (item 11): existe rascunho local diferente do que está no servidor?
+      if (user?.id) {
+        const r = lerRascunho<RascunhoCapituloDados>(chavesRascunho.capituloEdicao(user.id, ch.id));
+        if (r && r.dados.conteudo && !htmlVazio(r.dados.conteudo) && r.dados.conteudo !== carregado.conteudo) {
+          setRascunhoEdicao(r);
+        } else {
+          setRascunhoEdicao(null);
+        }
+      } else {
+        setRascunhoEdicao(null);
+      }
     }).catch(() => toast.error('Erro ao carregar capítulo'));
   }
 
@@ -246,12 +291,114 @@ export default function AuthorDashboard() {
     setEdicaoSuja(JSON.stringify({ id, titulo, conteudo, preco_capitulo, is_free }) !== snapshotEdicao);
   }, [editingChapter, snapshotEdicao]);
 
+  // --- Fase 2: autosave local (item 10) — cada palavra fica no dispositivo ---
+
+  // Autosave do novo capítulo (debounce de 800ms por tecla)
+  useEffect(() => {
+    if (!bookChapters || !showChapterDialog || !user) return;
+    const sujo = newChapter.titulo.trim() !== '' || !htmlVazio(newChapter.conteudo);
+    setNovoCapituloSujo(sujo);
+    if (!sujo) return;
+    const t = setTimeout(() => {
+      guardarRascunho(chavesRascunho.capituloNovo(user.id, bookChapters.id), newChapter);
+      setTsRascunhoNovo(Date.now());
+    }, 800);
+    return () => clearTimeout(t);
+  }, [newChapter, bookChapters, showChapterDialog, user]);
+
+  // Autosave do capítulo em edição — só grava quando difere da versão do servidor
+  useEffect(() => {
+    if (!editingChapter || !snapshotEdicao || !user) return;
+    const atual = JSON.stringify({
+      id: editingChapter.id, titulo: editingChapter.titulo, conteudo: editingChapter.conteudo,
+      preco_capitulo: editingChapter.preco_capitulo, is_free: editingChapter.is_free,
+    });
+    if (atual === snapshotEdicao) return;
+    const t = setTimeout(() => {
+      guardarRascunho(chavesRascunho.capituloEdicao(user.id, editingChapter.id), {
+        titulo: editingChapter.titulo,
+        conteudo: editingChapter.conteudo,
+        preco_capitulo: editingChapter.preco_capitulo,
+        is_free: editingChapter.is_free,
+      });
+      setTsRascunhoEdicao(Date.now());
+    }, 800);
+    return () => clearTimeout(t);
+  }, [editingChapter, snapshotEdicao, user]);
+
+  // Barreira do navegador (item 12): fechar/recarregar o separador com texto
+  // não salvo pede confirmação — o navegador mostra a mensagem nativa dele
+  useEffect(() => {
+    if (!edicaoSuja && !novoCapituloSujo) return;
+    const antesDeSair = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', antesDeSair);
+    return () => window.removeEventListener('beforeunload', antesDeSair);
+  }, [edicaoSuja, novoCapituloSujo]);
+
   function tentarFecharEdicao() {
     if (edicaoSuja) {
       setConfirmarDescarte(true);
       return;
     }
     setEditingChapter(null);
+  }
+
+  // --- Fase 2: recuperação de rascunhos (item 11) ---
+
+  function restaurarRascunhoNovo() {
+    if (!rascunhoNovo) return;
+    setNewChapter({
+      titulo: rascunhoNovo.dados.titulo ?? '',
+      conteudo: rascunhoNovo.dados.conteudo ?? '',
+      preco_capitulo: rascunhoNovo.dados.preco_capitulo ?? '0',
+      is_free: !!rascunhoNovo.dados.is_free,
+    });
+    setEditorResetKey((k) => k + 1); // remonta o editor com o texto do rascunho
+    setRascunhoNovo(null);
+    toast.success('Rascunho restaurado — continue de onde parou.');
+  }
+
+  function descartarRascunhoNovo() {
+    if (bookChapters && user) limparRascunho(chavesRascunho.capituloNovo(user.id, bookChapters.id));
+    setRascunhoNovo(null);
+  }
+
+  function restaurarRascunhoEdicao() {
+    if (!rascunhoEdicao || !editingChapter) return;
+    setEditingChapter({
+      ...editingChapter,
+      titulo: rascunhoEdicao.dados.titulo ?? editingChapter.titulo,
+      conteudo: rascunhoEdicao.dados.conteudo ?? editingChapter.conteudo,
+      preco_capitulo: rascunhoEdicao.dados.preco_capitulo ?? editingChapter.preco_capitulo,
+      is_free: rascunhoEdicao.dados.is_free ?? editingChapter.is_free,
+    });
+    setNonceEdicao((k) => k + 1); // remonta o editor com o texto do rascunho
+    setRascunhoEdicao(null);
+    toast.success('Rascunho restaurado — salve quando terminar.');
+  }
+
+  function descartarRascunhoEdicao() {
+    if (editingChapter && user) limparRascunho(chavesRascunho.capituloEdicao(user.id, editingChapter.id));
+    setRascunhoEdicao(null);
+  }
+
+  // --- Fase 2: reordenar capítulos (item 14) — nunca mais eliminar/recriar para corrigir a ordem ---
+
+  async function moverCapitulo(capituloId: string, direcao: 'cima' | 'baixo') {
+    if (!bookChapters) return;
+    setAMoverCapitulo(capituloId);
+    try {
+      await apiFetch('/api/chapters/reordenar', {
+        method: 'PATCH',
+        body: JSON.stringify({ livroId: bookChapters.id, capituloId, direcao }),
+      });
+      loadBookChapters(bookChapters.id);
+      toast.success('Ordem dos capítulos actualizada.');
+    } catch (err) { toast.error((err as Error).message); }
+    finally { setAMoverCapitulo(null); }
   }
 
   async function saveEditChapter() {
@@ -271,6 +418,10 @@ export default function AuthorDashboard() {
           is_free: editingChapter.is_free,
         }),
       });
+      // Sucesso no servidor — o rascunho local deste capítulo já não é preciso
+      if (user) limparRascunho(chavesRascunho.capituloEdicao(user.id, editingChapter.id));
+      setRascunhoEdicao(null);
+      setTsRascunhoEdicao(null);
       setEditingChapter(null);
       if (bookChapters) loadBookChapters(bookChapters.id);
       loadDashboard();
@@ -601,6 +752,16 @@ export default function AuthorDashboard() {
                     </span>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                       <span className="text-xs text-muted-foreground mr-1">{ch.is_free ? 'Grátis' : `${Math.round(ch.preco_capitulo)} MC`}</span>
+                      {bookChapters.chapters.length > 1 && (
+                        <>
+                          <button onClick={() => moverCapitulo(ch.id, 'cima')} disabled={idxCh === 0 || aMoverCapitulo === ch.id} className="p-1 rounded hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para cima">
+                            {aMoverCapitulo === ch.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" /> : <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </button>
+                          <button onClick={() => moverCapitulo(ch.id, 'baixo')} disabled={idxCh === bookChapters.chapters.length - 1 || aMoverCapitulo === ch.id} className="p-1 rounded hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="Mover para baixo">
+                            {aMoverCapitulo === ch.id ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                          </button>
+                        </>
+                      )}
                       {ch.arquivado ? (
                         <button onClick={() => toggleArquivarCapitulo(ch)} className="p-1 rounded hover:bg-emerald-500/10 transition-colors" title="Restaurar capítulo — volta a ficar visível para os leitores"><ArchiveRestore className="h-3.5 w-3.5 text-emerald-600" /></button>
                       ) : (
@@ -615,16 +776,31 @@ export default function AuthorDashboard() {
               </div>
               <div className="border-t pt-4 space-y-3">
                 <p className="text-sm font-medium">Adicionar Capítulo</p>
+                {rascunhoNovo && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800/60">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Rascunho não salvo encontrado</p>
+                      <p className="text-xs text-amber-800/80 dark:text-amber-300/80">Guardado neste dispositivo {formatarMomentoRascunho(rascunhoNovo.guardadoEm)} — nunca chegou a ser salvo na plataforma.</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button size="sm" variant="outline" onClick={descartarRascunhoNovo}>Descartar</Button>
+                      <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={restaurarRascunhoNovo}>Restaurar</Button>
+                    </div>
+                  </div>
+                )}
                 <div><Label className="text-xs">Título</Label><Input value={newChapter.titulo} onChange={(e) => setNewChapter({ ...newChapter, titulo: e.target.value })} placeholder="Título do capítulo" /></div>
                 <div>
                   <Label className="text-xs">Conteúdo</Label>
                   <RichTextEditor
                     key={`novo-${editorResetKey}`}
-                    content=""
+                    content={newChapter.conteudo}
                     onChange={(html) => setNewChapter({ ...newChapter, conteudo: html })}
                     placeholder="Escreva o conteúdo do capítulo... use a barra para formatar (negrito, itálico, títulos, fontes...)"
                     minHeight="12rem"
                   />
+                  {tsRascunhoNovo && (
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-1"><Clock className="h-3 w-3" /> Rascunho guardado no dispositivo {formatarMomentoRascunho(tsRascunhoNovo)}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex-1"><Label className="text-xs">Preço (MC)</Label><Input type="number" step="1" min="0" value={newChapter.preco_capitulo} onChange={(e) => setNewChapter({ ...newChapter, preco_capitulo: e.target.value })} disabled={newChapter.is_free} /></div>
@@ -843,15 +1019,30 @@ export default function AuthorDashboard() {
           <DialogHeader><DialogTitle>Editar Capítulo</DialogTitle><DialogDescription>Altere o título, conteúdo e preço do capítulo.</DialogDescription></DialogHeader>
           {editingChapter && (
             <div className="space-y-4">
+              {rascunhoEdicao && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800/60">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Rascunho mais recente neste dispositivo</p>
+                    <p className="text-xs text-amber-800/80 dark:text-amber-300/80">Guardado {formatarMomentoRascunho(rascunhoEdicao.guardadoEm)} e nunca salvo na plataforma — restaure para não perder texto.</p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button size="sm" variant="outline" onClick={descartarRascunhoEdicao}>Descartar</Button>
+                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={restaurarRascunhoEdicao}>Restaurar</Button>
+                  </div>
+                </div>
+              )}
               <div><Label className="text-xs">Título</Label><Input value={editingChapter.titulo} onChange={(e) => setEditingChapter({ ...editingChapter, titulo: e.target.value })} /></div>
               <div>
                 <Label className="text-xs">Conteúdo</Label>
                 <RichTextEditor
-                  key={editingChapter.id}
+                  key={`${editingChapter.id}-${nonceEdicao}`}
                   content={editingChapter.conteudo}
                   onChange={(html) => setEditingChapter({ ...editingChapter, conteudo: html })}
                   minHeight="16rem"
                 />
+                {tsRascunhoEdicao && (
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-1"><Clock className="h-3 w-3" /> Guardado no dispositivo {formatarMomentoRascunho(tsRascunhoEdicao)}</p>
+                )}
               </div>
               <div className="flex items-center gap-4">
                 <div className="flex-1"><Label className="text-xs">Preço (MC)</Label><Input type="number" step="1" min="0" value={editingChapter.preco_capitulo} onChange={(e) => setEditingChapter({ ...editingChapter, preco_capitulo: e.target.value })} disabled={editingChapter.is_free} /></div>

@@ -1,19 +1,34 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { ArrowLeft, Plus, ImageIcon, X, Upload, ChevronDown, ChevronUp, BookOpen, RefreshCw, Clock } from 'lucide-react';
 import { CATEGORIAS_SUGESTOES, FAIXAS_ETARIAS, type SectionKey, SECTION_LABELS } from '@/lib/constants';
 import RichTextEditor, { htmlVazio } from '@/components/literaria/RichTextEditor';
+import { chavesRascunho, guardarRascunho, lerRascunho, limparRascunho, formatarMomentoRascunho, type Rascunho } from '@/lib/rascunhos';
 
+
+interface DadosRascunhoObra {
+  titulo: string;
+  sinopse: string;
+  categorias: string[];
+  capaUrl: string;
+  precoTotal: string;
+  faixaEtaria: string;
+  isVolume: boolean;
+  volumeNumero: string;
+  volumeTotal: string;
+  activeSections: SectionKey[];
+  sectionContent: Record<SectionKey, string>;
+}
 
 export default function NewBookPage() {
-  const { navigate, token } = useAppStore();
+  const { navigate, token, user } = useAppStore();
   const [titulo, setTitulo] = useState('');
   const [sinopse, setSinopse] = useState('');
   const [categorias, setCategorias] = useState<string[]>([]);
@@ -29,6 +44,13 @@ export default function NewBookPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ficheiroPendenteRef = useRef<File | null>(null);
+
+  // FASE 2 — Blindar autores: autosave do formulário + recuperação (itens 10-12)
+  const chaveNovaObra = chavesRascunho.novaObra(user?.id ?? 'anon');
+  const [rascunhoObra, setRascunhoObra] = useState<Rascunho<DadosRascunhoObra> | null>(null);
+  const [tsRascunhoObra, setTsRascunhoObra] = useState<number | null>(null);
+  const [nonceRestaurar, setNonceRestaurar] = useState(0);
 
   // Optional sections
   const [activeSections, setActiveSections] = useState<SectionKey[]>([]);
@@ -44,6 +66,59 @@ export default function NewBookPage() {
       s.toLowerCase().includes(categoriaInput.toLowerCase()) &&
       !categorias.some((c) => c.toLowerCase() === s.toLowerCase())
   );
+
+  // Recuperação (item 11): rascunho desta obra guardado numa visita anterior?
+  useEffect(() => {
+    const r = lerRascunho<DadosRascunhoObra>(chaveNovaObra);
+    const temConteudo = !!r && (!!r.dados.titulo?.trim() || (!!r.dados.sinopse && !htmlVazio(r.dados.sinopse)) || (r.dados.categorias?.length ?? 0) > 0);
+    if (temConteudo) setRascunhoObra(r);
+  }, [chaveNovaObra]);
+
+  // Autosave (item 10): cada alteração do formulário fica no dispositivo (debounce 800ms)
+  useEffect(() => {
+    const vazio = !titulo.trim() && htmlVazio(sinopse) && categorias.length === 0 && !capaUrl;
+    if (vazio) return;
+    const t = setTimeout(() => {
+      guardarRascunho(chaveNovaObra, { titulo, sinopse, categorias, capaUrl, precoTotal, faixaEtaria, isVolume, volumeNumero, volumeTotal, activeSections, sectionContent });
+      setTsRascunhoObra(Date.now());
+    }, 800);
+    return () => clearTimeout(t);
+  }, [titulo, sinopse, categorias, capaUrl, precoTotal, faixaEtaria, isVolume, volumeNumero, volumeTotal, activeSections, sectionContent, chaveNovaObra]);
+
+  // Barreira do navegador (item 12): fechar/recarregar com conteúdo pede confirmação
+  useEffect(() => {
+    const temConteudo = !!titulo.trim() || !htmlVazio(sinopse) || categorias.length > 0;
+    if (!temConteudo) return;
+    const antesDeSair = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', antesDeSair);
+    return () => window.removeEventListener('beforeunload', antesDeSair);
+  }, [titulo, sinopse, categorias]);
+
+  function restaurarRascunhoObra() {
+    if (!rascunhoObra) return;
+    const d = rascunhoObra.dados;
+    setTitulo(d.titulo ?? '');
+    setSinopse(d.sinopse ?? '');
+    setCategorias(Array.isArray(d.categorias) ? d.categorias : []);
+    setCapaUrl(d.capaUrl ?? '');
+    setPrecoTotal(d.precoTotal ?? '');
+    setFaixaEtaria(d.faixaEtaria ?? 'Livre');
+    setIsVolume(!!d.isVolume);
+    setVolumeNumero(d.volumeNumero ?? '1');
+    setVolumeTotal(d.volumeTotal ?? '');
+    setActiveSections(Array.isArray(d.activeSections) ? d.activeSections : []);
+    setSectionContent((prev) => ({ ...prev, ...(d.sectionContent ?? {}) }));
+    setNonceRestaurar((k) => k + 1); // remonta os editores com o texto restaurado
+    setRascunhoObra(null);
+  }
+
+  function descartarRascunhoObra() {
+    limparRascunho(chaveNovaObra);
+    setRascunhoObra(null);
+  }
 
   function addCategoria(cat: string) {
     const trimmed = cat.trim();
@@ -74,21 +149,10 @@ export default function NewBookPage() {
     );
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file || !token) return;
-
-    // Client-side validation
-    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowed.includes(file.type)) {
-      setError(`Tipo de ficheiro não suportado (${file.type}). Use JPG, PNG, WEBP ou GIF.`);
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      setError(`Ficheiro demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo 5MB.`);
-      return;
-    }
-
+  // FASE 2 (item 13): falha de upload NUNCA recarrega a página — o autor não perde
+  // o formulário. O ficheiro fica retido para "Tentar novamente".
+  async function enviarCapa(file: File) {
+    if (!token) return;
     setUploading(true);
     setError('');
     try {
@@ -104,22 +168,37 @@ export default function NewBookPage() {
         let msg = 'Erro no upload';
         try { const d = await res.json(); msg = d.error || msg; } catch {}
         if (res.status === 429) msg = 'Muitas requisições. Aguarde alguns segundos e tente novamente.';
-        else if (res.status === 502) msg = 'Servidor indisponível. A página vai recarregar...';
+        else if (res.status >= 500) msg = 'Servidor temporariamente indisponível. Nada se perdeu — tente novamente em instantes.';
         throw new Error(msg);
       }
       const data = await res.json();
       setCapaUrl(data.url);
+      ficheiroPendenteRef.current = null;
     } catch (err) {
-      const msg = (err as Error).message;
-      setError(msg);
-      // Auto-reload on 502
-      if (msg.includes('indisponível')) {
-        setTimeout(() => window.location.reload(), 2000);
-      }
+      setError((err as Error).message);
     } finally {
       setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+
+    // Client-side validation
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      setError(`Tipo de ficheiro não suportado (${file.type}). Use JPG, PNG, WEBP ou GIF.`);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(`Ficheiro demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo 5MB.`);
+      return;
+    }
+
+    ficheiroPendenteRef.current = file; // retido para permitir "Tentar novamente"
+    await enviarCapa(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -151,6 +230,9 @@ export default function NewBookPage() {
           epilogo: sectionContent.epilogo || undefined,
         }),
       });
+      // Obra criada — o rascunho local do formulário cumpriu a sua função
+      limparRascunho(chaveNovaObra);
+      setTsRascunhoObra(null);
       navigate('author-dashboard');
     } catch (err) {
       setError((err as Error).message);
@@ -176,6 +258,19 @@ export default function NewBookPage() {
               <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>
             )}
 
+            {rascunhoObra && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-amber-300/70 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800/60">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-200">Rascunho desta obra encontrado</p>
+                  <p className="text-xs text-amber-800/80 dark:text-amber-300/80">Guardado neste dispositivo {formatarMomentoRascunho(rascunhoObra.guardadoEm)} — restaure para não perder o que já escreveu.</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button type="button" size="sm" variant="outline" onClick={descartarRascunhoObra}>Descartar</Button>
+                  <Button type="button" size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={restaurarRascunhoObra}>Restaurar</Button>
+                </div>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="titulo">Título</Label>
               <Input
@@ -191,6 +286,7 @@ export default function NewBookPage() {
               <Label htmlFor="sinopse">Sinopse</Label>
               <div className="mt-1.5">
                 <RichTextEditor
+                  key={`sinopse-${nonceRestaurar}`}
                   content={sinopse}
                   onChange={setSinopse}
                   placeholder="Descreva brevemente a obra..."
@@ -280,6 +376,17 @@ export default function NewBookPage() {
                   <Upload className="h-4 w-4 mr-2" />
                   {uploading ? 'Enviando...' : 'Enviar imagem do dispositivo'}
                 </Button>
+                {ficheiroPendenteRef.current && error && !uploading && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-950/40"
+                    onClick={() => enviarCapa(ficheiroPendenteRef.current as File)}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Tentar enviar a capa novamente
+                  </Button>
+                )}
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-px bg-border" />
                   <span className="text-xs text-muted-foreground">ou cole uma URL</span>
@@ -344,6 +451,7 @@ export default function NewBookPage() {
                       {isActive && (
                         <div className="px-3 pb-3">
                           <RichTextEditor
+                            key={`${key}-${nonceRestaurar}`}
                             content={sectionContent[key]}
                             onChange={(html) =>
                               setSectionContent((prev) => ({ ...prev, [key]: html }))
@@ -446,6 +554,9 @@ export default function NewBookPage() {
             <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={loading}>
               <Plus className="h-4 w-4 mr-1" /> {loading ? 'Criando...' : 'Criar Obra'}
             </Button>
+            {tsRascunhoObra && (
+              <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1"><Clock className="h-3 w-3" /> Rascunho guardado no dispositivo {formatarMomentoRascunho(tsRascunhoObra)} — nunca perde o que escreveu.</p>
+            )}
           </form>
         </CardContent>
       </Card>
