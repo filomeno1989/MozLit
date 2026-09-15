@@ -22,6 +22,36 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     });
 
+    // ===== Checklist de publicação (item 21) =====
+    // Por obra: capítulos visíveis que não têm texto útil (vazios ou só tags).
+    // Postgres faz o corte das tags em SQL (sem carregar conteúdo pesado);
+    // SQLite de desenvolvimento usa apenas o corte simples por string vazia.
+    const vaziosPorLivro = new Map<string, number>();
+    const idsLivros = livros.map((l) => l.id);
+    if (idsLivros.length > 0) {
+      const ehPostgres = (process.env.DATABASE_URL || '').startsWith('postgres');
+      if (ehPostgres) {
+        const linhasVazios = await db.$queryRaw<{ livro_id: string; vazios: bigint | number }[]>`
+          SELECT "livro_id", COUNT(*)::int AS vazios
+          FROM "chapters"
+          WHERE "arquivado" = false
+            AND BTRIM(REGEXP_REPLACE(COALESCE("conteudo", ''), '<[^>]*>', '', 'g')) = ''
+            AND "livro_id"::text IN (${idsLivros.join(',')})
+          GROUP BY "livro_id"`;
+        for (const linha of linhasVazios) {
+          vaziosPorLivro.set(linha.livro_id, Number(linha.vazios));
+        }
+      } else {
+        const vazios = await db.chapter.findMany({
+          where: { livroId: { in: idsLivros }, arquivado: false, conteudo: '' },
+          select: { livroId: true },
+        });
+        for (const v of vazios) {
+          vaziosPorLivro.set(v.livroId, (vaziosPorLivro.get(v.livroId) ?? 0) + 1);
+        }
+      }
+    }
+
     const totalLivros = livros.length;
     const totalCapitulos = livros.reduce((sum, l) => sum + l.chapters.length, 0);
 
@@ -111,6 +141,7 @@ export async function GET(request: NextRequest) {
       epilogo: l.epilogo,
       totalCapitulos: l.chapters.length,
       capitulosPagos: l.chapters.filter(c => !c.is_free).length,
+      capitulosVazios: vaziosPorLivro.get(l.id) ?? 0,
       receitaEstimada: l.chapters.filter(c => !c.is_free).reduce((s, c) => s + c.preco_capitulo, 0),
       createdAt: l.createdAt,
     }));

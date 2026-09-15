@@ -5,6 +5,7 @@ export type ViewName =
   | 'book-detail'
   | 'reader'
   | 'author-dashboard'
+  | 'autor'
   | 'login'
   | 'register'
   | 'wallet'
@@ -157,9 +158,15 @@ if (typeof window !== 'undefined') {
       localStorage.removeItem('mozlit_user');
     }
   }
-  // Initialize dark mode from system preference
-  if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  // Initialize dark mode: valor guardado primeiro, senão preferência do sistema.
+  // (Antes aplicava sempre a preferência do sistema, que depois era corrigida —
+  // era a segunda causa do flash de tema no primeiro paint.)
+  const savedDark = localStorage.getItem('mozlit_dark');
+  const prefereEscuro = savedDark !== null ? savedDark === 'true' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (prefereEscuro) {
     document.documentElement.classList.add('dark');
     useAppStore.setState({ isDark: true });
+  } else {
+    document.documentElement.classList.remove('dark');
   }
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 import { validateTitulo, validateCategorias, validateFaixaEtaria, validateVolumeInfo, validarCampoLivroHtml } from '@/lib/validate';
-import { LIMITES } from '@/lib/constants';
+import { LIMITES, textoSimplesDeHtml } from '@/lib/constants';
 
 export async function GET(
   request: NextRequest,
@@ -138,15 +138,48 @@ export async function PATCH(
     if (faixa_etaria !== undefined) data.faixa_etaria = validateFaixaEtaria(faixa_etaria);
     if (volume_info !== undefined) data.volume_info = validateVolumeInfo(volume_info);
 
-    // If publishing, verify book has chapters visíveis (arquivados não contam —
-    // um livro só com capítulos arquivados ficaria vazio para os leitores)
+    // If publishing, checklist mínimo no servidor (item 21): o autor pode
+    // contornar a UI, mas nunca o servidor. Exige sinopse útil e pelo menos
+    // 1 capítulo visível com conteúdo real (só tags HTML não conta).
     if (status === 'PUBLICADO') {
-      const chapterCount = await db.chapter.count({ where: { livroId: id, arquivado: false } });
-      if (chapterCount === 0) {
+      const livroParaPublicar = await db.book.findUnique({
+        where: { id },
+        select: { sinopse: true, capa_url: true },
+      });
+
+      const sinopseTexto = textoSimplesDeHtml(livroParaPublicar?.sinopse ?? '').trim();
+      if (sinopseTexto.length < 50) {
         return NextResponse.json(
-          { error: 'Não pode publicar um livro sem capítulos.' },
+          { error: 'Antes de publicar, escreva uma sinopse com pelo menos 50 caracteres.' },
           { status: 400 }
         );
+      }
+
+      const ehPostgres = (process.env.DATABASE_URL || '').startsWith('postgres');
+      if (ehPostgres) {
+        const linhas = await db.$queryRaw<{ capitulo: bigint | number }[]>`
+          SELECT COUNT(*)::int AS capitulo
+          FROM "chapters"
+          WHERE "livro_id"::text = ${id}
+            AND "arquivado" = false
+            AND BTRIM(REGEXP_REPLACE(COALESCE("conteudo", ''), '<[^>]*>', '', 'g')) <> ''`;
+        if (Number(linhas[0]?.capitulo ?? 0) === 0) {
+          return NextResponse.json(
+            { error: 'Não pode publicar: nenhum capítulo visível tem conteúdo.' },
+            { status: 400 }
+          );
+        }
+      } else {
+        // Dev (SQLite): corte simples — capítulo visível com string não vazia
+        const chapterCount = await db.chapter.count({
+          where: { livroId: id, arquivado: false, conteudo: { not: '' } },
+        });
+        if (chapterCount === 0) {
+          return NextResponse.json(
+            { error: 'Não pode publicar um livro sem capítulos.' },
+            { status: 400 }
+          );
+        }
       }
     }
 

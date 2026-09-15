@@ -6,8 +6,9 @@ import { validateSenha } from '@/lib/validate';
 const PAPEIS_VALIDOS = ['LEITOR', 'ESCRITOR', 'ADMIN'];
 
 /**
- * GET /api/admin/utilizadores?q=termo — lista utilizadores (busca por nome, email ou telefone)
- * para o painel admin (crédito directo, verificação de roles).
+ * GET /api/admin/utilizadores?q=termo&pagina=N — lista utilizadores paginada
+ * (busca por nome, email ou telefone) para o painel admin (crédito directo,
+ * verificação de roles). 30 por página — o painel oferece “Carregar mais”.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +21,10 @@ export async function GET(request: NextRequest) {
     }
 
     const q = request.nextUrl.searchParams.get('q')?.trim() || '';
+    const paginaParam = parseInt(request.nextUrl.searchParams.get('pagina') || '1', 10);
+    const pagina = Number.isFinite(paginaParam) && paginaParam > 0 ? paginaParam : 1;
+    const POR_PAGINA = 30;
+
     // `mode: 'insensitive'` só existe no PostgreSQL (produção). No SQLite de
     // desenvolvimento a busca é case-sensitive — evita erro 500 em dev.
     const pg = (process.env.DATABASE_URL || '').startsWith('postgres');
@@ -34,24 +39,33 @@ export async function GET(request: NextRequest) {
         }
       : {};
 
-    const utilizadores = await db.user.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        telefone: true,
-        role: true,
-        moedas: true,
-        saldo_carteira: true,
-        createdAt: true,
-        _count: { select: { books: true } },
-      },
-    });
+    const [utilizadores, total] = await Promise.all([
+      db.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (pagina - 1) * POR_PAGINA,
+        take: POR_PAGINA,
+        select: {
+          id: true,
+          nome: true,
+          email: true,
+          telefone: true,
+          role: true,
+          moedas: true,
+          saldo_carteira: true,
+          createdAt: true,
+          _count: { select: { books: true } },
+        },
+      }),
+      db.user.count({ where }),
+    ]);
 
-    return NextResponse.json({ utilizadores });
+    return NextResponse.json({
+      utilizadores,
+      pagina,
+      total,
+      temMais: pagina * POR_PAGINA < total,
+    });
   } catch (error) {
     console.error('Erro ao listar utilizadores (admin):', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

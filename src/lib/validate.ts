@@ -295,12 +295,28 @@ export function validateCreditoAdmin(moedas: unknown): number {
 
 /**
  * Sanitiza HTML do editor rico (Tiptap) antes de gravar na BD.
- * Allowlist estrita: formatação literária apenas — sem scripts, iframes, imagens externas ou estilos arbitrários.
+ * Allowlist estrita: formatação literária apenas — sem scripts, iframes ou estilos arbitrários.
  * Permitidos: font-family (span/p) e text-align (p, h2, h3, blockquote).
+ * Imagens (item 17): apenas <img> servidas do próprio armazém Supabase da
+ * plataforma — bloqueia hotlinking externo, trackers e javascript: URLs.
  */
 export function sanitizeConteudoHtml(html: string): string {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const sanitizeHtml = require('sanitize-html') as typeof import('sanitize-html');
+
+  // Anfitriões de imagem permitidos: o bucket Supabase da plataforma e a
+  // própria aplicação (placeholders/ativos locais). Sem env configurada,
+  // nenhuma imagem passa (fail-closed — nunca HTML arbitrário).
+  const anfitrioesPermitidos: string[] = [];
+  try {
+    const urlSupabase = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (urlSupabase) anfitrioesPermitidos.push(new URL(urlSupabase).hostname.toLowerCase());
+    const urlApp = process.env.NEXT_PUBLIC_APP_URL || 'https://mozlit.vercel.app';
+    if (urlApp) anfitrioesPermitidos.push(new URL(urlApp).hostname.toLowerCase());
+  } catch {
+    // env malformada → mantém apenas o que foi adicionado com sucesso
+  }
+
   return sanitizeHtml(html, {
     allowedTags: [
       'p', 'br', 'h2', 'h3',
@@ -308,6 +324,7 @@ export function sanitizeConteudoHtml(html: string): string {
       'ul', 'ol', 'li',
       'blockquote',
       'span',
+      'img',
     ],
     allowedAttributes: {
       span: ['style'],
@@ -315,6 +332,7 @@ export function sanitizeConteudoHtml(html: string): string {
       h2: ['style'],
       h3: ['style'],
       blockquote: ['style'],
+      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
     },
     allowedStyles: {
       '*': {
@@ -324,9 +342,21 @@ export function sanitizeConteudoHtml(html: string): string {
         'text-align': [/^(left|center|right|justify)$/],
       },
     },
-    allowedSchemes: [],
+    // Apenas https nas imagens — os uploads da plataforma vivem no Supabase
+    allowedSchemes: ['https'],
     allowProtocolRelative: false,
     disallowedTagsMode: 'discard',
+    exclusiveFilter: (frame) => {
+      if (frame.tag !== 'img') return false;
+      const src = frame.attribs?.src || '';
+      if (!src) return true; // img sem src é inútil — remove
+      try {
+        const host = new URL(src).hostname.toLowerCase();
+        return !anfitrioesPermitidos.includes(host); // remove imagens de origem externa
+      } catch {
+        return true; // URL não parseável → remove
+      }
+    },
   });
 }
 

@@ -50,20 +50,22 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const tipo = formData.get('tipo') as string | null; // 'capa' | 'avatar' | 'comprovativo'
+    const tipo = formData.get('tipo') as string | null; // 'capa' | 'avatar' | 'comprovativo' | 'capitulo'
 
     if (!file) {
       return NextResponse.json({ error: 'Nenhum ficheiro enviado.' }, { status: 400 });
     }
 
-    if (tipo !== 'capa' && tipo !== 'avatar' && tipo !== 'comprovativo') {
-      return NextResponse.json({ error: 'Tipo inválido. Use "capa", "avatar" ou "comprovativo".' }, { status: 400 });
+    if (tipo !== 'capa' && tipo !== 'avatar' && tipo !== 'comprovativo' && tipo !== 'capitulo') {
+      return NextResponse.json({ error: 'Tipo inválido. Use "capa", "avatar", "comprovativo" ou "capitulo".' }, { status: 400 });
     }
 
     const maxSize = tipo === 'capa'
       ? LIMITES.CAPA_MAX_SIZE_BYTES
       : tipo === 'comprovativo'
       ? LIMITES.COMPROVATIVO_MAX_SIZE_BYTES
+      : tipo === 'capitulo'
+      ? LIMITES.IMAGEM_CAPITULO_MAX_SIZE_BYTES
       : LIMITES.AVATAR_MAX_SIZE_BYTES;
     validateImageFile(file, maxSize, tipo);
 
@@ -75,14 +77,14 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = 'jpg'; // conteúdo re-encodado para JPEG (comprimido)
-    const folder = tipo === 'capa' ? 'covers' : tipo === 'comprovativo' ? 'comprovativos' : 'avatars';
+    const folder = tipo === 'capa' ? 'covers' : tipo === 'comprovativo' ? 'comprovativos' : tipo === 'capitulo' ? 'capitulos' : 'avatars';
     const fileName = `${payload.userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const bytes = await file.arrayBuffer();
     const raw = Buffer.from(bytes);
 
-    // Bucket dos comprovativos é novo — cria-o à primeira (covers/avatars já existem)
-    if (folder === 'comprovativos') {
+    // Buckets novos — cria-os à primeira (covers/avatars já existem)
+    if (folder === 'comprovativos' || folder === 'capitulos') {
       await garantirBucket(supabaseUrl, serviceKey, folder);
     }
 
@@ -92,7 +94,8 @@ export async function POST(request: NextRequest) {
     let buffer: Buffer<ArrayBufferLike> = raw;
     try {
       // Comprovativo: 1400px preserva o texto do SMS/valor da transacção legível
-      const maxWidth = tipo === 'capa' ? 900 : tipo === 'comprovativo' ? 1400 : 400;
+      // Capítulo: 1200px chega para ilustrações em ecrãs grandes sem pesar na leitura
+      const maxWidth = tipo === 'capa' ? 900 : tipo === 'comprovativo' ? 1400 : tipo === 'capitulo' ? 1200 : 400;
       buffer = await sharp(raw)
         .rotate() // respeita a orientação EXIF
         .resize({ width: maxWidth, withoutEnlargement: true })

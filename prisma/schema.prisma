@@ -29,6 +29,8 @@ model User {
   comments     Comment[]
   recargas     RecargaSolicitacao[]
   recuperacoes PedidoRecuperacao[]
+  seguidores   Seguidor[] @relation("autorSeguidores")
+  seguindo     Seguidor[] @relation("leitorSegue")
 
   @@map("profiles")
 }
@@ -178,4 +180,18 @@ model PedidoRecuperacao {
   @@index([estado, createdAt])
   @@index([userId])
   @@map("pedidos_recuperacao")
+}
+
+model Seguidor {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  autorId    String   @map("autor_id") @db.Uuid
+  seguidorId String   @map("seguidor_id") @db.Uuid
+  criadoEm   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  autor    User @relation("autorSeguidores", fields: [autorId], references: [id], onDelete: Cascade)
+  seguidor User @relation("leitorSegue", fields: [seguidorId], references: [id], onDelete: Cascade)
+
+  @@unique([autorId, seguidorId])
+  @@index([autorId])
+  @@map("seguidores")
 }

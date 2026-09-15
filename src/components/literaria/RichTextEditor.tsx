@@ -1,16 +1,19 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { EditorContent, useEditor, useEditorState, type Editor } from '@tiptap/react';
-import { Extension } from '@tiptap/core';
+import { Extension, Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { TextStyle, FontFamily } from '@tiptap/extension-text-style';
 import { isHtmlConteudo } from '@/lib/constants';
+import { useAppStore } from '@/store/app';
+import { toast } from 'sonner';
 import {
   Bold, Italic, Underline, Strikethrough,
   Heading2, Heading3, List, ListOrdered, Quote,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Undo2, Redo2, RemoveFormatting, Type,
+  Undo2, Redo2, RemoveFormatting, Type, ImagePlus, Loader2,
 } from 'lucide-react';
 
 /**
@@ -26,8 +29,53 @@ declare module '@tiptap/core' {
       /** Volta ao alinhamento padrão (esquerda) */
       unsetTextAlign: () => ReturnType;
     };
+    imagemCapitulo: {
+      /** Insere uma imagem no ponto de escrita actual (item 17) */
+      setImagemCapitulo: (opcoes: { src: string; alt?: string; title?: string }) => ReturnType;
+    };
   }
 }
+
+/**
+ * Imagem nos capítulos (item 17). Nó local — sem dependência extra, para não
+ * mexer no lockfile do deploy. Só aceita URLs servidas pela própria plataforma
+ * (upload via /api/upload tipo "capitulo"); o sanitizador do servidor filtra
+ * qualquer outra origem antes de gravar.
+ */
+const ImagemCapitulo = Node.create({
+  name: 'imagemCapitulo',
+  group: 'block',
+  draggable: true,
+
+  addAttributes() {
+    return {
+      src: { default: null as string | null },
+      alt: { default: null as string | null },
+      title: { default: null as string | null },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'img[src]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    // classe visual aplicada via CSS (.mozlit-editor img) — aqui só atributos
+    return ['img', mergeAttributes(HTMLAttributes, { loading: 'lazy' })];
+  },
+
+  addCommands() {
+    return {
+      setImagemCapitulo:
+        (opcoes) =>
+        ({ commands }) =>
+          commands.insertContent({
+            type: this.name,
+            attrs: opcoes,
+          }),
+    };
+  },
+});
 
 const TextAlign = Extension.create({
   name: 'textAlign',
@@ -77,8 +125,10 @@ export const FONTES_LITERARIAS = [
 
 export const FONTE_PADRAO = FONTES_LITERARIAS[0].css;
 
-/** Verifica se o HTML do editor está vazio (sem texto visível) */
+/** Verifica se o HTML do editor está vazio (sem texto visível nem imagem) */
 export function htmlVazio(html: string): boolean {
+  // Uma imagem inserida é conteúdo — um capítulo só com foto não está vazio
+  if (/<img\b/i.test(html)) return false;
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length === 0;
 }
 
@@ -130,7 +180,7 @@ function ToolbarButton({
   );
 }
 
-function Toolbar({ editor }: { editor: Editor | null }) {
+function Toolbar({ editor, onInserirImagem, aEnviarImagem }: { editor: Editor | null; onInserirImagem: () => void; aEnviarImagem: boolean }) {
   const state = useEditorState({
     editor,
     selector: ({ editor: e }) => ({
@@ -194,6 +244,13 @@ function Toolbar({ editor }: { editor: Editor | null }) {
       </ToolbarButton>
       <ToolbarButton title="Citação" active={state.blockquote} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
         <Quote className="h-4 w-4" />
+      </ToolbarButton>
+
+      <span className="w-px h-5 bg-border mx-1" aria-hidden="true" />
+
+      {/* Imagem do capítulo (item 17) — upload imediato para o armazém da plataforma */}
+      <ToolbarButton title="Inserir imagem (JPG, PNG ou WebP até 4MB)" onClick={onInserirImagem} disabled={aEnviarImagem}>
+        {aEnviarImagem ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
       </ToolbarButton>
 
       <span className="w-px h-5 bg-border mx-1" aria-hidden="true" />
@@ -267,6 +324,7 @@ export default function RichTextEditor({
       TextStyle,
       FontFamily.configure({ types: ['textStyle'] }),
       TextAlign,
+      ImagemCapitulo,
       Placeholder.configure({ placeholder }),
     ],
     content,
@@ -280,12 +338,69 @@ export default function RichTextEditor({
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
   });
 
+  // --- Imagens do capítulo (item 17): upload imediato + inserção no ponto de escrita ---
+  const inputImagemRef = useRef<HTMLInputElement>(null);
+  const [aEnviarImagem, setAEnviarImagem] = useState(false);
+
+  function escolherImagem() {
+    inputImagemRef.current?.click();
+  }
+
+  async function inserirImagem(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !editor) return;
+    const aceites = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!aceites.includes(file.type)) {
+      toast.error('Formato não suportado. Use JPG, PNG ou WebP.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error(`Imagem demasiado grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo 4MB.`);
+      e.target.value = '';
+      return;
+    }
+    setAEnviarImagem(true);
+    try {
+      const { token } = useAppStore.getState();
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('tipo', 'capitulo');
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: fd,
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => null);
+        throw new Error(d?.error || 'Erro ao enviar imagem.');
+      }
+      const { url } = (await res.json()) as { url: string };
+      editor.chain().focus().setImagemCapitulo({ src: url, alt: file.name.replace(/\.[^.]+$/, '').slice(0, 120) }).run();
+      toast.success('Imagem inserida.');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAEnviarImagem(false);
+      e.target.value = '';
+    }
+  }
+
   return (
     <div className="rounded-lg overflow-hidden border border-border/60 focus-within:ring-2 focus-within:ring-amber-500/40 transition-shadow">
-      <Toolbar editor={editor} />
+      <Toolbar editor={editor} onInserirImagem={escolherImagem} aEnviarImagem={aEnviarImagem} />
       <div style={{ minHeight }} className="bg-background overflow-y-auto">
         <EditorContent editor={editor} className="mozlit-editor text-[0.95rem] leading-relaxed" />
       </div>
+      <input
+        ref={inputImagemRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={inserirImagem}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
     </div>
   );
 }

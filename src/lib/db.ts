@@ -141,6 +141,42 @@ const DDL_AUTO_REPARACAO: string[] = [
   `ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "book_id" UUID`,
   `CREATE INDEX IF NOT EXISTS "transactions_chapterId_idx" ON "transactions" ("chapter_id")`,
   `CREATE INDEX IF NOT EXISTS "transactions_bookId_idx" ON "transactions" ("book_id")`,
+
+  // ===== Fase 4 2026-09-15: seguir autores (item 18) =====
+  // Leitores seguem escritores para descobrir novas obras. O par (autor, leitor)
+  // é único — seguir duas vezes é idempotente.
+  `CREATE TABLE IF NOT EXISTS "seguidores" (
+      "id"          UUID NOT NULL DEFAULT gen_random_uuid(),
+      "autor_id"    UUID NOT NULL,
+      "seguidor_id" UUID NOT NULL,
+      "created_at"  TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+      CONSTRAINT "seguidores_pkey" PRIMARY KEY ("id"),
+      CONSTRAINT "seguidores_autor_id_seguidor_id_key" UNIQUE ("autor_id", "seguidor_id")
+  )`,
+  `DO $$
+  BEGIN
+      IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'seguidores_autor_id_fkey'
+      ) THEN
+          ALTER TABLE "seguidores"
+              ADD CONSTRAINT "seguidores_autor_id_fkey"
+              FOREIGN KEY ("autor_id") REFERENCES "profiles"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+  END $$`,
+  `DO $$
+  BEGIN
+      IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'seguidores_seguidor_id_fkey'
+      ) THEN
+          ALTER TABLE "seguidores"
+              ADD CONSTRAINT "seguidores_seguidor_id_fkey"
+              FOREIGN KEY ("seguidor_id") REFERENCES "profiles"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+  END $$`,
+  `CREATE INDEX IF NOT EXISTS "seguidores_autorId_idx" ON "seguidores" ("autor_id")`,
+  `CREATE INDEX IF NOT EXISTS "seguidores_seguidorId_idx" ON "seguidores" ("seguidor_id")`,
 ]
 
 /**
@@ -206,7 +242,7 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
  */
 async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
   try {
-    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number; comprovativo: number }[]>`
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number; comprovativo: number; seguidores: number }[]>`
       SELECT
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
@@ -222,6 +258,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
           WHERE table_name = 'recargas_solicitacoes' AND column_name = 'comprovativo_url') AS comprovativo,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'transactions' AND column_name IN ('chapter_id', 'book_id')) AS trans,
+        (SELECT COUNT(*)::int FROM information_schema.tables
+          WHERE table_name = 'seguidores') AS seguidores,
         (SELECT COUNT(*)::int FROM pg_indexes
           WHERE indexname IN ('chapters_livroId_ordem_idx', 'transactions_userId_tipo_idx',
             'library_items_userId_bookId_idx', 'library_items_userId_tipo_idx',
@@ -232,7 +270,9 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
             'library_items_bookId_idx', 'library_items_chapterId_idx',
             'transactions_chapterId_idx', 'transactions_bookId_idx',
             'chapters_livroId_arquivado_idx',
-            'pedidos_recuperacao_estado_created_at_idx', 'pedidos_recuperacao_user_id_idx')) AS idx,
+            'pedidos_recuperacao_estado_created_at_idx', 'pedidos_recuperacao_user_id_idx',
+            'seguidores_autorId_idx', 'seguidores_seguidorId_idx',
+            'seguidores_autor_id_seguidor_id_key')) AS idx,
         (SELECT COUNT(*)::int FROM pg_constraint
           WHERE conname = 'transactions_tipo_check') AS tipo_check`
     const r = linhas[0]
@@ -244,7 +284,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
       Number(r?.recargas ?? 0) >= 12 &&
       Number(r?.comprovativo ?? 0) === 1 &&
       Number(r?.trans ?? 0) === 2 &&
-      Number(r?.idx ?? 0) === 19 &&
+      Number(r?.seguidores ?? 0) === 1 &&
+      Number(r?.idx ?? 0) === 22 &&
       Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida
     )
   } catch {

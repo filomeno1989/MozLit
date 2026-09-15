@@ -298,8 +298,13 @@ export default function BookDetailPage() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">{book.titulo}</h1>
 
-          {/* Author info */}
-          <div className="flex items-center gap-3 mb-4 group">
+          {/* Author info — clicável: leva ao perfil público do autor (item 18) */}
+          <button
+            type="button"
+            onClick={() => navigate('autor', { autorId: book.autor.id })}
+            className="flex items-center gap-3 mb-4 group text-left w-fit max-w-full"
+            aria-label={`Ver perfil de ${book.autor.nome}`}
+          >
             {book.autor.avatar_url ? (
               <img
                 src={book.autor.avatar_url}
@@ -312,8 +317,9 @@ export default function BookDetailPage() {
               </div>
             )}
             <div>
-              <p className="font-medium text-sm group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
+              <p className="font-medium text-sm group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors flex items-center gap-1">
                 por {book.autor.nome}
+                <ChevronRight className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
               </p>
               {book.autor.biografia && (
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5 max-w-md">
@@ -321,7 +327,7 @@ export default function BookDetailPage() {
                 </p>
               )}
             </div>
-          </div>
+          </button>
 
           {/* Purchase error (fallback) */}
           {purchaseError && (

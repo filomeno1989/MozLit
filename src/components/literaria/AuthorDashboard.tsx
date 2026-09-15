@@ -15,9 +15,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from '@/components/ui/skeleton';
 import RichTextEditor, { htmlVazio, textoLegadoParaHtml } from '@/components/literaria/RichTextEditor';
 import { chavesRascunho, guardarRascunho, lerRascunho, limparRascunho, formatarMomentoRascunho, type Rascunho } from '@/lib/rascunhos';
-import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2, Archive, ArchiveRestore, Clock } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2, Archive, ArchiveRestore, Clock, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { toast } from 'sonner';
-import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS, formatarMoedas } from '@/lib/constants';
+import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS, formatarMoedas, textoSimplesDeHtml } from '@/lib/constants';
 
 interface DashboardData {
   totalGanhos: number;
@@ -40,6 +40,7 @@ interface DashboardData {
     epilogo: string;
     totalCapitulos: number;
     capitulosPagos: number;
+    capitulosVazios: number;
     receitaEstimada: number;
     createdAt: string;
   }>;
@@ -168,12 +169,38 @@ export default function AuthorDashboard() {
     }
   }
 
-  async function publishBook(bookId: string) {
+  // --- Item 21: checklist de publicação — a obra só sai quando está pronta ---
+  const [checklistAberto, setChecklistAberto] = useState(false);
+  const [checklistCarregando, setChecklistCarregando] = useState(false);
+  const [checklistLivro, setChecklistLivro] = useState<{ livro: DashboardData['livros'][0]; detalhe: BookWithChapters | null } | null>(null);
+  const [aPublicarDaChecklist, setAPublicarDaChecklist] = useState(false);
+
+  function abrirChecklistPublicacao(livro: DashboardData['livros'][0]) {
+    setChecklistLivro({ livro, detalhe: null });
+    setChecklistAberto(true);
+    setChecklistCarregando(true);
+    apiFetch<BookWithChapters>(`/api/books/${livro.id}`)
+      .then((detalhe) => setChecklistLivro({ livro, detalhe }))
+      .catch(() => {
+        // segue só com os dados do painel — os críticos continuam calculáveis
+      })
+      .finally(() => setChecklistCarregando(false));
+  }
+
+  async function publicarDaChecklist() {
+    if (!checklistLivro) return;
+    setAPublicarDaChecklist(true);
     try {
-      await apiFetch(`/api/books/${bookId}`, { method: 'PATCH', body: JSON.stringify({ status: 'PUBLICADO' }) });
+      await apiFetch(`/api/books/${checklistLivro.livro.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'PUBLICADO' }) });
       loadDashboard();
-      toast.success('Obra publicada com sucesso!');
-    } catch (err) { toast.error((err as Error).message); }
+      setChecklistAberto(false);
+      setChecklistLivro(null);
+      toast.success('Obra publicada com sucesso! Já está visível para os leitores.');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAPublicarDaChecklist(false);
+    }
   }
 
   async function unpublishBook(bookId: string) {
@@ -386,7 +413,6 @@ export default function AuthorDashboard() {
   }
 
   // --- Fase 2: reordenar capítulos (item 14) — nunca mais eliminar/recriar para corrigir a ordem ---
-
   async function moverCapitulo(capituloId: string, direcao: 'cima' | 'baixo') {
     if (!bookChapters) return;
     setAMoverCapitulo(capituloId);
@@ -597,6 +623,69 @@ export default function AuthorDashboard() {
     finally { setASalvarPerfil(false); }
   }
 
+  // --- Item 21: itens do checklist da obra a publicar ---
+  type ItemChecklist = { chave: string; ok: boolean; critico: boolean; pendente?: boolean; titulo: string; descricao: string };
+  const itensChecklist: ItemChecklist[] = checklistLivro
+    ? (() => {
+        const lv = checklistLivro.livro;
+        const detalhe = checklistLivro.detalhe;
+        const capitulosVisiveis = detalhe ? detalhe.chapters.filter((c) => !c.arquivado) : null;
+        const temCapa = !!lv.capa_url && lv.capa_url !== '/placeholder-cover.svg';
+        const sinopseTexto = detalhe ? textoSimplesDeHtml(detalhe.sinopse || '').trim() : '';
+        const secOpcionais = [lv.ficha_tecnica, lv.dedicatoria, lv.epigrafe, lv.epilogo].filter(
+          (s) => s && textoSimplesDeHtml(s).trim().length > 0
+        ).length;
+        return [
+          {
+            chave: 'capa', ok: temCapa, critico: true, pendente: false,
+            titulo: 'Capa da obra',
+            descricao: temCapa
+              ? 'A capa está carregada — é o primeiro cartaz que os leitores vêem.'
+              : 'Carregue uma capa — uma obra sem capa passa desapercebida na grelha.',
+          },
+          {
+            chave: 'sinopse', ok: sinopseTexto.length >= 100, critico: true, pendente: !detalhe,
+            titulo: 'Sinopse (mín. 100 caracteres)',
+            descricao: detalhe
+              ? sinopseTexto.length >= 100
+                ? `Sinopse com ${sinopseTexto.length} caracteres — pronta para convencer o leitor.`
+                : `Faltam ${100 - sinopseTexto.length} caracteres para uma sinopse que venda a obra.`
+              : 'A carregar a sinopse…',
+          },
+          {
+            chave: 'capitulos', ok: !!capitulosVisiveis && capitulosVisiveis.length > 0, critico: true, pendente: !detalhe,
+            titulo: 'Pelo menos 1 capítulo visível',
+            descricao: capitulosVisiveis
+              ? capitulosVisiveis.length > 0
+                ? `${capitulosVisiveis.length} capítulo(s) visível(is) para o público.`
+                : 'Adicione ou restaure um capítulo — capítulos arquivados não contam.'
+              : 'A carregar os capítulos…',
+          },
+          {
+            chave: 'conteudo', ok: lv.totalCapitulos > 0 && lv.capitulosVazios === 0, critico: true, pendente: false,
+            titulo: 'Todos os capítulos têm conteúdo',
+            descricao:
+              lv.totalCapitulos === 0
+                ? 'A obra ainda não tem capítulos — escreva o primeiro.'
+                : lv.capitulosVazios === 0
+                ? 'Todos os capítulos visíveis têm texto.'
+                : `${lv.capitulosVazios} capítulo(s) sem texto útil — preencha ou arquive antes de publicar.`,
+          },
+          {
+            chave: 'secoes', ok: true, critico: false, pendente: false,
+            titulo: 'Secções opcionais',
+            descricao: `${secOpcionais} de 4 preenchidas (ficha técnica, dedicatória, epígrafe, epílogo).`,
+          },
+          {
+            chave: 'faixa', ok: true, critico: false, pendente: false,
+            titulo: 'Classificação etária',
+            descricao: `Esta obra está classificada como «${lv.faixa_etaria || 'Livre'}».`,
+          },
+        ] as ItemChecklist[];
+      })()
+    : [];
+  const prontoPublicar = itensChecklist.filter((i) => i.critico).every((i) => i.ok);
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
@@ -697,7 +786,7 @@ export default function AuthorDashboard() {
                     <Button size="sm" variant="ghost" onClick={() => loadBookChapters(livro.id)}><FileText className="h-3.5 w-3.5 mr-1" /> Capítulos</Button>
                     <Button size="sm" variant="ghost" onClick={() => openEditBook(livro)} aria-label="Editar livro"><Pencil className="h-3.5 w-3.5" /></Button>
                     {livro.status !== 'PUBLICADO' && (
-                      <Button size="sm" variant="outline" className="text-emerald-600" onClick={() => publishBook(livro.id)}><Eye className="h-3.5 w-3.5 mr-1" /> Publicar</Button>
+                      <Button size="sm" variant="outline" className="text-emerald-600" title="Verificação antes de publicar" onClick={() => abrirChecklistPublicacao(livro)}><Eye className="h-3.5 w-3.5 mr-1" /> Publicar</Button>
                     )}
                     {livro.status === 'PUBLICADO' && (
                       <Button size="sm" variant="outline" className="text-amber-600" onClick={() => unpublishBook(livro.id)}>Despublicar</Button>
@@ -1060,6 +1149,92 @@ export default function AuthorDashboard() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Item 21: checklist de publicação — verificação final antes de sair ao público */}
+      <Dialog
+        open={checklistAberto}
+        onOpenChange={(open) => {
+          if (!open) { setChecklistAberto(false); setChecklistLivro(null); }
+        }}
+      >
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Publicar «{checklistLivro?.livro.titulo}»</DialogTitle>
+            <DialogDescription>
+              Verificação final antes de a obra ficar visível para todos os leitores.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {itensChecklist.map((item) => (
+              <div
+                key={item.chave}
+                className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${
+                  item.critico
+                    ? item.ok
+                      ? 'border-emerald-500/30 bg-emerald-500/5'
+                      : 'border-destructive/30 bg-destructive/5'
+                    : 'border-border/50 bg-muted/30'
+                }`}
+              >
+                {item.pendente ? (
+                  <Loader2 className="h-[18px] w-[18px] mt-0.5 shrink-0 animate-spin text-muted-foreground" />
+                ) : !item.critico ? (
+                  <Info className="h-[18px] w-[18px] mt-0.5 shrink-0 text-muted-foreground" />
+                ) : item.ok ? (
+                  <CheckCircle2 className="h-[18px] w-[18px] mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <XCircle className="h-[18px] w-[18px] mt-0.5 shrink-0 text-destructive" />
+                )}
+                <div className="min-w-0">
+                  <p className={`text-sm font-medium ${item.critico && !item.ok && !item.pendente ? 'text-destructive' : ''}`}>
+                    {item.titulo}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{item.descricao}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                if (!checklistLivro) return;
+                setChecklistAberto(false);
+                setChecklistLivro(null);
+                loadBookChapters(checklistLivro.livro.id);
+              }}
+            >
+              <FileText className="h-4 w-4 mr-1" /> Ver capítulos
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                if (!checklistLivro) return;
+                const lv = checklistLivro.livro;
+                setChecklistAberto(false);
+                setChecklistLivro(null);
+                openEditBook(lv);
+              }}
+            >
+              <Pencil className="h-4 w-4 mr-1" /> Completar ficha
+            </Button>
+          </div>
+          <Button
+            onClick={publicarDaChecklist}
+            disabled={!prontoPublicar || checklistCarregando || aPublicarDaChecklist}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {aPublicarDaChecklist ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Eye className="h-4 w-4 mr-1" />
+            )}
+            {prontoPublicar ? 'Publicar agora' : 'Complete os pontos em falta para publicar'}
+          </Button>
         </DialogContent>
       </Dialog>
 

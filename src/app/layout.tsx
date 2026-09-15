@@ -91,6 +91,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt" suppressHydrationWarning>
+      <head>
+        {/*
+          Anti-flash de tema: aplica claro/escuro ANTES do primeiro paint.
+          Sem isto, quem usa modo escuro via uma luz branca em cada carregamento —
+          sensação de app amador. O script é minúsculo e roda no <head>.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var g=localStorage.getItem('mozlit_dark');var e=g===null?window.matchMedia('(prefers-color-scheme: dark)').matches:g==='true';if(e)document.documentElement.classList.add('dark');}catch(x){}})();`,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${lora.variable} ${merriweather.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
       >

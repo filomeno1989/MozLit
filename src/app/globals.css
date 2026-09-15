@@ -197,6 +197,33 @@
 .leitor-html li {
   margin-bottom: 0.35rem;
 }
+/* ===== Imagens nos capítulos (item 17) ===== */
+/* Editor: imagem fluida, arredondada, com contorno de selecção limpo */
+.mozlit-editor .mozlit-editor-content img,
+.mozlit-editor img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.75rem auto;
+  border-radius: 0.5rem;
+  cursor: grab;
+}
+.ProseMirror-selectednode > img,
+.ProseMirror-selectednode img {
+  outline: 2px solid #d97706;
+  outline-offset: 2px;
+  border-radius: 0.5rem;
+}
+/* Leitor: ilustração centrada, com moldura suave e convite ao zoom */
+.leitor-html img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1.5rem auto;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  cursor: zoom-in;
+}
 /* ===== Safe-areas iOS (item 23) — conteúdo nunca fica sob o notch/barra home ===== */
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);

@@ -11,7 +11,7 @@ import { BookOpen, Search, X } from 'lucide-react';
 import { formatarMoedas, textoSimplesDeHtml } from '@/lib/constants';
 import { progressoMaisRecente, limparProgresso, percentagemObra, haQuanto, type ItemProgresso } from '@/lib/progresso';
 
-interface Book {
+export interface LivroCartaz {
   id: string;
   titulo: string;
   sinopse: string;
@@ -22,7 +22,8 @@ interface Book {
   autor: { id: string; nome: string };
 }
 
-function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
+/** Cartaz de obra — reutilizado na home e no perfil público de autor (item 18) */
+export function BookCard({ book, onClick }: { book: LivroCartaz; onClick: () => void }) {
   const hasRealCover = book.capa_url && book.capa_url !== '/placeholder-cover.svg';
 
   return (
@@ -199,8 +200,8 @@ function ContinuarLerCard() {
 }
 
 export default function HomePage() {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [allBooks, setAllBooks] = useState<Book[]>([]);
+  const [books, setBooks] = useState<LivroCartaz[]>([]);
+  const [allBooks, setAllBooks] = useState<LivroCartaz[]>([]);
   const { navigate, user } = useAppStore();
   const [loading, setLoading] = useState(true);
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null);
@@ -232,7 +233,7 @@ export default function HomePage() {
       if (cursor) params.set('cursor', cursor);
       params.set('limit', '20');
       const query = params.toString() ? `?${params.toString()}` : '';
-      const data = await apiFetch<{ books: Book[]; nextCursor: string | null }>(`/api/books${query}`);
+      const data = await apiFetch<{ books: LivroCartaz[]; nextCursor: string | null }>(`/api/books${query}`);
       if (isFirst) {
         setBooks(data.books || []);
         if (!categoriaAtiva && !searchQuery) setAllBooks(data.books || []);

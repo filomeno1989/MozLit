@@ -92,6 +92,9 @@ export default function AdminPanel() {
   const [busca, setBusca] = useState('');
   const [utilizadores, setUtilizadores] = useState<UtilizadorAdmin[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const [paginaUtilizadores, setPaginaUtilizadores] = useState(1);
+  const [temMaisUtilizadores, setTemMaisUtilizadores] = useState(false);
+  const [totalUtilizadores, setTotalUtilizadores] = useState(0);
   const [creditoUser, setCreditoUser] = useState<UtilizadorAdmin | null>(null);
   const [creditoQtd, setCreditoQtd] = useState('');
   const [creditoNota, setCreditoNota] = useState('');
@@ -145,11 +148,17 @@ export default function AdminPanel() {
     loadRecuperacoes();
   }, [loadStats, loadRecargas, loadRecuperacoes, filtroEstado]);
 
-  async function buscarUtilizadores(q: string) {
+  async function buscarUtilizadores(q: string, pagina = 1, acumular = false) {
     setBuscando(true);
     try {
-      const d = await apiFetch<{ utilizadores: UtilizadorAdmin[] }>(`/api/admin/utilizadores?q=${encodeURIComponent(q)}`);
-      setUtilizadores(d.utilizadores || []);
+      const d = await apiFetch<{ utilizadores: UtilizadorAdmin[]; pagina: number; total: number; temMais: boolean }>(
+        `/api/admin/utilizadores?q=${encodeURIComponent(q)}&pagina=${pagina}`
+      );
+      // Paginação (extra Fase 4): 1ª página substitui, “Carregar mais” acumula
+      setUtilizadores((prev) => (acumular ? [...prev, ...(d.utilizadores || [])] : d.utilizadores || []));
+      setPaginaUtilizadores(d.pagina);
+      setTemMaisUtilizadores(d.temMais);
+      setTotalUtilizadores(d.total);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -671,6 +680,22 @@ export default function AdminPanel() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {utilizadores.length > 0 && temMaisUtilizadores && (
+                <div className="flex flex-col items-center gap-1 pt-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={buscando}
+                    onClick={() => buscarUtilizadores(busca, paginaUtilizadores + 1, true)}
+                  >
+                    {buscando ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Search className="h-4 w-4 mr-1.5" />}
+                    Carregar mais
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    {utilizadores.length} de {totalUtilizadores.toLocaleString('pt-MZ')} utilizadores
+                  </p>
                 </div>
               )}
             </CardContent>

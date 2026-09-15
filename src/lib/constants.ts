@@ -44,6 +44,7 @@ export const LIMITES = {
   CAPA_MAX_SIZE_BYTES: 2 * 1024 * 1024, // 2MB
   AVATAR_MAX_SIZE_BYTES: 1 * 1024 * 1024, // 1MB
   COMPROVATIVO_MAX_SIZE_BYTES: 6 * 1024 * 1024, // 6MB — screenshots de SMS são pesados
+  IMAGEM_CAPITULO_MAX_SIZE_BYTES: 4 * 1024 * 1024, // 4MB — ilustrações/fotos dentro dos capítulos
   CATEGORIAS_MAX: 5,
   PRECO_CAPITULO_MAX: 500, // MC — tecto por capítulo (impede preços absurdos/negativos)
   PRECO_TOTAL_MAX: 5_000, // MC — tecto para o preço do livro completo
@@ -101,7 +102,8 @@ export const RECARGA_CONFIG = {
 
 /** Detecta se o conteúdo do capítulo é HTML (do editor rico) ou texto simples (legado) */
 export function isHtmlConteudo(conteudo: string): boolean {
-  return /<(p|h[1-6]|ul|ol|blockquote|strong|em|u|s|br|span|div)\b/i.test(conteudo);
+  // img incluída: um capítulo que só tem uma imagem inserida no editor também é HTML
+  return /<(p|h[1-6]|ul|ol|blockquote|strong|em|u|s|br|span|div|img)\b/i.test(conteudo);
 }
 
 /** Converte HTML do editor em texto simples para previews (cartões, listas, cartazes) */

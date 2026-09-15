@@ -31,6 +31,7 @@ const LibraryPage = dynamic(() => import('@/components/literaria/LibraryPage'), 
 const NewBookPage = dynamic(() => import('@/components/literaria/NewBookPage'), { ssr: false, loading: CarregandoVista });
 const AdminPanel = dynamic(() => import('@/components/literaria/AdminPanel'), { ssr: false, loading: CarregandoVista });
 const PerfilPage = dynamic(() => import('@/components/literaria/PerfilPage'), { ssr: false, loading: CarregandoVista });
+const AuthorProfilePage = dynamic(() => import('@/components/literaria/AuthorProfilePage'), { ssr: false, loading: CarregandoVista });
 
 /** Views that require authentication */
 const PROTECTED_VIEWS = new Set(['wallet', 'library', 'author-dashboard', 'new-book', 'perfil', 'admin']);
@@ -60,6 +61,8 @@ function ViewRouter() {
       return <HomePage />;
     case 'book-detail':
       return <BookDetailPage />;
+    case 'autor':
+      return <AuthorProfilePage />;
     case 'reader':
       return <EReaderPage />;
     case 'author-dashboard':

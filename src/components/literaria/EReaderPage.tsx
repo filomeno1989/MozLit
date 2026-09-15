@@ -357,12 +357,21 @@ function renderProseText(text: string) {
  * Renderiza o conteúdo do capítulo:
  * - HTML (do editor rico) → injetado directamente (já foi sanitizado no servidor antes de gravar)
  * - Texto simples (capítulos antigos) → renderizador de prosa legado
+ * Imagens (item 17): clique abre o zoom em tela cheia (delegação no contentor)
  */
-function renderConteudo(conteudo: string) {
+function renderConteudo(conteudo: string, aoClicarImagem?: (src: string) => void) {
   if (isHtmlConteudo(conteudo)) {
     return (
       <div
         className="leitor-html"
+        onClick={(e) => {
+          if (!aoClicarImagem) return;
+          const alvo = e.target as HTMLElement;
+          if (alvo.tagName === 'IMG') {
+            const src = (alvo as HTMLImageElement).getAttribute('src');
+            if (src) aoClicarImagem(src);
+          }
+        }}
         dangerouslySetInnerHTML={{ __html: conteudo }}
       />
     );
@@ -426,6 +435,15 @@ export default function EReaderPage() {
   // Paywall "Gostaste? Continua a ler" — estado do popup de desbloqueio
   const [paywall, setPaywall] = useState<PaywallData | null>(null);
   const [aComprarPaywall, setAComprarPaywall] = useState(false);
+
+  // Imagens do capítulo (item 17): zoom em tela cheia ao tocar numa ilustração
+  const [zoomImagem, setZoomImagem] = useState<string | null>(null);
+  useEffect(() => {
+    if (!zoomImagem) return;
+    const antes = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = antes; };
+  }, [zoomImagem]);
 
   // For section reading, we need book data (com capítulos para o botão Seguinte)
   const [sectionBook, setSectionBook] = useState<SecaoLivro | null>(null);
@@ -694,7 +712,7 @@ export default function EReaderPage() {
             className={"max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[length:var(--leitor-fonte)]\n              [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[1.35em] [&_h2]:font-bold\n              [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[1.18em] [&_h3]:font-semibold\n              [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]\n              [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]\n              [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline" + (isItalic ? ' [&_p]:italic' : '')}
             style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
           >
-          {renderConteudo(sectionContent)}
+          {renderConteudo(sectionContent, setZoomImagem)}
           </div>
         </article>
 
@@ -861,7 +879,7 @@ export default function EReaderPage() {
             [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline"
           style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
         >
-          {renderConteudo(chapter.conteudo)}
+          {renderConteudo(chapter.conteudo, setZoomImagem)}
         </div>
       </article>
 
@@ -940,6 +958,32 @@ export default function EReaderPage() {
 
       {/* Comments Section */}
       <CommentsSection chapterId={chapter.id} bookAuthorId={chapter.livro.autorId} />
+
+      {/* Zoom de imagem (item 17) — tela cheia, fecha com clique ou Esc */}
+      {zoomImagem && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Imagem ampliada"
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setZoomImagem(null)}
+        >
+          <img
+            src={zoomImagem}
+            alt="Imagem ampliada do capítulo"
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            type="button"
+            aria-label="Fechar imagem"
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            onClick={() => setZoomImagem(null)}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
