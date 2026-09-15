@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
 
+/** UUID v4 — devolve 404 em vez de deixar o Prisma lançar erro de cast (500) */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * POST /api/autor/[id]/seguir — segue/deixa de seguir um autor (item 18).
  * Toggle idempotente: cria ou remove a ligação e devolve o estado novo
@@ -22,6 +25,10 @@ export async function POST(
     }
 
     const { id } = await params;
+
+    if (!UUID_REGEX.test(id)) {
+      return NextResponse.json({ error: 'Autor não encontrado.' }, { status: 404 });
+    }
 
     const autor = await db.user.findUnique({ where: { id }, select: { id: true, nome: true } });
     if (!autor) {

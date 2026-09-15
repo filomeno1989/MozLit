@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
 
+/** UUID v4 — devolve 404 em vez de deixar o Prisma lançar erro de cast (500) */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * GET /api/autor/[id] — perfil público de um autor (item 18).
  * Devolve dados do perfil, estatísticas (obras publicadas, seguidores) e a
@@ -14,6 +17,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+
+    if (!UUID_REGEX.test(id)) {
+      return NextResponse.json({ error: 'Autor não encontrado.' }, { status: 404 });
+    }
 
     // Sessão opcional: leitores anónimos também podem ver o perfil
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
