@@ -28,6 +28,7 @@ model User {
   libraryItems LibraryItem[]
   comments     Comment[]
   recargas     RecargaSolicitacao[]
+  recuperacoes PedidoRecuperacao[]
 
   @@map("profiles")
 }
@@ -159,4 +160,21 @@ model RecargaSolicitacao {
   @@index([userId, estado])
   @@index([estado, createdAt])
   @@map("recargas_solicitacoes")
+}
+
+model PedidoRecuperacao {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  contacto    String    // telefone/email indicado no pedido
+  estado      String    @default("PENDENTE") // PENDENTE | RESOLVIDO
+  notaAdmin   String?   @map("nota_admin")
+  resolvidoEm DateTime? @map("resolvido_em") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([estado, createdAt])
+  @@index([userId])
+  @@map("pedidos_recuperacao")
 }

@@ -7,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, LogIn, Loader2, AlertCircle, Eye, EyeOff, Phone, Mail } from 'lucide-react';
+import { BookOpen, LogIn, Loader2, AlertCircle, Eye, EyeOff, Phone, Mail, KeyRound } from 'lucide-react';
 import CountryCodePicker from '@/components/literaria/CountryCodePicker';
 import { PAIS_PADRAO, type Pais } from '@/lib/paises';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 type ModoLogin = 'TELEFONE' | 'EMAIL';
 
@@ -23,6 +24,39 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Recuperação de acesso ("esqueci-me da senha")
+  const [mostrarRecuperacao, setMostrarRecuperacao] = useState(false);
+  const [contactoRecuperacao, setContactoRecuperacao] = useState('');
+  const [aEnviarRecuperacao, setAEnviarRecuperacao] = useState(false);
+  const [recuperacaoOk, setRecuperacaoOk] = useState('');
+  const [recuperacaoErro, setRecuperacaoErro] = useState('');
+
+  async function enviarPedidoRecuperacao(e: React.FormEvent) {
+    e.preventDefault();
+    setRecuperacaoErro('');
+    setAEnviarRecuperacao(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; mensagem: string }>('/api/auth/recuperar', {
+        method: 'POST',
+        body: JSON.stringify({ contacto: contactoRecuperacao.trim() }),
+      });
+      setRecuperacaoOk(res.mensagem);
+    } catch (err) {
+      setRecuperacaoErro((err as Error).message);
+    } finally {
+      setAEnviarRecuperacao(false);
+    }
+  }
+
+  function fecharRecuperacao(open: boolean) {
+    setMostrarRecuperacao(open);
+    if (!open) {
+      setContactoRecuperacao('');
+      setRecuperacaoOk('');
+      setRecuperacaoErro('');
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,6 +183,15 @@ export default function LoginPage() {
               {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <LogIn className="h-4 w-4 mr-1" />}
               {loading ? 'Entrando...' : 'Entrar'}
             </Button>
+            <p className="text-center">
+              <button
+                type="button"
+                onClick={() => setMostrarRecuperacao(true)}
+                className="text-xs text-muted-foreground hover:text-amber-700 dark:hover:text-amber-400 hover:underline transition-colors"
+              >
+                Esqueceu a senha?
+              </button>
+            </p>
             <p className="text-center text-sm text-muted-foreground">
               Não tem conta?{' '}
               <button type="button" onClick={() => navigate('register')} className="text-amber-700 dark:text-amber-400 hover:underline font-medium focus-visible:underline focus-visible:outline-2 focus-visible:outline-amber-500 focus-visible:outline-offset-2">
@@ -158,6 +201,61 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Recuperação de acesso assistida pelo admin */}
+      <Dialog open={mostrarRecuperacao} onOpenChange={fecharRecuperacao}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-amber-600" /> Recuperar acesso
+            </DialogTitle>
+            <DialogDescription>
+              Indique o número de telefone (ex: +258 84 123 4567) ou o email da sua conta. A administração vai
+              contactá-lo para devolver o acesso.
+            </DialogDescription>
+          </DialogHeader>
+          {recuperacaoOk ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{recuperacaoOk}</span>
+              </div>
+              <Button variant="outline" className="w-full" onClick={() => fecharRecuperacao(false)}>
+                Voltar ao login
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={enviarPedidoRecuperacao} className="space-y-3">
+              {recuperacaoErro && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>{recuperacaoErro}</span>
+                </div>
+              )}
+              <div>
+                <Label htmlFor="contacto-recuperacao">Telefone ou email da conta</Label>
+                <Input
+                  id="contacto-recuperacao"
+                  type="text"
+                  value={contactoRecuperacao}
+                  onChange={(e) => setContactoRecuperacao(e.target.value)}
+                  placeholder="+258 84 123 4567 ou seu@email.com"
+                  className="mt-1.5"
+                  required
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+                disabled={aEnviarRecuperacao || !contactoRecuperacao.trim()}
+              >
+                {aEnviarRecuperacao ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <KeyRound className="h-4 w-4 mr-1.5" />}
+                {aEnviarRecuperacao ? 'A enviar...' : 'Enviar pedido'}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

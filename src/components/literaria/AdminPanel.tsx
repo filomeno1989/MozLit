@@ -25,6 +25,7 @@ interface Estatisticas {
   totalLivros: number;
   totalCapitulos: number;
   recargasPendentes: number;
+  recuperacoesPendentes: number;
   moedasEmCirculacao: number;
   recargasAprovadas: number;
   receitaMzn: number;
@@ -55,6 +56,16 @@ interface UtilizadorAdmin {
   saldo_carteira: number;
   createdAt: string;
   _count: { books: number };
+}
+
+interface PedidoRecuperacaoAdmin {
+  id: string;
+  contacto: string;
+  estado: string;
+  notaAdmin: string | null;
+  resolvidoEm: string | null;
+  createdAt: string;
+  user: { id: string; nome: string; email: string | null; telefone: string | null; role: string };
 }
 
 function contactInfo(u: { email: string | null; telefone: string | null }) {
@@ -89,6 +100,11 @@ export default function AdminPanel() {
   const [novaSenhaAdmin, setNovaSenhaAdmin] = useState('');
   const [aRedefinir, setARedefinir] = useState(false);
 
+  // Recuperações de acesso ("esqueci-me da senha")
+  const [recuperacoes, setRecuperacoes] = useState<PedidoRecuperacaoAdmin[]>([]);
+  const [aMarcarRecuperacao, setAMarcarRecuperacao] = useState<string | null>(null);
+  const [senhaTargetPedidoId, setSenhaTargetPedidoId] = useState<string | null>(null);
+
   const loadStats = useCallback(async () => {
     try {
       const s = await apiFetch<Estatisticas>('/api/admin/estatisticas');
@@ -111,10 +127,20 @@ export default function AdminPanel() {
     }
   }, []);
 
+  const loadRecuperacoes = useCallback(async () => {
+    try {
+      const d = await apiFetch<{ pedidos: PedidoRecuperacaoAdmin[] }>('/api/admin/recuperacoes');
+      setRecuperacoes(d.pedidos || []);
+    } catch {
+      // falha silenciosa: a tab de recuperações não deve derrubar o painel
+    }
+  }, []);
+
   useEffect(() => {
     loadStats();
     loadRecargas(filtroEstado);
-  }, [loadStats, loadRecargas, filtroEstado]);
+    loadRecuperacoes();
+  }, [loadStats, loadRecargas, loadRecuperacoes, filtroEstado]);
 
   async function buscarUtilizadores(q: string) {
     setBuscando(true);
@@ -203,13 +229,59 @@ export default function AdminPanel() {
         body: JSON.stringify({ id: senhaTarget.id, acao: 'SENHA', novaSenha: novaSenhaAdmin }),
       });
       toast.success(`Senha de ${senhaTarget.nome} redefinida. Partilhe-a com o utilizador de forma segura.`);
+      // Se a redefinição veio de um pedido de recuperação, marca como resolvido
+      const pedidoId = senhaTargetPedidoId;
       setSenhaTarget(null);
       setNovaSenhaAdmin('');
+      setSenhaTargetPedidoId(null);
+      if (pedidoId) {
+        try {
+          await apiFetch('/api/admin/recuperacoes', {
+            method: 'PATCH',
+            body: JSON.stringify({ id: pedidoId, estado: 'RESOLVIDO', notaAdmin: 'Senha redefinida pelo admin.' }),
+          });
+        } catch { /* não bloqueia */ }
+        loadRecuperacoes();
+        loadStats();
+      }
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setARedefinir(false);
     }
+  }
+
+  async function marcarRecuperacao(id: string, estado: 'RESOLVIDO' | 'PENDENTE') {
+    setAMarcarRecuperacao(id);
+    try {
+      await apiFetch('/api/admin/recuperacoes', {
+        method: 'PATCH',
+        body: JSON.stringify({ id, estado }),
+      });
+      toast.success(estado === 'RESOLVIDO' ? 'Pedido marcado como resolvido.' : 'Pedido reaberto.');
+      loadRecuperacoes();
+      loadStats();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAMarcarRecuperacao(null);
+    }
+  }
+
+  function abrirRedefinirDeRecuperacao(p: PedidoRecuperacaoAdmin) {
+    setSenhaTarget({
+      id: p.user.id,
+      nome: p.user.nome,
+      email: p.user.email,
+      telefone: p.user.telefone,
+      role: p.user.role,
+      moedas: 0,
+      saldo_carteira: 0,
+      createdAt: p.createdAt,
+      _count: { books: 0 },
+    });
+    setSenhaTargetPedidoId(p.id);
+    setNovaSenhaAdmin('');
   }
 
   return (
@@ -302,6 +374,14 @@ export default function AdminPanel() {
             )}
           </TabsTrigger>
           <TabsTrigger value="utilizadores">Utilizadores</TabsTrigger>
+          <TabsTrigger value="recuperacoes" className="relative">
+            Recuperações
+            {stats && stats.recuperacoesPendentes > 0 && (
+              <Badge className="ml-1.5 bg-destructive text-white hover:bg-destructive text-[10px] px-1.5 h-4">
+                {stats.recuperacoesPendentes}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* ===== TAB RECARGAS ===== */}
@@ -397,6 +477,92 @@ export default function AdminPanel() {
                             </Button>
                           </div>
                         )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ===== TAB RECUPERAÇÕES ===== */}
+        <TabsContent value="recuperacoes">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <KeyRound className="h-4 w-4" /> Pedidos de Recuperação de Acesso
+              </CardTitle>
+              <CardDescription>
+                Utilizadores que esqueceram a senha. Valide a identidade pelo contacto, use «Redefinir senha» e
+                partilhe a senha temporária de forma segura (WhatsApp/SMS).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {recuperacoes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Nenhum pedido de recuperação.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {recuperacoes.map((p) => {
+                    const contato = contactInfo(p.user);
+                    const pendente = p.estado === 'PENDENTE';
+                    return (
+                      <div key={p.id} className={`rounded-lg border p-3.5 space-y-2.5 ${pendente ? 'border-amber-300/70 dark:border-amber-700/40 bg-amber-50/50 dark:bg-amber-950/20' : 'border-border/60 opacity-80'}`}>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-sm">{p.user.nome} <span className="text-muted-foreground font-normal">· {p.user.role}</span></p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              Contacto indicado: <strong className="text-foreground">{p.contacto}</strong>
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              Conta: <contato.icon className="h-3 w-3 inline" /> {contato.text}
+                            </p>
+                          </div>
+                          {pendente ? (
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-100"><Clock className="h-3 w-3 mr-1" /> Pendente</Badge>
+                          ) : (
+                            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 hover:bg-emerald-100"><CheckCircle2 className="h-3 w-3 mr-1" /> Resolvido</Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(p.createdAt).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          {p.resolvidoEm && ` · resolvido ${new Date(p.resolvidoEm).toLocaleDateString('pt-MZ', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`}
+                        </p>
+                        {p.notaAdmin && <p className="text-xs bg-muted rounded px-2 py-1.5">Nota: {p.notaAdmin}</p>}
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {pendente && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={() => abrirRedefinirDeRecuperacao(p)}
+                              >
+                                <KeyRound className="h-3.5 w-3.5 mr-1" /> Redefinir senha
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={aMarcarRecuperacao === p.id}
+                                onClick={() => marcarRecuperacao(p.id, 'RESOLVIDO')}
+                              >
+                                {aMarcarRecuperacao === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
+                                Marcar resolvido
+                              </Button>
+                            </>
+                          )}
+                          {!pendente && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={aMarcarRecuperacao === p.id}
+                              onClick={() => marcarRecuperacao(p.id, 'PENDENTE')}
+                            >
+                              Reabrir
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

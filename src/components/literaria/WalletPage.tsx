@@ -26,6 +26,16 @@ interface Recarga {
   processadaEm?: string | null;
 }
 
+/**
+ * Unidade do valor de uma transacção: COMPRA e VENDA são movimentos de conteúdo
+ * e guardam MOEDAS (MC); conversões (COMPRA_MOEDAS) e depósitos guardam MZN.
+ * Antes a lista mostrava tudo sem unidade — o histórico misturava "−40" (MC)
+ * com "−4.00" (MZN) e ninguém sabia o que estava a ver.
+ */
+function unidadeTransacao(tipo: string): 'MC' | 'MZN' {
+  return tipo === 'COMPRA' || tipo === 'VENDA' ? 'MC' : 'MZN';
+}
+
 function EstadoBadge({ estado }: { estado: string }) {
   if (estado === 'APROVADA') {
     return <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 hover:bg-emerald-100"><CheckCircle2 className="h-3 w-3 mr-1" /> Aprovada</Badge>;
@@ -518,7 +528,9 @@ export default function WalletPage() {
                       : 'text-emerald-600 dark:text-emerald-400'
                   }`}
                   >
-                    {ehSaida ? '-' : '+'}{(t.valor ?? 0).toFixed(2)}
+                    {ehSaida ? '-' : '+'}{unidadeTransacao(tipo) === 'MC'
+                      ? `${Math.round(Math.abs(t.valor ?? 0)).toLocaleString('pt-MZ')} MC`
+                      : `${(t.valor ?? 0).toFixed(2)} MZN`}
                   </span>
                 </div>
                 );

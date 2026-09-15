@@ -34,7 +34,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sem permissão para este livro' }, { status: 403 });
     }
 
-    const chapterCount = await db.chapter.count({ where: { livroId } });
+    // Numeração contígua: usar max(ordem)+1 em vez de count(). Após eliminações,
+    // count() devolvia um número que já existia — dois capítulos ficavam com a
+    // mesma ordem e a navegação anterior/próximo saltava capítulos.
+    const maxOrdem = await db.chapter.aggregate({
+      where: { livroId },
+      _max: { ordem: true },
+    });
     const chapter = await db.chapter.create({
       data: {
         titulo: tituloValidado,
@@ -44,7 +50,7 @@ export async function POST(request: NextRequest) {
           ? Math.min(LIMITES.PRECO_CAPITULO_MAX, Math.max(0, Math.round(preco_capitulo)))
           : 0,
         is_free: Boolean(is_free),
-        ordem: typeof ordem === 'number' && Number.isFinite(ordem) && ordem >= 0 ? Math.floor(ordem) : chapterCount,
+        ordem: typeof ordem === 'number' && Number.isFinite(ordem) && ordem >= 0 ? Math.floor(ordem) : (maxOrdem._max.ordem ?? -1) + 1,
       },
     });
 

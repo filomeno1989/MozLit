@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
       totalLivros,
       totalCapitulos,
       recargasPendentes,
+      recuperacoesPendentes,
       agregadoMoedas,
       agregadoRecargas,
     ] = await Promise.all([
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
       db.book.count(),
       db.chapter.count(),
       db.recargaSolicitacao.count({ where: { estado: 'PENDENTE' } }),
+      db.pedidoRecuperacao.count({ where: { estado: 'PENDENTE' } }),
       db.user.aggregate({ _sum: { moedas: true } }),
       db.recargaSolicitacao.aggregate({
         where: { estado: 'APROVADA' },
@@ -39,6 +41,7 @@ export async function GET(request: NextRequest) {
       totalLivros,
       totalCapitulos,
       recargasPendentes,
+      recuperacoesPendentes,
       moedasEmCirculacao: agregadoMoedas._sum.moedas ?? 0,
       recargasAprovadas: agregadoRecargas._sum.moedas ?? 0,
       receitaMzn: agregadoRecargas._sum.valorMzn ?? 0,

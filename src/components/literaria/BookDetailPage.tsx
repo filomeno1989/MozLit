@@ -53,6 +53,9 @@ export default function BookDetailPage() {
 
   const userId = user?.id;
 
+  // Autor da obra ou admin: lê tudo, nunca vê botão de compra nos próprios capítulos
+  const podeGerir = !!user && !!book && (user.id === book.autor.id || user.role === 'ADMIN');
+
   useEffect(() => {
     if (bookId) {
       loadBook();
@@ -129,7 +132,7 @@ export default function BookDetailPage() {
   }
 
   function handleRead(chapter: Chapter) {
-    if (chapter.is_free || purchasedIds.has(chapter.id) || ownsFullBook) {
+    if (hasAccess(chapter)) {
       navigate('reader', { chapterId: chapter.id, bookId: bookId });
     } else {
       handlePurchase(chapter.id);
@@ -137,7 +140,7 @@ export default function BookDetailPage() {
   }
 
   function hasAccess(chapter: Chapter) {
-    return chapter.is_free || purchasedIds.has(chapter.id) || ownsFullBook;
+    return chapter.is_free || purchasedIds.has(chapter.id) || ownsFullBook || podeGerir;
   }
 
   // Check which book sections exist
@@ -232,8 +235,6 @@ export default function BookDetailPage() {
       .replace(/\s+/g, ' ')
       .trim();
   }
-
-  const isOwnBook = user && user.id === book.autor.id;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -337,7 +338,7 @@ export default function BookDetailPage() {
           </div>
 
           {/* Full book purchase button — visível também a visitantes (convite a entrar) */}
-          {!isOwnBook && !ownsFullBook && book.preco_total > 0 && (
+          {!podeGerir && !ownsFullBook && book.preco_total > 0 && (
             <Card className="mb-4 border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -434,7 +435,7 @@ export default function BookDetailPage() {
               {hasAnySection ? 'Nenhum capítulo disponível ainda.' : 'Nenhum conteúdo disponível ainda.'}
             </p>
           ) : (
-            book.chapters.map((chapter) => {
+            book.chapters.map((chapter, idxCap) => {
               const owned = hasAccess(chapter);
               return (
                 <div
@@ -442,8 +443,10 @@ export default function BookDetailPage() {
                   className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-accent/50 transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
+                    {/* Numeração por POSIÇÃO na lista visível — fica sempre
+                        1,2,3… mesmo depois de eliminar ou arquivar capítulos */}
                     <span className="text-xs font-mono text-muted-foreground w-6 shrink-0">
-                      {String(chapter.ordem + 1).padStart(2, '0')}
+                      {String(idxCap + 1).padStart(2, '0')}
                     </span>
                     <span className="font-medium text-sm truncate">{chapter.titulo}</span>
                     {chapter.arquivado && (

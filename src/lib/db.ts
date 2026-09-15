@@ -92,6 +92,36 @@ const DDL_AUTO_REPARACAO: string[] = [
   `ALTER TABLE "chapters" ADD COLUMN IF NOT EXISTS "arquivado" BOOLEAN NOT NULL DEFAULT false`,
   `CREATE INDEX IF NOT EXISTS "chapters_livroId_arquivado_idx" ON "chapters" ("livro_id", "arquivado")`,
 
+  // ===== Fase 1 2026-09-15: recuperação de senha (esqueci-me da senha) =====
+  // O utilizador pede ajuda no ecrã de login; o admin vê o pedido no painel,
+  // valida a identidade pelo contacto e define uma senha temporária.
+  `CREATE TABLE IF NOT EXISTS "pedidos_recuperacao" (
+      "id"             UUID NOT NULL DEFAULT gen_random_uuid(),
+      "user_id"        UUID NOT NULL,
+      "contacto"       TEXT NOT NULL,
+      "estado"         TEXT NOT NULL DEFAULT 'PENDENTE',
+      "nota_admin"     TEXT,
+      "resolvido_em"   TIMESTAMPTZ(6),
+      "created_at"     TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+      "updated_at"     TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+      CONSTRAINT "pedidos_recuperacao_pkey" PRIMARY KEY ("id")
+  )`,
+  `DO $$
+  BEGIN
+      IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'pedidos_recuperacao_user_id_fkey'
+      ) THEN
+          ALTER TABLE "pedidos_recuperacao"
+              ADD CONSTRAINT "pedidos_recuperacao_user_id_fkey"
+              FOREIGN KEY ("user_id") REFERENCES "profiles"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+  END $$`,
+  `CREATE INDEX IF NOT EXISTS "pedidos_recuperacao_estado_created_at_idx"
+      ON "pedidos_recuperacao" ("estado", "created_at")`,
+  `CREATE INDEX IF NOT EXISTS "pedidos_recuperacao_user_id_idx"
+      ON "pedidos_recuperacao" ("user_id")`,
+
   // ===== Reforço 2026-09-10c: performance + auditoria de vendas =====
   // Índices para as consultas mais frequentes (Postgres não indexa FKs sozinho)
   `CREATE INDEX IF NOT EXISTS "books_autorId_idx" ON "books" ("autor_id")`,
@@ -171,7 +201,7 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
  */
 async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
   try {
-    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; idx: number; tipo_check: number; trans: number }[]>`
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number }[]>`
       SELECT
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
@@ -179,7 +209,9 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
           WHERE table_name = 'books' AND column_name = 'faixa_etaria') AS books,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'chapters' AND column_name = 'arquivado') AS arquivado,
-        (SELECT COUNT(*)::int FROM information_schema.columns
+        (SELECT COUNT(*)::int FROM information_schema.tables
+          WHERE table_name = 'pedidos_recuperacao') AS recuperacoes,
+        (SELECT COUNT(*)::int FROM information_schema.tables
           WHERE table_name = 'recargas_solicitacoes') AS recargas,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'transactions' AND column_name IN ('chapter_id', 'book_id')) AS trans,
@@ -192,7 +224,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
             'comments_chapterId_idx', 'comments_parentId_idx', 'comments_userId_idx',
             'library_items_bookId_idx', 'library_items_chapterId_idx',
             'transactions_chapterId_idx', 'transactions_bookId_idx',
-            'chapters_livroId_arquivado_idx')) AS idx,
+            'chapters_livroId_arquivado_idx',
+            'pedidos_recuperacao_estado_created_at_idx', 'pedidos_recuperacao_user_id_idx')) AS idx,
         (SELECT COUNT(*)::int FROM pg_constraint
           WHERE conname = 'transactions_tipo_check') AS tipo_check`
     const r = linhas[0]
@@ -200,9 +233,10 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
       Number(r?.perfil ?? 0) === 2 &&
       Number(r?.books ?? 0) === 1 &&
       Number(r?.arquivado ?? 0) === 1 &&
+      Number(r?.recuperacoes ?? 0) === 1 &&
       Number(r?.recargas ?? 0) >= 12 &&
       Number(r?.trans ?? 0) === 2 &&
-      Number(r?.idx ?? 0) === 17 &&
+      Number(r?.idx ?? 0) === 19 &&
       Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida
     )
   } catch {

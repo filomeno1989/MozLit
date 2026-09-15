@@ -192,6 +192,22 @@ export const PAISES: Pais[] = [
 /** País por defeito do seletor */
 export const PAIS_PADRAO = PAISES[0]; // Moçambique
 
+/**
+ * Divide um número internacional completo (+258841234567) em { dial, resto }.
+ * Usa o dial mais longo que corresponde (ex: "+1" vs "+1242" do Bahamas).
+ * Retorna null se o número não começar por "+" ou não coincidir com nenhum dial.
+ */
+export function dividirDialInternacional(numero: string): { dial: string; resto: string } | null {
+  if (!numero.startsWith('+')) return null;
+  const dials = PAISES.map((p) => p.dial).sort((a, b) => b.length - a.length);
+  for (const dial of dials) {
+    if (numero.startsWith(dial)) {
+      return { dial, resto: numero.slice(dial.length) };
+    }
+  }
+  return null;
+}
+
 /** Procura país pelo código de discagem (dial), ex: "+258" */
 export function paisPorDial(dial: string): Pais | undefined {
   return PAISES.find((p) => p.dial === dial);

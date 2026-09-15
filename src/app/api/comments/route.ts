@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'O comentário não pode exceder 1000 caracteres.' }, { status: 400 });
     }
 
+    let parentIdFinal: string | null = null;
     if (parentId) {
       const parent = await db.comment.findUnique({ where: { id: parentId } });
       if (!parent) {
@@ -108,6 +109,11 @@ export async function POST(request: NextRequest) {
       if (parent.chapterId !== chapterId) {
         return NextResponse.json({ error: 'Resposta inválida' }, { status: 400 });
       }
+      // ACHATAMENTO: o leitor só vê respostas de 1 nível (filhos de comentários
+      // de topo). Responder a uma resposta criava um comentário órfão — gravado
+      // na BD mas INVISÍVEL para sempre. Liga a resposta ao comentário de topo;
+      // a autoria real aparece no texto da UI ("A responder a X").
+      parentIdFinal = parent.parentId || parent.id;
     }
 
     // SELECT leve: só precisamos de is_free — o conteúdo do capítulo pode ter 500KB
@@ -120,8 +126,16 @@ export async function POST(request: NextRequest) {
     }
 
     if (!chapter.is_free) {
+      // LIVRO_COMPLETO também permite comentar (antes só chapterId individual —
+      // quem comprou o livro completo via 403 ao comentar)
       const hasAccess = await db.libraryItem.findFirst({
-        where: { userId: payload.userId, chapterId },
+        where: {
+          userId: payload.userId,
+          OR: [
+            { chapterId },
+            { bookId: chapter.livroId, tipo: 'LIVRO_COMPLETO' },
+          ],
+        },
       });
       if (!hasAccess) {
         return NextResponse.json({ error: 'Necessita adquirir o capítulo para comentar.' }, { status: 403 });
@@ -133,7 +147,7 @@ export async function POST(request: NextRequest) {
         conteudo: trimmed,
         chapterId,
         userId: payload.userId,
-        parentId: parentId || null,
+        parentId: parentIdFinal,
       },
       include: {
         user: { select: { id: true, nome: true, role: true } },

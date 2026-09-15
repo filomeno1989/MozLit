@@ -152,12 +152,15 @@ export async function GET(
         paywall: {
           capituloId: chapter.id,
           capituloTitulo: chapter.titulo,
-          capituloOrdem: chapter.ordem,
           preco: Math.round(chapter.preco_capitulo),
           livroId: chapter.livro.id,
           livroTitulo: chapter.livro.titulo,
           livroCapa: chapter.livro.capa_url || '',
           saldoMoedas,
+          // Posição do capítulo na lista VISÍVEL (arquivados excluídos) — o
+          // popup mostra "Capítulo 4" tal como o leitor vê, mesmo que haja
+          // buracos na ordem crua da BD
+          capituloOrdem: Math.max(0, allChapters.findIndex((c) => c.id === chapter.id)),
         },
       },
       { status: 403 }
@@ -289,7 +292,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 
-    await db.chapter.delete({ where: { id } });
+    // Eliminar + re-numerar numa transacção: os capítulos seguintes sobem uma
+    // posição para a ordem ficar contígua (antes ficavam buracos — 01, 02, 04… —
+    // e um capítulo novo podia herdar número duplicado).
+    await db.$transaction(async (tx) => {
+      await tx.chapter.delete({ where: { id } });
+      await tx.chapter.updateMany({
+        where: { livroId: chapter.livroId, ordem: { gt: chapter.ordem } },
+        data: { ordem: { decrement: 1 } },
+      });
+    });
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Erro ao excluir capítulo:', error);

@@ -83,7 +83,7 @@ function proximoAposSecao(secao: SectionKey, livro: SecaoLivro | null): ProximoA
   }
   const primeiro = livro.chapters && livro.chapters[0];
   if (primeiro) {
-    return { tipo: 'capitulo', id: primeiro.id, label: `Cap. ${primeiro.ordem + 1} - ${primeiro.titulo}` };
+    return { tipo: 'capitulo', id: primeiro.id, label: `Cap. 1 - ${primeiro.titulo}` };
   }
   if (livro.epilogo) {
     return { tipo: 'secao', key: 'epilogo', label: SECTION_LABELS.epilogo.label };
@@ -538,6 +538,17 @@ export default function EReaderPage() {
   const { livro } = chapter;
   const secaoAnterior = chapter.prevChapter ? null : secaoAnteriorAoCapitulo(livro);
 
+  // Numeração por POSIÇÃO na lista visível (arquivados já excluídos pelo API
+  // para leitores): "Cap. 3" é o 3.º que o leitor vê, mesmo que a ordem crua
+  // da BD tenha buracos de capítulos eliminados no passado.
+  const posicaoActual = Math.max(1, chapter.allChapters.findIndex((c) => c.id === chapter.id) + 1);
+  const posPrev = chapter.prevChapter
+    ? chapter.allChapters.findIndex((c) => c.id === chapter.prevChapter!.id) + 1
+    : 0;
+  const posNext = chapter.nextChapter
+    ? chapter.allChapters.findIndex((c) => c.id === chapter.nextChapter!.id) + 1
+    : 0;
+
   return (
     <div
       className="relative min-h-[calc(100vh-7rem)]"
@@ -602,14 +613,16 @@ export default function EReaderPage() {
               </Button>
             </div>
             <div className="max-h-64 overflow-y-auto">
-              {chapter.allChapters.map((ch) => (
+              {chapter.allChapters.map((ch, idxCh) => (
                 <button
                   key={ch.id}
                   onClick={() => goToChapter(ch.id)}
                   className={`w-full text-left px-4 py-2.5 text-sm hover:bg-accent transition-colors flex items-center gap-3 border-b border-border/30 last:border-0 ${ch.id === chapter.id ? 'bg-accent font-medium text-amber-700 dark:text-amber-400' : ''}`}
                 >
+                  {/* Numeração por posição na lista visível: 1,2,3… sem buracos
+                      após eliminar/arquivar (ordem crua da BD pode ter falhas) */}
                   <span className="text-xs font-mono text-muted-foreground w-6 shrink-0">
-                    {String(ch.ordem + 1).padStart(2, '0')}
+                    {String(idxCh + 1).padStart(2, '0')}
                   </span>
                   <span className="truncate flex-1">{ch.titulo}</span>
                   {ch.arquivado && (
@@ -638,7 +651,7 @@ export default function EReaderPage() {
             {chapter.titulo}
           </h1>
           <p className="text-sm text-muted-foreground">
-            Capítulo {chapter.ordem + 1} - {chapter.livro.titulo}
+            Capítulo {posicaoActual} - {chapter.livro.titulo}
           </p>
         </header>
 
@@ -681,7 +694,7 @@ export default function EReaderPage() {
               onClick={() => goToChapter(chapter.prevChapter!.id)}
             >
               <ChevronLeft className="h-4 w-4 mr-1" />
-              <span className="hidden sm:inline">Cap. {chapter.prevChapter!.ordem + 1}</span>
+              <span className="hidden sm:inline">Cap. {posPrev}</span>
             </Button>
           ) : secaoAnterior ? (
             <Button
@@ -699,7 +712,7 @@ export default function EReaderPage() {
           )}
 
           <span className="text-xs text-muted-foreground">
-            {chapter.ordem + 1} / {chapter.allChapters.length}
+            {posicaoActual} / {chapter.allChapters.length}
           </span>
 
           {chapter.nextChapter ? (
@@ -708,7 +721,7 @@ export default function EReaderPage() {
               size="sm"
               onClick={() => goToChapter(chapter.nextChapter!.id)}
             >
-              <span className="hidden sm:inline">Cap. {chapter.nextChapter!.ordem + 1}</span>
+              <span className="hidden sm:inline">Cap. {posNext}</span>
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           ) : livro.epilogo ? (

@@ -75,6 +75,11 @@ export default function AuthorDashboard() {
   // Edit chapter
   const [editingChapter, setEditingChapter] = useState<{ id: string; titulo: string; conteudo: string; preco_capitulo: string; is_free: boolean } | null>(null);
   const [savingChapter, setSavingChapter] = useState(false);
+  // Guarda anti-perda: fechar o editor de capítulo com alterações não salvas
+  // pede confirmação — horas de escrita não podem desaparecer num clique fora
+  const [edicaoSuja, setEdicaoSuja] = useState(false);
+  const [confirmarDescarte, setConfirmarDescarte] = useState(false);
+  const [snapshotEdicao, setSnapshotEdicao] = useState('');
   const [aAdicionarCapitulo, setAAdicionarCapitulo] = useState(false);
   const [aSalvarObra, setASalvarObra] = useState(false);
   const [aSalvarPerfil, setASalvarPerfil] = useState(false);
@@ -216,14 +221,37 @@ export default function AuthorDashboard() {
         toast.error('Erro ao carregar capítulo');
         return;
       }
-      setEditingChapter({
+      const carregado = {
         id: ch.id,
         titulo: full.titulo ?? ch.titulo,
         conteudo: textoLegadoParaHtml(full.conteudo),
         preco_capitulo: String(Math.round(full.preco_capitulo ?? 0)),
         is_free: !!full.is_free,
-      });
+      };
+      // Snapshot do estado carregado — qualquer alteração a partir daqui
+      // marca a edição como "suja"
+      setSnapshotEdicao(JSON.stringify(carregado));
+      setEdicaoSuja(false);
+      setEditingChapter(carregado);
     }).catch(() => toast.error('Erro ao carregar capítulo'));
+  }
+
+  // Detecta alterações não salvas no capítulo em edição
+  useEffect(() => {
+    if (!editingChapter || !snapshotEdicao) {
+      setEdicaoSuja(false);
+      return;
+    }
+    const { id, titulo, conteudo, preco_capitulo, is_free } = editingChapter;
+    setEdicaoSuja(JSON.stringify({ id, titulo, conteudo, preco_capitulo, is_free }) !== snapshotEdicao);
+  }, [editingChapter, snapshotEdicao]);
+
+  function tentarFecharEdicao() {
+    if (edicaoSuja) {
+      setConfirmarDescarte(true);
+      return;
+    }
+    setEditingChapter(null);
   }
 
   async function saveEditChapter() {
@@ -563,10 +591,10 @@ export default function AuthorDashboard() {
                 <div className="p-2.5 rounded-lg bg-destructive/10 text-destructive text-sm">{chapterError}</div>
               )}
               <div className="divide-y divide-border/40">
-                {bookChapters.chapters.map((ch) => (
+                {bookChapters.chapters.map((ch, idxCh) => (
                   <div key={ch.id} className={`flex items-center justify-between text-sm p-2.5 first:pt-0 last:pb-0 ${ch.arquivado ? 'opacity-70' : ''}`}>
                     <span className="truncate">
-                      <span className="text-muted-foreground font-mono text-xs mr-2">{String(ch.ordem + 1).padStart(2, '0')}</span>
+                      <span className="text-muted-foreground font-mono text-xs mr-2">{String(idxCh + 1).padStart(2, '0')}</span>
                       <span className={ch.arquivado ? 'line-through decoration-border' : ''}>{ch.titulo}</span>
                       {ch.arquivado && <Badge variant="outline" className="ml-2 text-[10px] uppercase tracking-wide border-amber-400/60 text-amber-700 dark:text-amber-400">Arquivado</Badge>}
                       {!ch.arquivado && ch.is_free && <Badge variant="secondary" className="ml-2 text-xs">Grátis</Badge>}
@@ -810,7 +838,7 @@ export default function AuthorDashboard() {
       )}
 
       {/* Edit Chapter Dialog */}
-      <Dialog open={!!editingChapter} onOpenChange={(open) => { if (!open) setEditingChapter(null); }}>
+      <Dialog open={!!editingChapter} onOpenChange={(open) => { if (!open) tentarFecharEdicao(); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Editar Capítulo</DialogTitle><DialogDescription>Altere o título, conteúdo e preço do capítulo.</DialogDescription></DialogHeader>
           {editingChapter && (
@@ -833,7 +861,7 @@ export default function AuthorDashboard() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setEditingChapter(null)}>Cancelar</Button>
+                <Button variant="outline" className="flex-1" onClick={tentarFecharEdicao}>Cancelar</Button>
                 <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={saveEditChapter} disabled={savingChapter}>
                   {savingChapter ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
                   Salvar
@@ -843,6 +871,27 @@ export default function AuthorDashboard() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Descarte de alterações não salvas no editor de capítulo */}
+      <AlertDialog open={confirmarDescarte} onOpenChange={setConfirmarDescarte}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Descartar alterações?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Este capítulo tem alterações ainda não salvas. Se sair agora, perde o que foi escrito desde a última gravação.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Continuar a editar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { setConfirmarDescarte(false); setEditingChapter(null); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Descartar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmação de eliminação de CAPÍTULO — horas de escrita exigem travão */}
       <AlertDialog open={!!deleteChapterTarget} onOpenChange={(open) => !open && setDeleteChapterTarget(null)}>

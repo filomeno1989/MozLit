@@ -8,7 +8,7 @@ import {
   RECARGA_CONFIG,
   isHtmlConteudo,
 } from './constants';
-import { normalizarTelefone, validarNumeroLocal, TELEFONE_REGEX } from './paises';
+import { normalizarTelefone, validarNumeroLocal, TELEFONE_REGEX, dividirDialInternacional } from './paises';
 
 export class ValidationError extends Error {
   constructor(message: string) {
@@ -43,6 +43,20 @@ export function validateTelefone(
   // Número completo internacional
   if (cleaned.startsWith('+')) {
     const normalized = cleaned.replace(/[\s\-().]/g, '');
+    // Zeros à esquerda: muita gente escreve 084… ou 00258… após o dial.
+    // Aplica a MESMA normalização do registo (+258 084… → +258841234567) para
+    // que o login encontre a conta guardada — antes, "+258084…" não casava com
+    // "+258841234567" e o utilizador recebia "Credenciais inválidas".
+    const partes = dividirDialInternacional(normalized);
+    if (partes) {
+      const recomposto = normalizarTelefone(partes.dial, partes.resto);
+      if (!TELEFONE_REGEX.test(recomposto)) {
+        throw new ValidationError('Número de telefone inválido. Use formato internacional, ex: +258841234567.');
+      }
+      const erro = validarNumeroLocal(partes.dial, partes.resto);
+      if (erro) throw new ValidationError(erro);
+      return recomposto;
+    }
     if (!TELEFONE_REGEX.test(normalized)) {
       throw new ValidationError('Número de telefone inválido. Use formato internacional, ex: +258841234567.');
     }

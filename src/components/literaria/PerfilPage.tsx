@@ -16,6 +16,10 @@ import {
 } from 'lucide-react';
 import CountryCodePicker from '@/components/literaria/CountryCodePicker';
 import { PAISES, PAIS_PADRAO, type Pais } from '@/lib/paises';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ContaCompleta {
   id: string;
@@ -62,6 +66,12 @@ export default function PerfilPage() {
   const [okSenha, setOkSenha] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
+  // Guarda do contacto original: trocar de telefone↔email REMOVE o contacto
+  // anterior da conta — exige confirmação explícita (antes apagava em silêncio
+  // só porque o utilizador guardou o nome com o outro modo seleccionado).
+  const [contactoOriginal, setContactoOriginal] = useState<{ modo: ModoContacto; valor: string } | null>(null);
+  const [corpoPendente, setCorpoPendente] = useState<Record<string, string> | null>(null);
+
   useEffect(() => {
     let cancelado = false;
     apiFetch<{ user: ContaCompleta }>('/api/conta')
@@ -73,6 +83,7 @@ export default function PerfilPage() {
         setEmail(user.email || '');
         if (user.telefone) {
           setModoContacto('TELEFONE');
+          setContactoOriginal({ modo: 'TELEFONE', valor: user.telefone });
           // Separa o código do país (dial) do número guardado (+258841234567)
           const match = user.telefone.match(/^(\+\d{1,4})(\d+)$/);
           if (match) {
@@ -88,6 +99,7 @@ export default function PerfilPage() {
           }
         } else if (user.email) {
           setModoContacto('EMAIL');
+          setContactoOriginal({ modo: 'EMAIL', valor: user.email });
         }
       })
       .catch((err) => {
@@ -99,22 +111,27 @@ export default function PerfilPage() {
     return () => { cancelado = true; };
   }, []);
 
-  async function guardarDados(e: React.FormEvent) {
-    e.preventDefault();
-    setErroDados('');
-    setOkDados(false);
+  function construirCorpo(): Record<string, string> {
+    const body: Record<string, string> = { nome, biografia };
+    if (modoContacto === 'TELEFONE') {
+      body.telefone = telefone.trim();
+      body.dial = pais.dial;
+      // Só remove o email se a conta REALMENTE tinha email e o modo mudou
+      if (contactoOriginal?.modo === 'EMAIL' && contactoOriginal.valor) body.email = '';
+    } else {
+      body.email = email.trim();
+      if (contactoOriginal?.modo === 'TELEFONE' && contactoOriginal.valor) body.telefone = '';
+    }
+    return body;
+  }
+
+  function bodyRemoveEmail(b: Record<string, string>): boolean {
+    return b.email === '';
+  }
+
+  async function enviarDados(body: Record<string, string>) {
     setAGuardarDados(true);
     try {
-      const body: Record<string, string> = { nome, biografia };
-      if (modoContacto === 'TELEFONE') {
-        body.telefone = telefone.trim();
-        body.dial = pais.dial;
-        body.email = ''; // remove email se escolher só telefone
-      } else {
-        body.email = email.trim();
-        body.telefone = ''; // remove telefone se escolher só email
-      }
-
       const data = await apiFetch<{ user: ContaCompleta; token: string }>('/api/conta', {
         method: 'PATCH',
         body: JSON.stringify(body),
@@ -132,6 +149,10 @@ export default function PerfilPage() {
         );
       }
       setConta(data.user);
+      // O contacto original passa a ser o que ficou gravado
+      if (data.user.telefone) setContactoOriginal({ modo: 'TELEFONE', valor: data.user.telefone });
+      else if (data.user.email) setContactoOriginal({ modo: 'EMAIL', valor: data.user.email });
+      else setContactoOriginal(null);
       setOkDados(true);
       setTimeout(() => setOkDados(false), 4000);
     } catch (err) {
@@ -139,6 +160,19 @@ export default function PerfilPage() {
     } finally {
       setAGuardarDados(false);
     }
+  }
+
+  async function guardarDados(e: React.FormEvent) {
+    e.preventDefault();
+    setErroDados('');
+    setOkDados(false);
+    const body = construirCorpo();
+    // Esta gravação vai remover o contacto actual da conta? Pedir confirmação.
+    if (body.email === '' || body.telefone === '') {
+      setCorpoPendente(body);
+      return;
+    }
+    enviarDados(body);
   }
 
   async function guardarSenha(e: React.FormEvent) {
@@ -436,6 +470,30 @@ export default function PerfilPage() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Confirmação: trocar de contacto remove o contacto anterior da conta */}
+      <AlertDialog open={!!corpoPendente} onOpenChange={(open) => !open && setCorpoPendente(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover o contacto actual?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {corpoPendente && bodyRemoveEmail(corpoPendente)
+                ? 'Ao guardar apenas com telefone, o seu email actual será removido da conta. No futuro entrará com o número de telefone.'
+                : 'Ao guardar apenas com email, o seu número de telefone actual será removido da conta. No futuro entrará com o email.'}{' '}
+              Continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { const b = corpoPendente; setCorpoPendente(null); if (b) enviarDados(b); }}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Sim, continuar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
