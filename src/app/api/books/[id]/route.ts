@@ -26,6 +26,7 @@ export async function GET(
             ordem: true,
             preco_capitulo: true,
             is_free: true,
+            arquivado: true,
           },
           orderBy: { ordem: 'asc' },
         },
@@ -49,9 +50,14 @@ export async function GET(
       }
     }
 
+    // Capítulos arquivados: escondidos do público, visíveis ao autor/admin
+    // (permitem corrigir um capítulo sem despublicar o livro inteiro)
+    const isAutorOuAdmin = !!payload && (payload.userId === book.autorId || payload.role === 'ADMIN');
+
     const result = {
       ...book,
       categorias: JSON.parse(book.categorias || '[]'),
+      chapters: isAutorOuAdmin ? book.chapters : book.chapters.filter((c) => !c.arquivado),
     };
 
     return NextResponse.json(result);
@@ -132,9 +138,10 @@ export async function PATCH(
     if (faixa_etaria !== undefined) data.faixa_etaria = validateFaixaEtaria(faixa_etaria);
     if (volume_info !== undefined) data.volume_info = validateVolumeInfo(volume_info);
 
-    // If publishing, verify book has chapters
+    // If publishing, verify book has chapters visíveis (arquivados não contam —
+    // um livro só com capítulos arquivados ficaria vazio para os leitores)
     if (status === 'PUBLICADO') {
-      const chapterCount = await db.chapter.count({ where: { livroId: id } });
+      const chapterCount = await db.chapter.count({ where: { livroId: id, arquivado: false } });
       if (chapterCount === 0) {
         return NextResponse.json(
           { error: 'Não pode publicar um livro sem capítulos.' },

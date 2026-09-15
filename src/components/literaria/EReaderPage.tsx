@@ -1,19 +1,22 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Moon, Sun, ChevronLeft, ChevronRight, BookOpen, List, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { ArrowLeft, Moon, Sun, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck } from 'lucide-react';
 import CommentsSection from '@/components/literaria/CommentsSection';
-import { type SectionKey, SECTION_LABELS, isHtmlConteudo } from '@/lib/constants';
+import { toast } from 'sonner';
+import { type SectionKey, SECTION_LABELS, isHtmlConteudo, formatarMoedas } from '@/lib/constants';
 
 interface ChapterListItem {
   id: string;
   titulo: string;
   ordem: number;
   is_free: boolean;
+  arquivado?: boolean;
 }
 
 interface ChapterData {
@@ -98,6 +101,117 @@ function secaoAnteriorAoCapitulo(livro: ChapterData['livro']): { key: SectionKey
   return null;
 }
 
+/** Dados do paywall enviados pela API num 403 (preço, saldo, capa) */
+interface PaywallData {
+  capituloId: string;
+  capituloTitulo: string;
+  capituloOrdem: number;
+  preco: number;
+  livroId: string;
+  livroTitulo: string;
+  livroCapa: string;
+  saldoMoedas: number | null;
+}
+
+/**
+ * Conteúdo do popup de paywall "Gostaste? Continua a ler".
+ * Compra em contexto: o leitor desbloqueia sem sair do capítulo que estava a ler.
+ */
+function PaywallConteudo({
+  paywall,
+  aComprar,
+  onDesbloquear,
+  onCarregar,
+  onVoltar,
+}: {
+  paywall: PaywallData;
+  aComprar: boolean;
+  onDesbloquear: () => void;
+  onCarregar: () => void;
+  onVoltar: () => void;
+}) {
+  const { user } = useAppStore();
+  const saldo = user?.moedas ?? paywall.saldoMoedas ?? 0;
+  const saldoSuficiente = saldo >= paywall.preco;
+
+  return (
+    <div className="text-center">
+      {/* Capa do livro meio fora do cartão — assinatura visual do popup */}
+      {paywall.livroCapa && paywall.livroCapa !== '/placeholder-cover.svg' ? (
+        <img
+          src={paywall.livroCapa}
+          alt={paywall.livroTitulo}
+          className="w-16 aspect-[3/4] object-cover rounded-lg shadow-xl mx-auto -mt-16 border-2 border-background"
+        />
+      ) : (
+        <div className="w-16 aspect-[3/4] rounded-lg shadow-xl mx-auto -mt-16 bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center border-2 border-background">
+          <BookOpen className="h-6 w-6 text-white" />
+        </div>
+      )}
+
+      <p className="mt-4 text-[11px] font-semibold uppercase tracking-widest text-amber-700 dark:text-amber-400 flex items-center justify-center gap-1.5">
+        <Lock className="h-3 w-3" /> Capítulo {paywall.capituloOrdem + 1} bloqueado
+      </p>
+      <h2 className="mt-1.5 text-xl font-bold leading-snug">Gostaste? Continua a ler</h2>
+      <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2">
+        <span className="italic">“{paywall.capituloTitulo}”</span>
+        <span className="mx-1">·</span>{paywall.livroTitulo}
+      </p>
+
+      <div className="mt-5 rounded-xl border border-amber-200/70 dark:border-amber-800/40 bg-amber-50/70 dark:bg-amber-950/25 p-4">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-1.5 text-white font-bold text-sm shadow-sm">
+          <Coins className="h-4 w-4" /> {formatarMoedas(paywall.preco)} MC
+        </span>
+        {user && (
+          <p className="mt-2.5 text-xs text-muted-foreground">
+            {saldoSuficiente ? (
+              <>Saldo: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatarMoedas(saldo)} MC</span> · após compra: {formatarMoedas(Math.max(0, saldo - paywall.preco))} MC</>
+            ) : (
+              <>Saldo: <span className="font-semibold text-destructive">{formatarMoedas(saldo)} MC</span> · faltam {formatarMoedas(paywall.preco - saldo)} MC</>
+            )}
+          </p>
+        )}
+      </div>
+
+      {user ? (
+        saldoSuficiente ? (
+          <Button
+            className="mt-4 w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold shadow-md"
+            onClick={onDesbloquear}
+            disabled={aComprar}
+          >
+            {aComprar ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Lock className="h-4 w-4 mr-1.5" />}
+            {aComprar ? 'A desbloquear…' : `Desbloquear por ${formatarMoedas(paywall.preco)} MC`}
+          </Button>
+        ) : (
+          <Button
+            className="mt-4 w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md"
+            onClick={onCarregar}
+          >
+            <Wallet className="h-4 w-4 mr-1.5" /> Saldo insuficiente — Carregar MC
+          </Button>
+        )
+      ) : (
+        <Button
+          className="mt-4 w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold shadow-md"
+          onClick={onDesbloquear}
+        >
+          <Lock className="h-4 w-4 mr-1.5" /> Entrar para desbloquear
+        </Button>
+      )}
+
+      <p className="mt-3 text-[11px] text-muted-foreground flex items-center justify-center gap-1">
+        <BadgeCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+        Compra única · acesso para sempre
+      </p>
+
+      <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={onVoltar}>
+        Voltar ao livro
+      </Button>
+    </div>
+  );
+}
+
 function renderProseText(text: string) {
   return text.split('\n').map((paragraph, i) => {
     if (!paragraph.trim()) return <br key={i} />;
@@ -160,6 +274,10 @@ export default function EReaderPage() {
   const [error, setError] = useState<string | null>(null);
   const [chapterMenuOpen, setChapterMenuOpen] = useState(false);
 
+  // Paywall "Gostaste? Continua a ler" — estado do popup de desbloqueio
+  const [paywall, setPaywall] = useState<PaywallData | null>(null);
+  const [aComprarPaywall, setAComprarPaywall] = useState(false);
+
   // For section reading, we need book data (com capítulos para o botão Seguinte)
   const [sectionBook, setSectionBook] = useState<SecaoLivro | null>(null);
   const [sectionLoading, setSectionLoading] = useState(false);
@@ -170,13 +288,21 @@ export default function EReaderPage() {
     if (!chapterId) return;
     setLoading(true);
     setError(null);
+    setPaywall(null);
     setChapterMenuOpen(false);
     try {
       const data = await apiFetch<{ chapter: ChapterData }>(`/api/chapters/${chapterId}`);
       setChapter(data.chapter);
     } catch (err) {
-      setError((err as Error).message);
-      setChapter(null);
+      if (err instanceof ApiError && err.status === 403 && err.data?.paywall) {
+        // 403 paywall: mantém o capítulo actual por trás do popup (se houver)
+        // para o leitor decidir sem perder o contexto da leitura
+        setPaywall(err.data.paywall as PaywallData);
+        setError(null);
+      } else {
+        setError((err as Error).message);
+        setChapter(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -220,6 +346,27 @@ export default function EReaderPage() {
     navigate('reader', { chapterId: id, bookId });
   }
 
+  /** Desbloqueia o capítulo do popup sem sair do leitor */
+  async function desbloquearDoPaywall() {
+    if (!paywall) return;
+    if (!user) { navigate('login'); return; }
+    setAComprarPaywall(true);
+    try {
+      const res = await apiFetch<{ success: boolean; novoSaldoMoedas: number }>('/api/library', {
+        method: 'POST',
+        body: JSON.stringify({ chapterId: paywall.capituloId }),
+      });
+      useAppStore.getState().updateMoedas(res.novoSaldoMoedas);
+      toast.success('Capítulo desbloqueado! Boa leitura.');
+      setPaywall(null);
+      await loadChapter();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setAComprarPaywall(false);
+    }
+  }
+
   // Loading states
   if (isSectionView && sectionLoading) {
     return (
@@ -251,6 +398,27 @@ export default function EReaderPage() {
         <Button variant="outline" onClick={() => navigate('book-detail', { bookId })}>
           <ArrowLeft className="h-4 w-4 mr-1" /> Voltar ao livro
         </Button>
+      </div>
+    );
+  }
+
+  // ============ PAYWALL autónomo (entrada directa num capítulo bloqueado) ============
+  if (paywall && !chapter && !isSectionView) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12">
+        <div
+          className="max-w-sm mx-auto rounded-2xl border border-border/60 bg-card p-6 pt-6 shadow-lg"
+          style={{ animation: 'mozlitPaywallIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)' }}
+        >
+          <PaywallConteudo
+            paywall={paywall}
+            aComprar={aComprarPaywall}
+            onDesbloquear={desbloquearDoPaywall}
+            onCarregar={() => navigate('wallet')}
+            onVoltar={() => navigate('book-detail', { bookId: paywall.livroId })}
+          />
+        </div>
+        <style>{`@keyframes mozlitPaywallIn { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }`}</style>
       </div>
     );
   }
@@ -327,7 +495,7 @@ export default function EReaderPage() {
           </header>
 
           <div
-            className={"prose prose-neutral dark:prose-invert max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem] [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic" + (isItalic ? ' [&_p]:italic' : '')}
+            className={"prose prose-neutral dark:prose-invert max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[1.05rem] [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_em]:text-amber-700 [&_i]:text-amber-700 dark:[&_em]:text-amber-400 dark:[&_i]:text-amber-400" + (isItalic ? ' [&_p]:italic' : '')}
             style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
           >
           {renderConteudo(sectionContent)}
@@ -444,6 +612,9 @@ export default function EReaderPage() {
                     {String(ch.ordem + 1).padStart(2, '0')}
                   </span>
                   <span className="truncate flex-1">{ch.titulo}</span>
+                  {ch.arquivado && (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground border rounded px-1 py-0.5 shrink-0">Arquivado</span>
+                  )}
                   {ch.is_free && (
                     <span className="text-xs text-emerald-600 dark:text-emerald-400 shrink-0">Grátis</span>
                   )}
@@ -477,12 +648,28 @@ export default function EReaderPage() {
             [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-xl [&_h2]:font-bold
             [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-semibold
             [&_blockquote]:border-l-2 [&_blockquote]:border-amber-500 [&_blockquote]:pl-4 [&_blockquote]:italic
-            [&_em]:not-italic:text-amber-700 dark:[&_em]:text-amber-400"
+            [&_em]:text-amber-700 [&_i]:text-amber-700 dark:[&_em]:text-amber-400 dark:[&_i]:text-amber-400"
           style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
         >
           {renderConteudo(chapter.conteudo)}
         </div>
       </article>
+
+      {/* POPUP PAYWALL — "Gostaste? Continua a ler" sobre o capítulo actual */}
+      <Dialog open={!!paywall} onOpenChange={(open) => { if (!open) setPaywall(null); }}>
+        <DialogContent className="max-w-[340px] rounded-2xl overflow-visible">
+          <DialogTitle className="sr-only">Desbloquear capítulo</DialogTitle>
+          {paywall && (
+            <PaywallConteudo
+              paywall={paywall}
+              aComprar={aComprarPaywall}
+              onDesbloquear={desbloquearDoPaywall}
+              onCarregar={() => { setPaywall(null); navigate('wallet'); }}
+              onVoltar={() => { setPaywall(null); navigate('book-detail', { bookId: paywall.livroId }); }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Bottom nav with prev/next */}
       <div className="max-w-2xl mx-auto px-4 pb-4">

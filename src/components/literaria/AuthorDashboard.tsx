@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import RichTextEditor, { htmlVazio, textoLegadoParaHtml } from '@/components/literaria/RichTextEditor';
-import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Plus, BookOpen, Eye, Pencil, Trash2, Coins, FileText, User, ImageIcon, Save, Upload, X, ChevronDown, ChevronUp, Loader2, Archive, ArchiveRestore } from 'lucide-react';
 import { toast } from 'sonner';
 import { CATEGORIAS_SUGESTOES, type SectionKey, SECTION_LABELS, formatarMoedas } from '@/lib/constants';
 
@@ -59,7 +59,7 @@ interface BookWithChapters {
   dedicatoria: string;
   epigrafe: string;
   epilogo: string;
-  chapters: Array<{ id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean }>;
+  chapters: Array<{ id: string; titulo: string; ordem: number; preco_capitulo: number; is_free: boolean; arquivado?: boolean }>;
 }
 
 export default function AuthorDashboard() {
@@ -260,6 +260,23 @@ export default function AuthorDashboard() {
       loadBookChapters(bookChapters.id);
       loadDashboard();
       toast.success('Capítulo eliminado.');
+    } catch (err) { toast.error((err as Error).message); }
+  }
+
+  /** Arquiva ou restaura um capítulo — esconde do público sem despublicar o livro.
+   *  Quem já comprou mantém o acesso; o capítulo volta ao restaurar. */
+  async function toggleArquivarCapitulo(ch: { id: string; titulo: string; arquivado?: boolean }) {
+    if (!bookChapters) return;
+    try {
+      await apiFetch(`/api/chapters/${ch.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ arquivado: !ch.arquivado }),
+      });
+      if (editingChapter?.id === ch.id) setEditingChapter(null);
+      loadBookChapters(bookChapters.id);
+      toast.success(ch.arquivado
+        ? `Capítulo "${ch.titulo}" restaurado — já está visível para os leitores.`
+        : `Capítulo "${ch.titulo}" arquivado — escondido do público. Corrija com calma e restaure quando quiser.`);
     } catch (err) { toast.error((err as Error).message); }
   }
 
@@ -539,7 +556,7 @@ export default function AuthorDashboard() {
       {/* Chapter Dialog */}
       <Dialog open={showChapterDialog} onOpenChange={setShowChapterDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle><DialogDescription>Gerencie os capítulos desta obra.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Capítulos - {bookChapters?.titulo}</DialogTitle><DialogDescription>Gerencie os capítulos desta obra. Use o arquivo para corrigir um capítulo sem despublicar o livro — quem já comprou mantém o acesso.</DialogDescription></DialogHeader>
           {bookChapters && (
             <div className="space-y-4">
               {chapterError && (
@@ -547,14 +564,20 @@ export default function AuthorDashboard() {
               )}
               <div className="divide-y divide-border/40">
                 {bookChapters.chapters.map((ch) => (
-                  <div key={ch.id} className="flex items-center justify-between text-sm p-2.5 first:pt-0 last:pb-0">
+                  <div key={ch.id} className={`flex items-center justify-between text-sm p-2.5 first:pt-0 last:pb-0 ${ch.arquivado ? 'opacity-70' : ''}`}>
                     <span className="truncate">
                       <span className="text-muted-foreground font-mono text-xs mr-2">{String(ch.ordem + 1).padStart(2, '0')}</span>
-                      {ch.titulo}
-                      {ch.is_free && <Badge variant="secondary" className="ml-2 text-xs">Grátis</Badge>}
+                      <span className={ch.arquivado ? 'line-through decoration-border' : ''}>{ch.titulo}</span>
+                      {ch.arquivado && <Badge variant="outline" className="ml-2 text-[10px] uppercase tracking-wide border-amber-400/60 text-amber-700 dark:text-amber-400">Arquivado</Badge>}
+                      {!ch.arquivado && ch.is_free && <Badge variant="secondary" className="ml-2 text-xs">Grátis</Badge>}
                     </span>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                       <span className="text-xs text-muted-foreground mr-1">{ch.is_free ? 'Grátis' : `${Math.round(ch.preco_capitulo)} MC`}</span>
+                      {ch.arquivado ? (
+                        <button onClick={() => toggleArquivarCapitulo(ch)} className="p-1 rounded hover:bg-emerald-500/10 transition-colors" title="Restaurar capítulo — volta a ficar visível para os leitores"><ArchiveRestore className="h-3.5 w-3.5 text-emerald-600" /></button>
+                      ) : (
+                        <button onClick={() => toggleArquivarCapitulo(ch)} className="p-1 rounded hover:bg-accent transition-colors" title="Arquivar capítulo — esconde do público sem despublicar o livro (quem comprou mantém o acesso)"><Archive className="h-3.5 w-3.5 text-muted-foreground" /></button>
+                      )}
                       <button onClick={() => openEditChapter(ch)} className="p-1 rounded hover:bg-accent transition-colors" title="Editar capítulo"><Pencil className="h-3.5 w-3.5 text-muted-foreground" /></button>
                       <button onClick={() => setDeleteChapterTarget({ id: ch.id, titulo: ch.titulo })} className="p-1 rounded hover:bg-destructive/10 transition-colors" title="Excluir capítulo"><Trash2 className="h-3.5 w-3.5 text-destructive" /></button>
                     </div>

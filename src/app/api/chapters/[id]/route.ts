@@ -23,6 +23,7 @@ export async function GET(
             titulo: true,
             categorias: true,
             faixa_etaria: true,
+            capa_url: true,
             ficha_tecnica: true,
             dedicatoria: true,
             epigrafe: true,
@@ -52,18 +53,24 @@ export async function GET(
       autorId: chapter.livro.autorId,
       categorias: JSON.parse(chapter.livro.categorias || '[]'),
       faixa_etaria: chapter.livro.faixa_etaria || 'Livre',
+      capa_url: chapter.livro.capa_url || '',
       ficha_tecnica: chapter.livro.ficha_tecnica || '',
       dedicatoria: chapter.livro.dedicatoria || '',
       epigrafe: chapter.livro.epigrafe || '',
       epilogo: chapter.livro.epilogo || '',
     };
 
+    const isAutorOuAdmin = !!payload && (payload.userId === chapter.livro.autorId || payload.role === 'ADMIN');
+
     // Get prev/next chapter and chapter list
-    const allChapters = await db.chapter.findMany({
+    // Arquivados: o autor vê a lista completa (para verificar correcções);
+    // os leitores só vêem os publicados.
+    const allChaptersAll = await db.chapter.findMany({
       where: { livroId: chapter.livroId },
       orderBy: { ordem: 'asc' },
-      select: { id: true, titulo: true, ordem: true, is_free: true },
+      select: { id: true, titulo: true, ordem: true, is_free: true, arquivado: true },
     });
+    const allChapters = isAutorOuAdmin ? allChaptersAll : allChaptersAll.filter((c) => !c.arquivado);
 
     const currentIndex = allChapters.findIndex((c) => c.id === chapter.id);
     const prevChapter = currentIndex > 0 ? allChapters[currentIndex - 1] : null;
@@ -75,12 +82,33 @@ export async function GET(
       conteudo: chapter.conteudo,
       ordem: chapter.ordem,
       is_free: chapter.is_free,
+      arquivado: chapter.arquivado,
       preco_capitulo: chapter.preco_capitulo,
       livro: livreData,
       prevChapter,
       nextChapter,
       allChapters,
     };
+
+    // Capítulo arquivado: escondido do público. Mantém acesso para quem já
+    // adquiriu o capítulo ou o livro completo — conteúdo pago nunca desaparece.
+    if (chapter.arquivado && !isAutorOuAdmin) {
+      if (payload) {
+        const temAcesso = await db.libraryItem.findFirst({
+          where: {
+            userId: payload.userId,
+            OR: [
+              { chapterId: id },
+              { bookId: chapter.livroId, tipo: 'LIVRO_COMPLETO' },
+            ],
+          },
+        });
+        if (temAcesso) {
+          return NextResponse.json({ chapter: result });
+        }
+      }
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    }
 
     // Free chapters are always accessible
     if (chapter.is_free) {
@@ -108,8 +136,30 @@ export async function GET(
       }
     }
 
+    // 403 PAYWALL — resposta rica para o popup do leitor:
+    // preço do capítulo, saldo actual e capa do livro (sem pedidos extra)
+    let saldoMoedas: number | null = null;
+    if (payload) {
+      const leitor = await db.user.findUnique({
+        where: { id: payload.userId },
+        select: { moedas: true },
+      });
+      saldoMoedas = leitor?.moedas ?? 0;
+    }
     return NextResponse.json(
-      { error: 'Necessita adquirir este capítulo para ler o conteúdo.' },
+      {
+        error: 'Necessita adquirir este capítulo para ler o conteúdo.',
+        paywall: {
+          capituloId: chapter.id,
+          capituloTitulo: chapter.titulo,
+          capituloOrdem: chapter.ordem,
+          preco: Math.round(chapter.preco_capitulo),
+          livroId: chapter.livro.id,
+          livroTitulo: chapter.livro.titulo,
+          livroCapa: chapter.livro.capa_url || '',
+          saldoMoedas,
+        },
+      },
       { status: 403 }
     );
   } catch (error) {
@@ -194,6 +244,7 @@ export async function PATCH(
       data.preco_capitulo = preco;
     }
     if (body.is_free !== undefined) data.is_free = Boolean(body.is_free);
+    if (body.arquivado !== undefined) data.arquivado = Boolean(body.arquivado);
     if (body.ordem !== undefined) {
       const ordem = Number(body.ordem);
       if (!Number.isFinite(ordem) || ordem < 0) {

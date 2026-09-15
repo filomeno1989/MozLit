@@ -86,6 +86,12 @@ const DDL_AUTO_REPARACAO: string[] = [
   // lista fechada para não voltar a bloquear tipos futuros.
   `ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_tipo_check"`,
 
+  // ===== Melhoria 2026-09-15: arquivar capítulos individualmente =====
+  // Permite ao autor esconder um capítulo do público (ex: para corrigir)
+  // sem despublicar o livro inteiro. Compradores mantêm o acesso.
+  `ALTER TABLE "chapters" ADD COLUMN IF NOT EXISTS "arquivado" BOOLEAN NOT NULL DEFAULT false`,
+  `CREATE INDEX IF NOT EXISTS "chapters_livroId_arquivado_idx" ON "chapters" ("livro_id", "arquivado")`,
+
   // ===== Reforço 2026-09-10c: performance + auditoria de vendas =====
   // Índices para as consultas mais frequentes (Postgres não indexa FKs sozinho)
   `CREATE INDEX IF NOT EXISTS "books_autorId_idx" ON "books" ("autor_id")`,
@@ -165,12 +171,14 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
  */
 async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
   try {
-    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; recargas: number; idx: number; tipo_check: number; trans: number }[]>`
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; idx: number; tipo_check: number; trans: number }[]>`
       SELECT
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'books' AND column_name = 'faixa_etaria') AS books,
+        (SELECT COUNT(*)::int FROM information_schema.columns
+          WHERE table_name = 'chapters' AND column_name = 'arquivado') AS arquivado,
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'recargas_solicitacoes') AS recargas,
         (SELECT COUNT(*)::int FROM information_schema.columns
@@ -183,16 +191,18 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
             'books_autorId_idx', 'books_status_createdAt_idx',
             'comments_chapterId_idx', 'comments_parentId_idx', 'comments_userId_idx',
             'library_items_bookId_idx', 'library_items_chapterId_idx',
-            'transactions_chapterId_idx', 'transactions_bookId_idx')) AS idx,
+            'transactions_chapterId_idx', 'transactions_bookId_idx',
+            'chapters_livroId_arquivado_idx')) AS idx,
         (SELECT COUNT(*)::int FROM pg_constraint
           WHERE conname = 'transactions_tipo_check') AS tipo_check`
     const r = linhas[0]
     return (
       Number(r?.perfil ?? 0) === 2 &&
       Number(r?.books ?? 0) === 1 &&
+      Number(r?.arquivado ?? 0) === 1 &&
       Number(r?.recargas ?? 0) >= 12 &&
       Number(r?.trans ?? 0) === 2 &&
-      Number(r?.idx ?? 0) === 16 &&
+      Number(r?.idx ?? 0) === 17 &&
       Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida
     )
   } catch {

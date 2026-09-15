@@ -208,6 +208,7 @@ export async function POST(request: NextRequest) {
         titulo: true,
         preco_capitulo: true,
         is_free: true,
+        arquivado: true,
         livroId: true,
         livro: { select: { autorId: true, id: true, titulo: true, status: true } },
       },
@@ -220,6 +221,11 @@ export async function POST(request: NextRequest) {
     // Capítulos de livros em rascunho não são compráveis
     if (chapter.livro.status === 'RASCUNHO') {
       return NextResponse.json({ error: 'Este livro ainda não está publicado.' }, { status: 400 });
+    }
+
+    // Capítulos arquivados não são compráveis (o autor está a corrigi-los)
+    if (chapter.arquivado) {
+      return NextResponse.json({ error: 'Este capítulo não está disponível neste momento.' }, { status: 400 });
     }
 
     if (chapter.livro.autorId === payload.userId) {

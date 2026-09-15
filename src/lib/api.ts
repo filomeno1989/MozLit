@@ -2,10 +2,13 @@ import { useAppStore } from '@/store/app';
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** Corpo JSON completo da resposta (ex: payload do paywall em 403) */
+  data: Record<string, unknown> | null;
+  constructor(message: string, status: number, data: Record<string, unknown> | null = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.data = data;
   }
 }
 
@@ -35,7 +38,7 @@ export async function apiFetch<T = unknown>(
     const contentType = res.headers.get('content-type');
     if (contentType?.includes('application/json')) {
       const data = await res.json();
-      throw new ApiError(data.error || 'Erro na requisição', res.status);
+      throw new ApiError(data.error || 'Erro na requisição', res.status, data);
     }
     throw new ApiError(`Erro ${res.status}: ${res.statusText}`, res.status);
   }

@@ -21,6 +21,7 @@ interface Chapter {
   ordem: number;
   preco_capitulo: number;
   is_free: boolean;
+  arquivado?: boolean;
 }
 
 interface BookDetail {
@@ -445,6 +446,9 @@ export default function BookDetailPage() {
                       {String(chapter.ordem + 1).padStart(2, '0')}
                     </span>
                     <span className="font-medium text-sm truncate">{chapter.titulo}</span>
+                    {chapter.arquivado && (
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide shrink-0 border-amber-400/60 text-amber-700 dark:text-amber-400">Arquivado</Badge>
+                    )}
                     {chapter.is_free && (
                       <Badge variant="secondary" className="text-xs shrink-0">Grátis</Badge>
                     )}
