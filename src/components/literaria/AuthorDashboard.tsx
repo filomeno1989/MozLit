@@ -211,24 +211,11 @@ export default function AuthorDashboard() {
     } catch (err) { toast.error((err as Error).message); }
   }
 
-  const [deleteBuyersCount, setDeleteBuyersCount] = useState(0);
-
-  async function confirmDelete(bookId: string) {
-    try {
-      // Check how many buyers this book has
-      const items = await apiFetch<{ items: Array<{ tipo: string }> }>('/api/library');
-      // We can't filter server-side, but the API will block if buyers exist
-      setDeleteBuyersCount(0); // Will be updated from error if blocked
-      setDeleteTarget(bookId);
-    } catch (err: any) {
-      // If the API returns 409 with buyersCount, show it
-      const msg = err?.message || '';
-      if (msg.includes('Não pode excluir')) {
-        toast.error(msg);
-      } else {
-        setDeleteTarget(bookId);
-      }
-    }
+  function confirmDelete(bookId: string) {
+    // A verificação real de compradores é feita pelo servidor (409 no DELETE) —
+    // a pré-checagem aqui chamava /api/library (a biblioteca do PRÓPRIO autor,
+    // não dos compradores) e não protegia nada: só desperdiçava um pedido.
+    setDeleteTarget(bookId);
   }
 
   async function deleteBook() {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { ehUuid } from '@/lib/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -100,6 +102,9 @@ export async function POST(request: NextRequest) {
 
     // --- Full Book Purchase ---
     if (bookId && !chapterId) {
+      if (!ehUuid(bookId)) {
+        return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
+      }
       const book = await db.book.findUnique({
         where: { id: bookId },
         include: {
@@ -145,10 +150,13 @@ export async function POST(request: NextRequest) {
         });
         if (jaTem) throw new Error('CONFLITO_POSSE');
 
-        const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
-          SELECT id, moedas FROM profiles WHERE id = ${payload.userId}::uuid FOR UPDATE
-        `;
-        if (!buyerRow || buyerRow.moedas < precoMoedas) {
+        // Débito condicional: race-safe e portável (o SELECT ... ::uuid FOR UPDATE
+        // é sintaxe exclusiva de PostgreSQL e rebentava em dev/SQLite).
+        const debit = await tx.user.updateMany({
+          where: { id: payload.userId, moedas: { gte: precoMoedas } },
+          data: { moedas: { decrement: precoMoedas } },
+        });
+        if (debit.count === 0) {
           throw new Error('Moedas insuficientes. Compre moedas na carteira.');
         }
 
@@ -198,6 +206,9 @@ export async function POST(request: NextRequest) {
     // --- Chapter Purchase ---
     if (!chapterId) {
       return NextResponse.json({ error: 'chapterId ou bookId é obrigatório' }, { status: 400 });
+    }
+    if (!ehUuid(chapterId)) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
     // SELECT leve: não arrastar conteudo (até 500KB) numa operação de compra
@@ -267,10 +278,13 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await db.$transaction(async (tx) => {
-      const [buyerRow] = await tx.$queryRaw<Array<{ moedas: number; id: string }>>`
-        SELECT id, moedas FROM profiles WHERE id = ${payload.userId}::uuid FOR UPDATE
-      `;
-      if (!buyerRow || buyerRow.moedas < precoMoedas) {
+      // Débito condicional: race-safe e portável (substitui o SELECT FOR UPDATE
+      // que era sintaxe PostgreSQL-only e falhava em dev/SQLite)
+      const debit = await tx.user.updateMany({
+        where: { id: payload.userId, moedas: { gte: precoMoedas } },
+        data: { moedas: { decrement: precoMoedas } },
+      });
+      if (debit.count === 0) {
         throw new Error('Moedas insuficientes. Compre moedas na carteira.');
       }
 
@@ -326,6 +340,11 @@ export async function POST(request: NextRequest) {
     }
     if (msg.includes('insuficientes')) {
       return NextResponse.json({ error: msg }, { status: 400 });
+    }
+    // Dupla compra em corrida: a unique (userId, chapterId) rebenta — melhor
+    // 409 "já possui" do que 500 genérico (dinheiro nunca saiu: rollback)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json({ error: 'Já possui este capítulo' }, { status: 409 });
     }
     console.error('Erro na compra:', error);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

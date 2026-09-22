@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ehUuid } from '@/lib/validate';
 
 export async function GET(
   request: NextRequest,
@@ -7,6 +8,9 @@ export async function GET(
 ) {
   try {
     const { autorId } = await params;
+    if (!ehUuid(autorId)) {
+      return NextResponse.json([]);
+    }
 
     const books = await db.book.findMany({
       where: { autorId, status: 'PUBLICADO' },

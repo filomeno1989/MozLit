@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateCategorias, validateFaixaEtaria, validateVolumeInfo, validarCampoLivroHtml } from '@/lib/validate';
+import { validateTitulo, validateCategorias, validateFaixaEtaria, validateVolumeInfo, validarCampoLivroHtml, ehUuid } from '@/lib/validate';
 import { LIMITES, textoSimplesDeHtml } from '@/lib/constants';
 
 export async function GET(
@@ -10,6 +10,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
+    }
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     const payload = token ? verifyToken(token) : null;
 
@@ -99,6 +102,9 @@ export async function PATCH(
     }
 
     const { id } = await params;
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
+    }
 
     const existingBook = await db.book.findUnique({
       where: { id },
@@ -128,9 +134,36 @@ export async function PATCH(
     if (titulo !== undefined) data.titulo = validateTitulo(titulo);
     if (sinopse !== undefined) data.sinopse = validarCampoLivroHtml(sinopse, 'Sinopse', LIMITES.SINOPSE_MAX);
     if (categorias !== undefined) data.categorias = JSON.stringify(validateCategorias(categorias));
-    if (capa_url !== undefined) data.capa_url = capa_url;
-    if (status !== undefined) data.status = status;
-    if (preco_total !== undefined) data.preco_total = typeof preco_total === 'number' ? preco_total : 0;
+    if (capa_url !== undefined) {
+      // Mesma validação do POST: capa tem de ser URL https do armazém (ou placeholder local)
+      if (capa_url !== null && capa_url !== '' && (typeof capa_url !== 'string' || !capa_url.startsWith('https://'))) {
+        return NextResponse.json({ error: 'URL da capa inválido.' }, { status: 400 });
+      }
+      data.capa_url = capa_url || '/placeholder-cover.svg';
+    }
+    // SEGURANÇA: whitelist de estados — o body podia injetar "publicado", "xpto"
+    // ou null (500 por violação NOT NULL) e corromper o fluxo de publicação
+    if (status !== undefined) {
+      if (status !== 'RASCUNHO' && status !== 'PUBLICADO') {
+        return NextResponse.json({ error: 'Estado inválido. Use RASCUNHO ou PUBLICADO.' }, { status: 400 });
+      }
+      data.status = status;
+    }
+    // SEGURANÇA: preço entre 0 e PRECO_TOTAL_MAX — negativo "pagava" leitores
+    // para comprar (impressão de MC fora da economia), sem tecto permitia absurdos
+    if (preco_total !== undefined) {
+      if (typeof preco_total !== 'number' || !Number.isFinite(preco_total)) {
+        return NextResponse.json({ error: 'Preço do livro inválido.' }, { status: 400 });
+      }
+      const preco = Math.round(preco_total);
+      if (preco < 0 || preco > LIMITES.PRECO_TOTAL_MAX) {
+        return NextResponse.json(
+          { error: `O preço do livro deve estar entre 0 e ${LIMITES.PRECO_TOTAL_MAX} MC.` },
+          { status: 400 }
+        );
+      }
+      data.preco_total = preco;
+    }
     if (ficha_tecnica !== undefined) data.ficha_tecnica = validarCampoLivroHtml(ficha_tecnica, 'Ficha técnica', LIMITES.SINOPSE_MAX);
     if (dedicatoria !== undefined) data.dedicatoria = validarCampoLivroHtml(dedicatoria, 'Dedicatória', LIMITES.SINOPSE_MAX);
     if (epigrafe !== undefined) data.epigrafe = validarCampoLivroHtml(epigrafe, 'Epígrafe', LIMITES.SINOPSE_MAX);
@@ -147,7 +180,10 @@ export async function PATCH(
         select: { sinopse: true, capa_url: true },
       });
 
-      const sinopseTexto = textoSimplesDeHtml(livroParaPublicar?.sinopse ?? '').trim();
+      // Se o PATCH traz sinopse nova, valida a NOVA (antes validava a antiga e
+      // rejeitava/aceitava com base num valor que ia mudar no mesmo pedido)
+      const sinopseFinal = data.sinopse !== undefined ? String(data.sinopse) : (livroParaPublicar?.sinopse ?? '');
+      const sinopseTexto = textoSimplesDeHtml(sinopseFinal).trim();
       if (sinopseTexto.length < 50) {
         return NextResponse.json(
           { error: 'Antes de publicar, escreva uma sinopse com pelo menos 50 caracteres.' },
@@ -240,6 +276,9 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
+    }
 
     const existingBook = await db.book.findUnique({
       where: { id },

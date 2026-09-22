@@ -80,7 +80,11 @@ export default function LibraryPage() {
     );
   }
 
-  const hasFullBooks = books.length > 0;
+  // Só entram na secção "Livros Completos" as obras cujo pack COMPLETO foi
+  // comprado — antes, qualquer livro com 1 capítulo avulso aparecia aqui com
+  // o badge "Completo" (falso) — quem comprou 1 de 30 capítulos via "completo"
+  const livrosCompletos = books.filter((b) => fullBookIds.includes(b.id));
+  const hasFullBooks = livrosCompletos.length > 0;
   const individualChapters = allItems.filter(
     (item) => item.chapter && !fullBookIds.includes(item.chapter.livro.id)
   );
@@ -107,11 +111,11 @@ export default function LibraryPage() {
                 <BookMarked className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                 <h2 className="text-lg font-semibold">Livros Completos</h2>
                 <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 text-xs">
-                  {books.length}
+                  {livrosCompletos.length}
                 </Badge>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {books.map((fb) => {
+                {livrosCompletos.map((fb) => {
                   const hasCover = fb.capa_url && fb.capa_url !== '/placeholder-cover.svg';
                   return (
                     <Card
@@ -140,7 +144,13 @@ export default function LibraryPage() {
                       </div>
                       <CardContent className="p-3">
                         <p className="font-semibold text-sm truncate">{fb.titulo}</p>
-                        <p className="text-xs text-muted-foreground">{fb.chapters.length} capítulos</p>
+                        {/* Livro completo: chapters vem vazio da API — dizer
+                            "Livro completo" em vez de "0 capítulos" */}
+                        <p className="text-xs text-muted-foreground">
+                          {fb.chapters.length > 0
+                            ? `${fb.chapters.length} capítulos comprados`
+                            : 'Livro completo adquirido'}
+                        </p>
                       </CardContent>
                     </Card>
                   );

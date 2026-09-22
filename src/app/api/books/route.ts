@@ -9,6 +9,7 @@ import {
   validarCampoLivroHtml,
 } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
+import { ehUuid } from '@/lib/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,6 +53,10 @@ export async function GET(request: NextRequest) {
     // SELECT magro: a grelha de cartões usa só estes campos — devolver os 5
     // campos HTML longos (sinopse completa, ficha técnica, etc.) multiplicava
     // o payload por dezenas de KB sem qualquer uso.
+    // Cursor inválido (não-UUID) devolveria erro de cast no PostgreSQL — ignorar
+    // e começar do início é mais amigável do que 500
+    const cursorLimpo = cursor && ehUuid(cursor) ? cursor : null;
+
     const books = await db.book.findMany({
       where,
       select: {
@@ -71,7 +76,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1, // +1 to check if there are more
-      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      ...(cursorLimpo ? { skip: 1, cursor: { id: cursorLimpo } } : {}),
     });
 
     const hasMore = books.length > limit;

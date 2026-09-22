@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
-import { validateCreditoAdmin, validateTextoRecarga } from '@/lib/validate';
+import { validateCreditoAdmin, validateTextoRecarga, ehUuid } from '@/lib/validate';
 
 /**
  * POST /api/admin/creditar — crédito directo de MC a um usuário (útil para beta testers e testes)
@@ -27,6 +27,10 @@ export async function POST(request: NextRequest) {
     // Localiza o usuário
     let user: Awaited<ReturnType<typeof db.user.findUnique>> = null;
     if (userId) {
+      // Id não-UUID daria erro de cast (500) — 404 limpo é a resposta correcta
+      if (!ehUuid(userId)) {
+        return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
+      }
       user = await db.user.findUnique({ where: { id: String(userId) } });
     } else if (userEmail) {
       user = await db.user.findUnique({ where: { email: String(userEmail).trim().toLowerCase() } });

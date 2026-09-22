@@ -383,7 +383,12 @@ export default function EReaderPage() {
   const { viewParams, navigate, user } = useAppStore();
   const chapterId = viewParams.chapterId as string | undefined;
   const bookId = viewParams.bookId as string | undefined;
-  const section = viewParams.section as SectionKey | undefined;
+  const sectionBruta = viewParams.section as string | undefined;
+  // Secção validada: um valor antigo/corrompido no progresso guardado não pode
+  // entrar no leitor (SECTION_LABELS[section] lançaria TypeError no render)
+  const section = sectionBruta && sectionBruta in SECTION_LABELS
+    ? (sectionBruta as SectionKey)
+    : undefined;
   const userId = user?.id;
 
   // Block PrintScreen, Ctrl+Shift+I/J/S/C, Ctrl+P, and DevTools shortcuts
@@ -451,14 +456,20 @@ export default function EReaderPage() {
 
   const isSectionView = !!section && !chapterId;
 
+  // Token de corrida: cliques rápidos em Seguinte/Anterior não devem sobrepor
+  // a resposta antiga à nova — só o pedido mais recente actualiza o leitor
+  const pedidoLeitor = useRef(0);
+
   const loadChapter = useCallback(async () => {
     if (!chapterId) return;
+    const meuPedido = ++pedidoLeitor.current;
     setLoading(true);
     setError(null);
     setPaywall(null);
     setChapterMenuOpen(false);
     try {
       const data = await apiFetch<{ chapter: ChapterData }>(`/api/chapters/${chapterId}`);
+      if (meuPedido !== pedidoLeitor.current) return; // resposta obsoleta — ignorar
       setChapter(data.chapter);
 
       // PROGRESSO (item 15): regista onde o leitor está — dispositivo apenas
@@ -484,6 +495,7 @@ export default function EReaderPage() {
         }
       }
     } catch (err) {
+      if (meuPedido !== pedidoLeitor.current) return;
       if (err instanceof ApiError && err.status === 403 && err.data?.paywall) {
         // 403 paywall: mantém o capítulo actual por trás do popup (se houver)
         // para o leitor decidir sem perder o contexto da leitura
@@ -494,16 +506,18 @@ export default function EReaderPage() {
         setChapter(null);
       }
     } finally {
-      setLoading(false);
+      if (meuPedido === pedidoLeitor.current) setLoading(false);
     }
   }, [chapterId, userId]);
 
   const loadSectionBook = useCallback(async () => {
     if (!bookId || !section) return;
+    const meuPedido = ++pedidoLeitor.current;
     setSectionLoading(true);
     setError(null);
     try {
       const data = await apiFetch<SecaoLivro>(`/api/books/${bookId}`);
+      if (meuPedido !== pedidoLeitor.current) return; // resposta obsoleta — ignorar
       setSectionBook({
         ...data,
         categorias: typeof data.categorias === 'string' ? JSON.parse(data.categorias) : data.categorias,
@@ -513,14 +527,16 @@ export default function EReaderPage() {
       guardarProgresso(userId, {
         bookId,
         section,
-        label: SECTION_LABELS[section].label,
+        // Secção antiga/corrompida no progresso não pode rebentar aqui
+        label: SECTION_LABELS[section]?.label ?? section,
         posicao: 0,
         totalCapitulos: data.chapters?.length || 0,
       });
     } catch (err) {
+      if (meuPedido !== pedidoLeitor.current) return;
       setError((err as Error).message);
     } finally {
-      setSectionLoading(false);
+      if (meuPedido === pedidoLeitor.current) setSectionLoading(false);
     }
   }, [bookId, section, userId]);
 

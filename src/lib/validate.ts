@@ -17,6 +17,16 @@ export class ValidationError extends Error {
   }
 }
 
+/**
+ * UUID v4 (aceita qualquer variante hexadecimal). Validar ANTES de passar ids
+ * ao Prisma evita a classe de erros "invalid input syntax for type uuid"
+ * (500) em PostgreSQL — devolvendo 404 limpo em vez de crash.
+ */
+export function ehUuid(id: unknown): id is string {
+  return typeof id === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 /** Validate and sanitize an email */
 export function validateEmail(email: unknown): string | null {
   if (email === null || email === undefined || email === '') return null;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
 import { validateDeposito } from '@/lib/validate';
+import { RECARGA_CONFIG } from '@/lib/constants';
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,8 +45,16 @@ export async function POST(request: NextRequest) {
 
     // === COMPRAR MOEDAS ===
     if (acao === 'comprar-moedas') {
-      if (!qtdMoedas || typeof qtdMoedas !== 'number' || qtdMoedas <= 0) {
+      // Inteiro obrigatório com tecto — frações (10.5) rebentavam o campo Int
+      // em erro Prisma (500) e sem tecto a API estava aberta a quantidades absurdas
+      if (!qtdMoedas || typeof qtdMoedas !== 'number' || !Number.isInteger(qtdMoedas) || qtdMoedas <= 0) {
         return NextResponse.json({ error: 'Quantidade de moedas inválida.' }, { status: 400 });
+      }
+      if (qtdMoedas > RECARGA_CONFIG.MOEDAS_MAX) {
+        return NextResponse.json(
+          { error: `Máximo de ${RECARGA_CONFIG.MOEDAS_MAX.toLocaleString('pt-MZ')} MC por operação.` },
+          { status: 400 }
+        );
       }
       // Calcular custo em MZN (10 moedas = 1 MZN)
       const custoMzn = qtdMoedas / 10;
@@ -96,20 +105,24 @@ export async function POST(request: NextRequest) {
 
     const valorValidado = validateDeposito(valor);
 
-    const user = await db.user.update({
-      where: { id: payload.userId },
-      data: { saldo_carteira: { increment: valorValidado } },
-      select: { saldo_carteira: true, moedas: true },
-    });
-
-    await db.transaction.create({
-      data: {
-        userId: payload.userId,
-        tipo,
-        valor: valorValidado,
-        status: 'CONCLUIDO',
-        descricao: `Carregamento via ${tipo}`,
-      },
+    // Transacção: saldo e registo de auditoria sobem SEMPRE juntos — se a 2.ª
+    // escrita falhasse, o saldo subia sem registo na Carteira (dinheiro fantasma)
+    const user = await db.$transaction(async (tx) => {
+      const actualizado = await tx.user.update({
+        where: { id: payload.userId },
+        data: { saldo_carteira: { increment: valorValidado } },
+        select: { saldo_carteira: true, moedas: true },
+      });
+      await tx.transaction.create({
+        data: {
+          userId: payload.userId,
+          tipo,
+          valor: valorValidado,
+          status: 'CONCLUIDO',
+          descricao: `Carregamento via ${tipo}`,
+        },
+      });
+      return actualizado;
     });
 
     return NextResponse.json({ saldo: user.saldo_carteira, moedas: user.moedas });

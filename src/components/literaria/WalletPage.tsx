@@ -50,6 +50,9 @@ function EstadoBadge({ estado }: { estado: string }) {
 export default function WalletPage() {
   const { user, updateBalance, updateMoedas } = useAppStore();
   const [loading, setLoading] = useState(true);
+  // Falha de carregamento do ecrã de dinheiro: mostrar erro com retry em vez
+  // de um vazio enganador "Nenhuma transacção registada"
+  const [erroCarregamento, setErroCarregamento] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositType, setDepositType] = useState<'MPESA' | 'NIB'>('MPESA');
   const [depositing, setDepositing] = useState(false);
@@ -94,8 +97,11 @@ export default function WalletPage() {
       updateMoedas(saldoData.moedas);
       setTransactions(saldoData.transacoes || []);
       setRecargas(recargasData.recargas || []);
+      setErroCarregamento(false);
     } catch {
-      // ignore
+      // Ecrã de DINHEIRO: falha de carregamento nunca pode parecer "sem
+      // transacções" — mostra erro com botão Tentar novamente
+      setErroCarregamento(true);
     } finally {
       setLoading(false);
     }
@@ -211,10 +217,13 @@ export default function WalletPage() {
   }
 
   function copiarNumero() {
+    // Clipboard pode estar indisponível (http não-seguro, permissão negada)
     navigator.clipboard.writeText(RECARGA_CONFIG.MPESA_NUMERO).then(() => {
       setCopiado(true);
       toast.success('Número copiado.');
       setTimeout(() => setCopiado(false), 2000);
+    }).catch(() => {
+      toast.error('Não foi possível copiar. Anote o número: ' + RECARGA_CONFIG.MPESA_NUMERO);
     });
   }
 
@@ -373,7 +382,7 @@ export default function WalletPage() {
                   setRecargaCustom('');
                 }
               }}
-              disabled={comprandoMoedas || !recargaCustom}
+              disabled={!recargaCustom}
               className="shrink-0"
             >
               <Zap className="h-4 w-4 mr-1" /> Solicitar
@@ -565,6 +574,15 @@ export default function WalletPage() {
                   <Skeleton className="h-4 w-16" />
                 </div>
               ))}
+            </div>
+          ) : erroCarregamento ? (
+            <div className="text-center py-6">
+              <p className="text-sm text-muted-foreground mb-3">
+                Não foi possível carregar as suas transacções.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => loadTransactions(true)}>
+                Tentar novamente
+              </Button>
             </div>
           ) : transactions.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
@@ -42,23 +42,32 @@ export default function AuthorProfilePage() {
   const [seguindo, setSeguindo] = useState(false);
   const [seguidores, setSeguidores] = useState(0);
   const [aSeguir, setASeguir] = useState(false);
+  // Token de corrida: navegação rápida entre dois perfis não mistura dados
+  const pedidoPerfil = useRef(0);
 
   useEffect(() => {
-    if (autorId) carregarPerfil();
+    if (autorId) {
+      const meuPedido = ++pedidoPerfil.current;
+      carregarPerfil(meuPedido);
+    } else {
+      setLoading(false);
+    }
   }, [autorId, token]);
 
-  async function carregarPerfil() {
+  async function carregarPerfil(meuPedido: number) {
     setLoading(true);
     setErro(false);
     try {
       const d = await apiFetch<PerfilAutor>(`/api/autor/${autorId}`);
+      if (meuPedido !== pedidoPerfil.current) return; // resposta obsoleta — ignorar
       setPerfil(d);
       setSeguindo(d.seguido);
       setSeguidores(d.estatisticas.totalSeguidores);
     } catch {
+      if (meuPedido !== pedidoPerfil.current) return;
       setErro(true);
     } finally {
-      setLoading(false);
+      if (meuPedido === pedidoPerfil.current) setLoading(false);
     }
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,6 +25,8 @@ export interface LivroCartaz {
 /** Cartaz de obra — reutilizado na home e no perfil público de autor (item 18) */
 export function BookCard({ book, onClick }: { book: LivroCartaz; onClick: () => void }) {
   const hasRealCover = book.capa_url && book.capa_url !== '/placeholder-cover.svg';
+  // Defensivo: o autor pode faltar em respostas antigas/em cache — nunca crashar o perfil
+  const nomeAutor = book.autor?.nome || 'Autor desconhecido';
 
   return (
     <Card
@@ -33,7 +35,7 @@ export function BookCard({ book, onClick }: { book: LivroCartaz; onClick: () => 
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       tabIndex={0}
       role="button"
-      aria-label={`Abrir livro: ${book.titulo} por ${book.autor.nome}`}
+      aria-label={`Abrir livro: ${book.titulo} por ${nomeAutor}`}
     >
       {/* Cover area */}
       <div className="aspect-[3/4] bg-muted relative overflow-hidden">
@@ -85,7 +87,7 @@ export function BookCard({ book, onClick }: { book: LivroCartaz; onClick: () => 
 
         {/* Author - clearly separated */}
         <p className="text-xs font-medium text-amber-700 dark:text-amber-400 truncate">
-          {book.autor.nome}
+          {nomeAutor}
         </p>
 
         {/* Synopsis - visually distinct (texto simples, sem código HTML à vista) */}
@@ -209,6 +211,8 @@ export default function HomePage() {
   const [searchInput, setSearchInput] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Token da última procura (race conditions ao filtrar/pesquisar depressa)
+  const pedidoHome = useRef(0);
   // (user/navigate já obtidos no topo)
 
   // Extract unique categories from all published books
@@ -219,10 +223,13 @@ export default function HomePage() {
   useEffect(() => {
     setBooks([]);
     setNextCursor(null);
-    loadBooks();
+    // Token de corrida: cliques rápidos em categorias/pesquisa podem receber
+    // respostas fora de ordem — só a última procura actualiza a lista
+    const meuPedido = ++pedidoHome.current;
+    loadBooks(meuPedido);
   }, [categoriaAtiva, searchQuery]);
 
-  async function loadBooks(cursor?: string) {
+  async function loadBooks(meuPedido: number, cursor?: string) {
     const isFirst = !cursor;
     if (isFirst) setLoading(true);
     else setLoadingMore(true);
@@ -234,18 +241,29 @@ export default function HomePage() {
       params.set('limit', '20');
       const query = params.toString() ? `?${params.toString()}` : '';
       const data = await apiFetch<{ books: LivroCartaz[]; nextCursor: string | null }>(`/api/books${query}`);
+      if (meuPedido !== pedidoHome.current) return; // resposta obsoleta — ignorar
       if (isFirst) {
         setBooks(data.books || []);
         if (!categoriaAtiva && !searchQuery) setAllBooks(data.books || []);
       } else {
         setBooks((prev) => [...prev, ...(data.books || [])]);
+        // Acumula também no "Carregar mais": categorias que só existem em
+        // páginas seguintes ficavam sem chip (allBooks só tinha a 1.ª página)
+        if (!categoriaAtiva && !searchQuery) {
+          setAllBooks((prev) => {
+            const vistos = new Set(prev.map((b) => b.id));
+            return [...prev, ...(data.books || []).filter((b) => !vistos.has(b.id))];
+          });
+        }
       }
       setNextCursor(data.nextCursor || null);
     } catch {
-      if (isFirst) setBooks([]);
+      if (isFirst && meuPedido === pedidoHome.current) setBooks([]);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (meuPedido === pedidoHome.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }
 
@@ -360,7 +378,7 @@ export default function HomePage() {
             {nextCursor && (
               <div className="text-center mt-8">
                 <button
-                  onClick={() => loadBooks(nextCursor!)}
+                  onClick={() => loadBooks(pedidoHome.current, nextCursor!)}
                   disabled={loadingMore}
                   className="px-6 py-2.5 rounded-full border border-border/60 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50"
                 >

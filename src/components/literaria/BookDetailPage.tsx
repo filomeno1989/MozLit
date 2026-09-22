@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
@@ -59,20 +59,30 @@ export default function BookDetailPage() {
   // Autor da obra ou admin: lê tudo, nunca vê botão de compra nos próprios capítulos
   const podeGerir = !!user && !!book && (user.id === book.autor.id || user.role === 'ADMIN');
 
+  // Pedido actual: ignora respostas de um bookId anterior quando o utilizador
+  // navega rápido entre obras (o loadPurchased antigo marcava "possui livro
+  // completo" do livro A enquanto se via o livro B)
+  const pedidoActual = useRef(0);
+
   useEffect(() => {
     if (bookId) {
-      loadBook();
-      if (userId) loadPurchased();
+      const meuPedido = ++pedidoActual.current;
+      loadBook(meuPedido);
+      if (userId) loadPurchased(meuPedido);
+    } else {
+      // Sem bookId não há o que carregar — nunca deixar o skeleton infinito
+      setLoading(false);
     }
     // Depende apenas do bookId e do ID do utilizador (não do objecto user,
     // que muda de identidade a cada compra/sync — isso fazia a página
     // inteira piscar de volta ao skeleton após cada ação).
   }, [bookId, userId]);
 
-  async function loadBook() {
+  async function loadBook(meuPedido: number) {
     setLoading(true);
     try {
       const data = await apiFetch<BookDetail>(`/api/books/${bookId}`);
+      if (meuPedido !== pedidoActual.current) return; // resposta obsoleta — ignorar
       setBook(data);
 
       // PROGRESSO (item 15): se o leitor já esteve aqui, valida que o ponto
@@ -86,15 +96,17 @@ export default function BookDetailPage() {
         setProgresso(null);
       }
     } catch {
+      if (meuPedido !== pedidoActual.current) return;
       setBook(null);
     } finally {
-      setLoading(false);
+      if (meuPedido === pedidoActual.current) setLoading(false);
     }
   }
 
-  async function loadPurchased() {
+  async function loadPurchased(meuPedido: number) {
     try {
       const res = await apiFetch<{ items: Array<{ chapterId: string | null; bookId: string | null; tipo: string }>; fullBookIds: string[] }>('/api/library');
+      if (meuPedido !== pedidoActual.current) return; // resposta obsoleta — ignorar
       const chapterSet = new Set(
         res.items.map((i) => i.chapterId).filter(Boolean) as string[]
       );
@@ -122,9 +134,11 @@ export default function BookDetailPage() {
         setPurchasedIds(new Set(book!.chapters.map((c) => c.id)));
       } else {
         setPurchasedIds((prev) => new Set([...prev, id!]));
-        loadPurchased();
+        loadPurchased(pedidoActual.current);
       }
     } catch (err) {
+      // Banner de erro visível para além do toast (purchaseError estava morto)
+      setPurchaseError((err as Error).message);
       toast.error((err as Error).message);
     } finally {
       setPurchasing(null);

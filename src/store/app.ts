@@ -62,15 +62,18 @@ export const useAppStore = create<AppState>((set) => ({
       const state = useAppStore.getState();
       // Don't push duplicate entries
       const last = state._history[state._history.length - 1];
-      if (!last || last.view !== view || JSON.stringify(last.params) !== JSON.stringify(params)) {
+      const duplicada = last && last.view === view && JSON.stringify(last.params) === JSON.stringify(params);
+      if (!duplicada) {
         const newHistory = [...state._history, { view, params: params || {} }];
         // Keep max 50 entries
         if (newHistory.length > 50) newHistory.shift();
         set({ _history: newHistory });
+        // Push browser history state APENAS quando a entrada entra no _history —
+        // antes, repetir o mesmo item de menu criava entrada de browser extra
+        // sem entrada no histórico interno e o Voltar "não fazia nada" à 1.ª vez
+        const key = `mozlit_${view}_${Date.now()}`;
+        window.history.pushState({ mozlit: true, view, params: params || {} }, '', `#${key}`);
       }
-      // Push browser history state so Android back button works
-      const key = `mozlit_${view}_${Date.now()}`;
-      window.history.pushState({ mozlit: true, view, params: params || {} }, '', `#${key}`);
       // Register popstate listener once
       if (!state._popstateRegistered) {
         set({ _popstateRegistered: true });

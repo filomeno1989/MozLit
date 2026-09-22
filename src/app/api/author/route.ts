@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 
@@ -31,12 +32,16 @@ export async function GET(request: NextRequest) {
     if (idsLivros.length > 0) {
       const ehPostgres = (process.env.DATABASE_URL || '').startsWith('postgres');
       if (ehPostgres) {
+        // Prisma.join parametriza cada id individualmente — o join(',') anterior
+        // ligava TODOS os ids como UM parâmetro (IN ($1) = "uuid1,uuid2") e a
+        // contagem devolvia sempre 0: o checklist mostrava "conteúdo OK" com
+        // capítulos vazios em produção.
         const linhasVazios = await db.$queryRaw<{ livro_id: string; vazios: bigint | number }[]>`
           SELECT "livro_id", COUNT(*)::int AS vazios
           FROM "chapters"
           WHERE "arquivado" = false
             AND BTRIM(REGEXP_REPLACE(COALESCE("conteudo", ''), '<[^>]*>', '', 'g')) = ''
-            AND "livro_id"::text IN (${idsLivros.join(',')})
+            AND "livro_id"::text IN (${Prisma.join(idsLivros)})
           GROUP BY "livro_id"`;
         for (const linha of linhasVazios) {
           vaziosPorLivro.set(linha.livro_id, Number(linha.vazios));

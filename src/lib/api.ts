@@ -12,24 +12,36 @@ export class ApiError extends Error {
   }
 }
 
+interface FetchOptions extends RequestInit {
+  /**
+   * Pedidos em segundo plano (poll de notificações) NÃO devem expulsar o
+   * leitor a meio de um capítulo quando a sessão expira — o 401 chega ao
+   * chamador, que decide em silêncio (parar o poll) sem redirecionar.
+   */
+  semRedirecionar?: boolean;
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit = {}
+  options: FetchOptions = {}
 ): Promise<T> {
+  const { semRedirecionar, ...fetchInit } = options;
   const { token } = useAppStore.getState();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+    ...(fetchInit.headers as Record<string, string>),
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(path, { ...options, headers });
+  const res = await fetch(path, { ...fetchInit, headers });
 
   // Handle 401 — clear auth and redirect to login
   if (res.status === 401 && !path.includes('/api/auth/')) {
     useAppStore.getState().clearAuth();
-    useAppStore.getState().navigate('login');
+    if (!semRedirecionar) {
+      useAppStore.getState().navigate('login');
+    }
     throw new ApiError('Sessão expirada. Entre novamente.', 401);
   }
 

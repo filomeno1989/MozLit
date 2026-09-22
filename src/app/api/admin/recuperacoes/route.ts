@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
-import { validateTextoRecarga } from '@/lib/validate';
+import { validateTextoRecarga, ehUuid } from '@/lib/validate';
 
 /**
  * GET /api/admin/recuperacoes — pedidos de recuperação de acesso ("esqueci-me da senha").
@@ -55,6 +55,9 @@ export async function PATCH(request: NextRequest) {
         { error: 'Indique o id do pedido e o estado (RESOLVIDO ou PENDENTE).' },
         { status: 400 }
       );
+    }
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
     }
 
     const nota = notaAdmin !== undefined

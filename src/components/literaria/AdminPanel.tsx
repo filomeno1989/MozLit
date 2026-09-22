@@ -142,11 +142,18 @@ export default function AdminPanel() {
     }
   }, []);
 
+  // Carga inicial: estatísticas + recuperações (recargas ficam a cargo do
+  // efeito do filtro abaixo, que também corre na montagem — sem duplo pedido)
   useEffect(() => {
     loadStats();
-    loadRecargas(filtroEstado);
     loadRecuperacoes();
-  }, [loadStats, loadRecargas, loadRecuperacoes, filtroEstado]);
+  }, [loadStats, loadRecuperacoes]);
+
+  // Mudar o filtro de recargas recarrega SÓ a lista de recargas — antes
+  // re-executava loadStats() e loadRecuperacoes() (pedidos inúteis) a cada filtro
+  useEffect(() => {
+    loadRecargas(filtroEstado);
+  }, [filtroEstado, loadRecargas]);
 
   async function buscarUtilizadores(q: string, pagina = 1, acumular = false) {
     setBuscando(true);

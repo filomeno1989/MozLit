@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, hashPassword, verificarAdminActivo } from '@/lib/auth';
-import { validateSenha } from '@/lib/validate';
+import { validateSenha, ehUuid } from '@/lib/validate';
 
 const PAPEIS_VALIDOS = ['LEITOR', 'ESCRITOR', 'ADMIN'];
 
@@ -96,6 +96,9 @@ export async function PATCH(request: NextRequest) {
 
     if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: 'Utilizador inválido.' }, { status: 400 });
+    }
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Utilizador não encontrado.' }, { status: 404 });
     }
 
     const alvo = await db.user.findUnique({ where: { id } });

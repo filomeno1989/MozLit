@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { ehUuid } from '@/lib/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,6 +10,9 @@ export async function GET(request: NextRequest) {
 
     if (!chapterId) {
       return NextResponse.json({ error: 'chapterId é obrigatório' }, { status: 400 });
+    }
+    if (!ehUuid(chapterId)) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
     // Check chapter access for paid chapters
@@ -90,6 +94,9 @@ export async function POST(request: NextRequest) {
 
     if (!conteudo || !chapterId) {
       return NextResponse.json({ error: 'Conteúdo e chapterId são obrigatórios' }, { status: 400 });
+    }
+    if (!ehUuid(chapterId) || (parentId && !ehUuid(parentId))) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     }
 
     const trimmed = String(conteudo).trim();

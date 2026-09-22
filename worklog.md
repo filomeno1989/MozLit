@@ -128,3 +128,34 @@ Stage Summary:
 - Push pendente (commit único com os 5 ficheiros alterados); deploy Vercel automático
 - Alinhamento disponível em todos os campos com editor rico; sanitização mantida
 - Nota ao utilizador: repo MozLit está PÚBLICO - recomendação de tornar privado como no danmo-hub
+
+---
+Task ID: 7
+Agent: main (chat novo, ambiente reiniciado)
+Task: Corrigir crash do perfil público de autor + varredura de melhorias e correcções + proposta da Fase 5
+
+Work Log:
+- BUG REPORTADO (perfil do escritor dá "Algo correu mal"): BookCard lê book.autor.nome (aria-label e parágrafo do autor) mas GET /api/autor/[id] devolvia as obras SEM o objecto autor → TypeError em render → ErrorBoundary. FIX: API passa a devolver autor: {id, nome} em cada obra (mesmo formato de /api/books) + BookCard defensivo (book.autor?.nome || 'Autor desconhecido'). Verificado E2E: perfil renderiza, Seguir/Deixar de seguir idempotente
+- VARREDURA (2 auditorias paralelas: rotas API + componentes, 26+ ficheiros cruzados com schema):
+  - ALTO — DELETE /api/chapters/[id] apagava capítulo COMPRADO (LibraryItem ia em cascade, leitores perdiam conteúdo pago): agora devolve 409 e empurra para arquivar (igual ao DELETE de livros)
+  - ALTO — /api/author: $queryRaw com IN (${ids.join(',')}) virava UM parâmetro → capitulosVazios sempre 0 em PostgreSQL, checklist de publicação mentia: substituído por Prisma.join(idsLivros)
+  - Classe de 500s "invalid input syntax for uuid" eliminada: helper ehUuid() em validate.ts aplicado em books/[id] (GET/PATCH/DELETE), books (cursor), books/by-author, chapters/[id] (GET/PATCH/DELETE), chapters (livroId), comments (chapterId/parentId), library (bookId/chapterId), admin/utilizadores, admin/creditar (userId), admin/recuperacoes
+  - PATCH books/[id]: whitelist de status (RASCUNHO/PUBLICADO), preço 0..PRECO_TOTAL_MAX (negativo "imprimia" MC), capa_url https, checklist de publicação valida a sinopse NOVA quando o PATCH a traz
+  - library POST: débito condicional portável (updateMany com moedas gte) substitui SELECT ... ::uuid FOR UPDATE (sintaxe PostgreSQL-only que rebentava em dev/SQLite); P2002 em corrida devolve 409 "Já possui" em vez de 500
+  - wallet: depósito MZN agora em $transaction (saldo e auditoria sobem juntos); comprar-moedas exige inteiro e tecto MOEDAS_MAX
+  - Race conditions de fetch com token de pedido (pedidoActual/pedidoHome/pedidoLeitor/pedidoPerfil) em BookDetailPage (loadBook+loadPurchased), HomePage, EReaderPage (loadChapter+loadSectionBook) e AuthorProfilePage — respostas obsoletas são ignoradas
+  - store/app.ts: pushState só quando a entrada entra no _history (Voltar "não fazia nada" à 1.ª vez); popstate mantido para back Android
+  - HomePage: allBooks acumula no "Carregar mais" (categorias de páginas seguintes ficavam sem chip)
+  - WalletPage: falha de carregamento mostra erro + "Tentar novamente" (não mais "Nenhuma transacção" enganador); copiarNumero com .catch; botão Solicitar usa estado certo (disabled={!recargaCustom})
+  - AppShell: poll de notificações com semRedirecionar (apiFetch FetchOptions) — sessão expirada a meio da leitura já não expulsa o leitor para o login
+  - LibraryPage: secção "Livros Completos" só mostra obras com pack completo comprado (badge "Completo" falso removido); contagem de capítulos diz "capítulos comprados" / "Livro completo adquirido"
+  - EReaderPage: secção do viewParams validada contra SECTION_LABELS (progresso corrompido não rebenta o render); BookDetailPage sem bookId deixa de mostrar skeleton infinito; purchaseError morto agora é usado no catch de executePurchase
+  - AuthorDashboard: pré-checagem de eliminar (chamava /api/library — biblioteca do PRÓPRIO autor) removida; CommentsSection ternário duplicado simplificado; AdminPanel separa carga inicial do efeito do filtro (sem pedidos duplicados)
+- schema.dev.prisma regenerado: dev SQLite ficou sem as relations/indexes da Fase 4 (seguidores, @@index) — agora em sincronia com o schema principal
+- Validação: tsc 0 erros, eslint 0 erros; E2E browser (dev SQLite + seed): perfil de autor OK, seguir/deixar OK, compra "insuficiente" com 400 amigável, conversão 50 MZN→500 MC OK, compra de capítulo OK (Maria −30 MC, Mia +15 MC, LibraryItem + transacções corretas), leitor renderiza, biblioteca classifica certo, painel admin com estatísticas corretas (485 MC em circulação), sem erros no console nem no dev.log
+
+Stage Summary:
+- Commit pushed → deploy Vercel automático
+- Crash do perfil do autor corrigido (causa raiz + defesa em BookCard)
+- 20+ correcções da varredura implementadas; pendentes documentadas: revalidação de papel ESCRITOR na BD nas rotas de escrita (janela de 7 dias do JWT), custo duplo LIVRO_COMPLETO com capítulos já comprados, rate limit em memória (multi-instância Vercel), região da função Vercel = região Supabase (acção do utilizador)
+- Fase 5 proposta ao utilizador: Social & Descoberta (seguir feed de autores, notificações in-app, partilha de trechos, obras relacionadas, busca avançada)

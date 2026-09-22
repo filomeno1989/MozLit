@@ -229,11 +229,8 @@ export default function CommentsSection({
       await apiFetch(`/api/comments?id=${commentId}`, { method: 'DELETE' });
       setComments((prev) =>
         prev
-          .map((c) =>
-            c.id === commentId
-              ? { ...c, replies: c.replies.filter((r) => r.id !== commentId) }
-              : { ...c, replies: c.replies.filter((r) => r.id !== commentId) }
-          )
+          // remove a resposta nos restantes comentários e o próprio comentário
+          .map((c) => ({ ...c, replies: c.replies.filter((r) => r.id !== commentId) }))
           .filter((c) => c.id !== commentId)
       );
     } catch (err) {

@@ -97,7 +97,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     async function verificarRecargas() {
       if (!vivo || !userIdNotif) return;
       try {
-        const d = await apiFetch<{ recargas: RecargaParaNotificar[] }>('/api/recargas');
+        const d = await apiFetch<{ recargas: RecargaParaNotificar[] }>('/api/recargas', { semRedirecionar: true });
         const novas = recargasNaoVistas(userIdNotif, d.recargas || []);
         if (novas.length === 0) return;
         marcarRecargasVistas(userIdNotif);
@@ -115,7 +115,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // offline/falha: tenta de novo no próximo ciclo — nunca intrusivo
+        // offline/falha/401: tenta de novo no próximo ciclo — nunca intrusivo.
+        // Se a sessão expirou, o clearAuth já aconteceu e este efeito nem
+        // volta a correr (userIdNotif fica null) — o leitor termina o capítulo
+        // em paz e só pede login na próxima interacção.
       }
     }
     const t = setTimeout(verificarRecargas, 2500); // após o arranque da página

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateConteudoCapitulo } from '@/lib/validate';
+import { validateTitulo, validateConteudoCapitulo, ehUuid } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
 
 export async function GET(
@@ -10,6 +10,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    }
     const token = extractTokenFromHeader(request.headers.get('Authorization'));
     const payload = token ? verifyToken(token) : null;
 
@@ -218,6 +221,9 @@ export async function PATCH(
     }
 
     const { id } = await params;
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    }
     const chapter = await db.chapter.findUnique({
       where: { id },
       include: { livro: { select: { autorId: true } } },
@@ -283,6 +289,9 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
+    }
     const chapter = await db.chapter.findUnique({
       where: { id },
       include: { livro: { select: { autorId: true } } },
@@ -290,6 +299,25 @@ export async function DELETE(
     if (!chapter) return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
     if (chapter.livro.autorId !== payload.userId && payload.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
+    }
+
+    // CONTEÚDO PAGO NUNCA DESAPARECE (princípio da Fase 2): se alguém adquiriu
+    // este capítulo ou o livro completo, a eliminação destruiria a compra dos
+    // leitores (LibraryItem apagado em cascade). Igual ao DELETE de livros —
+    // o autor arquiva para esconder do público, mantendo o acesso de quem pagou.
+    const compradores = await db.libraryItem.count({
+      where: {
+        OR: [
+          { chapterId: id },
+          { bookId: chapter.livroId, tipo: 'LIVRO_COMPLETO' },
+        ],
+      },
+    });
+    if (compradores > 0) {
+      return NextResponse.json(
+        { error: `Não pode eliminar: ${compradores} leitor(es) adquiriram este conteúdo. Arquive-o para o esconder do público — quem comprou continua a ter acesso.` },
+        { status: 409 }
+      );
     }
 
     // Eliminar + re-numerar numa transacção: os capítulos seguintes sobem uma

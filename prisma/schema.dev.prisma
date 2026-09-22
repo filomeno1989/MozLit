@@ -28,6 +28,9 @@ model User {
   libraryItems LibraryItem[]
   comments     Comment[]
   recargas     RecargaSolicitacao[]
+  recuperacoes PedidoRecuperacao[]
+  seguidores   Seguidor[] @relation("autorSeguidores")
+  seguindo     Seguidor[] @relation("leitorSegue")
 
   @@map("profiles")
 }
@@ -54,6 +57,8 @@ model Book {
   autor      User     @relation(fields: [autorId], references: [id], onDelete: Cascade)
   chapters   Chapter[]
 
+  @@index([autorId])
+  @@index([status, createdAt])
   @@map("books")
 }
 
@@ -63,6 +68,7 @@ model Chapter {
   conteudo       String   @default("")
   preco_capitulo Float    @default(0) @map("preco_capitulo")
   is_free        Boolean  @default(false) @map("is_free")
+  arquivado      Boolean  @default(false) @map("arquivado")
   ordem          Int      @default(0)
   livroId        String   @map("livro_id")
   createdAt      DateTime @default(now()) @map("created_at")
@@ -83,12 +89,16 @@ model Transaction {
   valor      Float
   status     String   @default("PENDENTE")
   descricao  String?
+  chapterId  String?  @map("chapter_id") // auditoria: capítulo comprado/vendido
+  bookId     String?  @map("book_id")   // auditoria: obra comprada/vendida
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, tipo])
+  @@index([chapterId])
+  @@index([bookId])
   @@map("transactions")
 }
 
@@ -106,6 +116,8 @@ model LibraryItem {
   @@unique([userId, chapterId])
   @@index([userId, bookId])
   @@index([userId, tipo])
+  @@index([bookId])
+  @@index([chapterId])
   @@map("library_items")
 }
 
@@ -123,6 +135,9 @@ model Comment {
   parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies   Comment[] @relation("CommentReplies")
 
+  @@index([chapterId])
+  @@index([userId])
+  @@index([parentId])
   @@map("comments")
 }
 
@@ -134,6 +149,7 @@ model RecargaSolicitacao {
   metodo        String    @default("MPESA") // MPESA | EMOOLA | TRANSFERENCIA
   numeroEnvio   String?   @map("numero_envio") // número de onde foi feito o envio
   referencia    String?                   // ID / referência da transacção (comprovativo)
+  comprovativoUrl String? @map("comprovativo_url") // imagem do comprovativo (screenshot do SMS/M-Pesa)
   nota          String?                   // observação opcional do usuário
   estado        String    @default("PENDENTE") // PENDENTE | APROVADA | REJEITADA | CANCELADA
   notaAdmin     String?   @map("nota_admin") // motivo da rejeição ou nota do admin
@@ -147,4 +163,35 @@ model RecargaSolicitacao {
   @@index([userId, estado])
   @@index([estado, createdAt])
   @@map("recargas_solicitacoes")
+}
+
+model PedidoRecuperacao {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  contacto    String    // telefone/email indicado no pedido
+  estado      String    @default("PENDENTE") // PENDENTE | RESOLVIDO
+  notaAdmin   String?   @map("nota_admin")
+  resolvidoEm DateTime? @map("resolvido_em")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([estado, createdAt])
+  @@index([userId])
+  @@map("pedidos_recuperacao")
+}
+
+model Seguidor {
+  id         String   @id @default(uuid())
+  autorId    String   @map("autor_id")
+  seguidorId String   @map("seguidor_id")
+  criadoEm   DateTime @default(now()) @map("created_at")
+
+  autor    User @relation("autorSeguidores", fields: [autorId], references: [id], onDelete: Cascade)
+  seguidor User @relation("leitorSegue", fields: [seguidorId], references: [id], onDelete: Cascade)
+
+  @@unique([autorId, seguidorId])
+  @@index([autorId])
+  @@map("seguidores")
 }

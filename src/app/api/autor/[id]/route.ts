@@ -57,6 +57,7 @@ export async function GET(
           faixa_etaria: true,
           volume_info: true,
           createdAt: true,
+          autor: { select: { id: true, nome: true } },
           _count: { select: { chapters: { where: { arquivado: false } } } },
         },
       }),
@@ -95,6 +96,8 @@ export async function GET(
         preco_total: b.preco_total,
         faixa_etaria: b.faixa_etaria,
         volume_info: b.volume_info,
+        // BookCard lê book.autor.nome — sem isto o perfil público crashava
+        autor: b.autor,
         totalCapitulos: b._count.chapters,
       })),
     });

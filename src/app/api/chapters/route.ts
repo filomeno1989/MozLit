@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateTitulo, validateConteudoCapitulo } from '@/lib/validate';
+import { validateTitulo, validateConteudoCapitulo, ehUuid } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
@@ -20,6 +20,9 @@ export async function POST(request: NextRequest) {
 
     if (!titulo || !conteudo || !livroId) {
       return NextResponse.json({ error: 'Título, conteúdo e livroId são obrigatórios' }, { status: 400 });
+    }
+    if (!ehUuid(livroId)) {
+      return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
     }
 
     // Validate inputs (conteúdo HTML é sanitizado antes de gravar)
