@@ -159,3 +159,26 @@ Stage Summary:
 - Crash do perfil do autor corrigido (causa raiz + defesa em BookCard)
 - 20+ correcções da varredura implementadas; pendentes documentadas: revalidação de papel ESCRITOR na BD nas rotas de escrita (janela de 7 dias do JWT), custo duplo LIVRO_COMPLETO com capítulos já comprados, rate limit em memória (multi-instância Vercel), região da função Vercel = região Supabase (acção do utilizador)
 - Fase 5 proposta ao utilizador: Social & Descoberta (seguir feed de autores, notificações in-app, partilha de trechos, obras relacionadas, busca avançada)
+
+---
+Task ID: 8
+Agent: main (chat novo, ambiente reiniciado)
+Task: Fase 5 — Social & Descoberta (itens 24-28) + correção crítica do débito duplo
+
+Work Log:
+- CORRECÇÃO CRÍTICA DESCOBERTA DURANTE A FASE 5: library POST debitava o comprador EM DOBRO desde a varredura aae8e38 — o updateMany condicional novo e o update() antigo ficaram os dois na transação. O E2E antigo ("Maria −30, Mia +15") registou o bug por engano como "comissão". Fix: débito único (updateMany só). Verificado: capítulo de 30 MC debita exactamente 30.
+- JUSTIÇA DE PREÇO (pendente documentada da varredura): LIVRO_COMPLETO desconta o preço dos capítulos pagos já adquiridos (precoCobrado + desconto na resposta; dialog mostra o desconto; pack gratuito se o desconto cobrir tudo). Verificado: pack de 100 com cap de 30 pago cobra 70.
+- ITEM 24 Notificações in-app: model Notificacao + DDL auto-reparação (esquemaActualizado 22→24 índices) + migration 20260922000000_notificacoes; src/lib/notificar.ts (notificar/notificarSeguidores, nunca lançam); hooks em seguir (SEGUIDOR_NOVO), books PATCH (OBRA_NOVA só na transição RASCUNHO→PUBLICADO), chapters POST em obra publicada (CAPITULO_NOVO), comments POST (COMENTARIO ao autor da obra + RESPOSTA ao dono do comentário pai — capturado como donoDoPai porque "parent" no escopo global é window.parent), admin/recargas PATCH (RECARGA). /api/notificacoes GET+?contagem=1+PATCH. AppShell: sino com badge 9+, painel Sheet com ícones por tipo e navegação ao clique, poll de contagem 30s (semRedirecionar).
+- ITEM 25 Feed "A Seguir": /api/feed (obras+capítulos dos seguidos intercalados por data, sugestões = mais seguidos + escritores activos, excluindo já seguidos); FeedPage (timeline, sugestões com Seguir em linha, estados vazios, visitantes veem sugestões); nav "A Seguir" para todos.
+- ITEM 26 Partilha: leitor com botão "Partilhar trecho" nas duas vistas (excepção controlada ao DRM: select-text condicional, captura mouseup/touchend, 10..600 chars, barra fixa Copiar/Partilhar, Web Share API + fallback clipboard, atribuição sempre); BookDetail "Partilhar" (link /?obra=ID) + deep-link no arranque (page.tsx).
+- ITEM 27 Obras relacionadas: /api/books/[id]/relacionadas (mesmo autor → género → recentes, max 6, só PUBLICADO); secção na BookDetailPage com BookCard + skeletons.
+- ITEM 28 Busca avançada: /api/books search também em categorias (JSON string contains), ordenar=recentes|antigos|preco_asc|preco_desc|titulo, total na resposta; HomePage com select de ordenação, contagem de resultados, título "Resultados para «termo»", estado vazio com Limpar filtros.
+- schema.dev.prisma regenerado + prisma generate + db push no SQLite dev (file:/home/z/my-project/db/custom.db — DATABASE_URL absoluto contorna a resolução relativa).
+- Validação: tsc 0, eslint 0 (setState síncrono no efeito do FeedPage corrigido para padrão do repo); E2E API: seguir→SEGUIDOR_NOVO, publicar→OBRA_NOVA a Maria e Mia, comentário→COMENTARIO, resposta→RESPOSTA, compra 30 MC exactos (débito único), pack 70/30 desconto, saldo insuficiente 400, auto-seguir 400, busca "Poesia"→1, ordenações (40→50→60→75; título A–Z), relacionadas→4, deep-link; E2E browser: feed anon (sugestões)/logado (timeline), sino com badge, clique em notificação navega (capítulo rascunho → erro limpo), modo trecho com selecção (mín. 10 chars respeitado) e Copiar, Partilhar obra, ordenação UI, deep-link /?obra=, mobile 390px sem overflow horizontal; console sem erros.
+- Nota: autor não consegue comentar o próprio capítulo pago (acesso só via LibraryItem) — comportamento pré-existente, documentado como candidata à Fase 6.
+
+Stage Summary:
+- Commit d8c2146 pushed → deploy Vercel automático; produção verificada (/api/feed com sugestões reais, total na resposta de books)
+- Débito duplo eliminado: o dinheiro dos leitores volta a valer exactamente o preço
+- Auto-reparação criará "notificacoes" na Supabase na 1.ª consulta após o deploy
+- Pendentes mantidas: revalidação de papel ESCRITOR nas rotas de escrita, rate limit multi-instância, região Vercel = Supabase (acção do utilizador)
