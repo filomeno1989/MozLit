@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     const categoria = searchParams.get('categoria');
     const search = searchParams.get('search');
     const cursor = searchParams.get('cursor');
+    const ordenar = searchParams.get('ordenar') || 'recentes';
     const limitRaw = Number(searchParams.get('limit')) || 20;
     // Entre 1 e 50 — valores negativos/NaN faziam o Prisma falhar com erro 500
     const limit = Math.max(1, Math.min(Number.isFinite(limitRaw) ? Math.floor(limitRaw) : 20, 50));
@@ -37,7 +38,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Search by title or author name
+    // Busca avançada (item 28): título, autor e categorias.
+    // Sinopse guarda HTML — corresponder termos lá dentro é ruidoso; fica para
+    // a página de detalhe. Categorias vive como JSON string, o "contains"
+    // apanha correspondências parciais dentro da lista.
     if (search && search.trim().length > 0) {
       const term = search.trim();
       // `mode: 'insensitive'` só existe no PostgreSQL (produção); no SQLite de dev
@@ -47,8 +51,20 @@ export async function GET(request: NextRequest) {
       (where as Record<string, unknown>).OR = [
         { titulo: { contains: term, ...ins } },
         { autor: { nome: { contains: term, ...ins } } },
+        // categorias vive como JSON string ("[\"Poesia\",...]") — contains apanha
+        { categorias: { contains: term, ...ins } },
       ];
     }
+
+    // Ordenação (item 28): recentes é o padrão; preço/título servem a descoberta
+    const ORDENACOES: Record<string, Record<string, 'asc' | 'desc'>> = {
+      recentes: { createdAt: 'desc' },
+      antigos: { createdAt: 'asc' },
+      preco_asc: { preco_total: 'asc' },
+      preco_desc: { preco_total: 'desc' },
+      titulo: { titulo: 'asc' },
+    };
+    const orderBy = ORDENACOES[ordenar] || ORDENACOES.recentes;
 
     // SELECT magro: a grelha de cartões usa só estes campos — devolver os 5
     // campos HTML longos (sinopse completa, ficha técnica, etc.) multiplicava
@@ -56,6 +72,10 @@ export async function GET(request: NextRequest) {
     // Cursor inválido (não-UUID) devolveria erro de cast no PostgreSQL — ignorar
     // e começar do início é mais amigável do que 500
     const cursorLimpo = cursor && ehUuid(cursor) ? cursor : null;
+
+    // Contagem total para a UI ("X resultados para «termo»") — 1 consulta
+    // indexada; catálogo atual é pequeno, custo desprezável
+    const total = await db.book.count({ where });
 
     const books = await db.book.findMany({
       where,
@@ -74,7 +94,7 @@ export async function GET(request: NextRequest) {
           select: { id: true, nome: true, biografia: true, avatar_url: true },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: limit + 1, // +1 to check if there are more
       ...(cursorLimpo ? { skip: 1, cursor: { id: cursorLimpo } } : {}),
     });
@@ -89,7 +109,7 @@ export async function GET(request: NextRequest) {
       categorias: JSON.parse(b.categorias || '[]'),
     }));
 
-    return NextResponse.json({ books: parsed, nextCursor });
+    return NextResponse.json({ books: parsed, nextCursor, total });
   } catch (error) {
     console.error('Error fetching books:', error);
     return NextResponse.json(

@@ -141,6 +141,39 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Preço inválido para o livro' }, { status: 400 });
       }
 
+      // JUSTIÇA DE PREÇO (Fase 5): quem já comprou capítulos individuais não
+      // volta a pagar por eles no pack — o LIVRO_COMPLETO desconta o preço dos
+      // capítulos pagos já adquiridos. Gratuitos não descontam (nunca custaram).
+      const capitulosPossuidos = await db.libraryItem.findMany({
+        where: { userId: payload.userId, bookId, chapterId: { not: null } },
+        select: { chapterId: true },
+      });
+      const idsPossuidos = new Set(
+        capitulosPossuidos.map((i) => i.chapterId).filter(Boolean) as string[]
+      );
+      const desconto = book.chapters
+        .filter((c) => !c.is_free && idsPossuidos.has(c.id))
+        .reduce((soma, c) => soma + Math.round(c.preco_capitulo), 0);
+      const precoAPagar = Math.max(0, precoMoedas - desconto);
+
+      // Desconto cobre todo o pack (o leitor já pagou o equivalente): receber o
+      // pack é gratuito — e desbloqueia capítulos futuros do mesmo livro.
+      if (precoAPagar === 0) {
+        await db.libraryItem.create({
+          data: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
+        });
+        const conta = await db.user.findUnique({
+          where: { id: payload.userId },
+          select: { moedas: true },
+        });
+        return NextResponse.json({
+          success: true,
+          novoSaldoMoedas: conta?.moedas ?? 0,
+          precoCobrado: 0,
+          desconto,
+        });
+      }
+
       const result = await db.$transaction(async (tx) => {
         // Re-verifica a posse DENTRO da transacção: a unique (userId, chapterId)
         // não protege LIVRO_COMPLETO (chapterId é null), e duas compras
@@ -151,10 +184,13 @@ export async function POST(request: NextRequest) {
         if (jaTem) throw new Error('CONFLITO_POSSE');
 
         // Débito condicional: race-safe e portável (o SELECT ... ::uuid FOR UPDATE
-        // é sintaxe exclusiva de PostgreSQL e rebentava em dev/SQLite).
+        // era sintaxe exclusiva de PostgreSQL e rebentava em dev/SQLite).
+        // ATENÇÃO: decrementa UMA única vez — a versão anterior tinha um segundo
+        // update() de decremento que cobrava o leitor EM DOBRO (regressão da
+        // varredura de 2026-09; o E2E antigo registou-o por engano como "comissão").
         const debit = await tx.user.updateMany({
-          where: { id: payload.userId, moedas: { gte: precoMoedas } },
-          data: { moedas: { decrement: precoMoedas } },
+          where: { id: payload.userId, moedas: { gte: precoAPagar } },
+          data: { moedas: { decrement: precoAPagar } },
         });
         if (debit.count === 0) {
           throw new Error('Moedas insuficientes. Compre moedas na carteira.');
@@ -164,20 +200,19 @@ export async function POST(request: NextRequest) {
           data: { userId: payload.userId, bookId, tipo: 'LIVRO_COMPLETO' },
         });
         await tx.user.update({
-          where: { id: payload.userId },
-          data: { moedas: { decrement: precoMoedas } },
-        });
-        await tx.user.update({
           where: { id: book.autorId },
-          data: { moedas: { increment: precoMoedas } },
+          data: { moedas: { increment: precoAPagar } },
         });
         await tx.transaction.create({
           data: {
             userId: payload.userId,
             tipo: 'COMPRA',
-            valor: precoMoedas,
+            valor: precoAPagar,
             status: 'CONCLUIDO',
-            descricao: `Livro completo: ${book.titulo} (${precoMoedas} MC)`,
+            descricao:
+              desconto > 0
+                ? `Livro completo: ${book.titulo} (${precoAPagar} MC, desconto de ${desconto} MC por capítulos já adquiridos)`
+                : `Livro completo: ${book.titulo} (${precoAPagar} MC)`,
             bookId,
           },
         });
@@ -186,9 +221,12 @@ export async function POST(request: NextRequest) {
           data: {
             userId: book.autorId,
             tipo: 'VENDA',
-            valor: precoMoedas,
+            valor: precoAPagar,
             status: 'CONCLUIDO',
-            descricao: `Venda: ${book.titulo} — livro completo (${precoMoedas} MC)`,
+            descricao:
+              desconto > 0
+                ? `Venda: ${book.titulo} — livro completo (${precoAPagar} MC, com desconto de ${desconto} MC)`
+                : `Venda: ${book.titulo} — livro completo (${precoAPagar} MC)`,
             bookId,
           },
         });
@@ -200,7 +238,12 @@ export async function POST(request: NextRequest) {
         return updatedBuyer;
       });
 
-      return NextResponse.json({ success: true, novoSaldoMoedas: result?.moedas ?? 0 });
+      return NextResponse.json({
+        success: true,
+        novoSaldoMoedas: result?.moedas ?? 0,
+        precoCobrado: precoAPagar,
+        desconto,
+      });
     }
 
     // --- Chapter Purchase ---
@@ -291,10 +334,8 @@ export async function POST(request: NextRequest) {
       await tx.libraryItem.create({
         data: { userId: payload.userId, chapterId, bookId: chapter.livroId },
       });
-      await tx.user.update({
-        where: { id: payload.userId },
-        data: { moedas: { decrement: precoMoedas } },
-      });
+      // Débito do comprador UMA única vez (o updateMany condicional acima já
+      // debita — o update() duplicado cobrava o leitor EM DOBRO).
       await tx.user.update({
         where: { id: chapter.livro.autorId },
         data: { moedas: { increment: precoMoedas } },

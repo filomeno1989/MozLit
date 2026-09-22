@@ -100,6 +100,22 @@ export const RECARGA_CONFIG = {
   COMPROVATIVO_URL_MAX: 600,
 } as const;
 
+/** "há 3 dias" a partir de uma data ISO do servidor (feed/notificações — item 24/25) */
+export function haQuantoDe(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return 'agora mesmo';
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `há ${d} ${d === 1 ? 'dia' : 'dias'}`;
+  const m = Math.floor(d / 30);
+  if (m < 12) return `há ${m} ${m === 1 ? 'mês' : 'meses'}`;
+  const a = Math.floor(m / 12);
+  return `há ${a} ${a === 1 ? 'ano' : 'anos'}`;
+}
+
 /** Detecta se o conteúdo do capítulo é HTML (do editor rico) ou texto simples (legado) */
 export function isHtmlConteudo(conteudo: string): boolean {
   // img incluída: um capítulo que só tem uma imagem inserida no editor também é HTML

@@ -211,6 +211,9 @@ export default function HomePage() {
   const [searchInput, setSearchInput] = useState('');
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Busca avançada (item 28): ordenação e contagem total de resultados
+  const [ordenar, setOrdenar] = useState('recentes');
+  const [total, setTotal] = useState(0);
   // Token da última procura (race conditions ao filtrar/pesquisar depressa)
   const pedidoHome = useRef(0);
   // (user/navigate já obtidos no topo)
@@ -227,7 +230,7 @@ export default function HomePage() {
     // respostas fora de ordem — só a última procura actualiza a lista
     const meuPedido = ++pedidoHome.current;
     loadBooks(meuPedido);
-  }, [categoriaAtiva, searchQuery]);
+  }, [categoriaAtiva, searchQuery, ordenar]);
 
   async function loadBooks(meuPedido: number, cursor?: string) {
     const isFirst = !cursor;
@@ -238,10 +241,12 @@ export default function HomePage() {
       if (categoriaAtiva) params.set('categoria', categoriaAtiva);
       if (searchQuery) params.set('search', searchQuery);
       if (cursor) params.set('cursor', cursor);
+      params.set('ordenar', ordenar);
       params.set('limit', '20');
       const query = params.toString() ? `?${params.toString()}` : '';
-      const data = await apiFetch<{ books: LivroCartaz[]; nextCursor: string | null }>(`/api/books${query}`);
+      const data = await apiFetch<{ books: LivroCartaz[]; nextCursor: string | null; total?: number }>(`/api/books${query}`);
       if (meuPedido !== pedidoHome.current) return; // resposta obsoleta — ignorar
+      setTotal(typeof data.total === 'number' ? data.total : 0);
       if (isFirst) {
         setBooks(data.books || []);
         if (!categoriaAtiva && !searchQuery) setAllBooks(data.books || []);
@@ -334,13 +339,32 @@ export default function HomePage() {
 
       {/* Livros */}
       <section>
-        <div className="flex items-baseline justify-between mb-5">
-          <h2 className="text-xl font-bold tracking-tight">
-            {categoriaAtiva || 'Todos os Livros'}
+        <div className="flex flex-wrap items-center gap-3 mb-5">
+          <h2 className="text-xl font-bold tracking-tight min-w-0">
+            {searchQuery ? (
+              <>Resultados para <span className="text-amber-700 dark:text-amber-400">«{searchQuery}»</span></>
+            ) : (
+              categoriaAtiva || 'Todos os Livros'
+            )}
           </h2>
           <span className="text-sm text-muted-foreground font-medium">
-            {books.length} {books.length === 1 ? 'obra' : 'obras'}
+            {total} {total === 1 ? 'obra' : 'obras'}
           </span>
+          <label className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">Ordenar por</span>
+            <select
+              value={ordenar}
+              onChange={(e) => setOrdenar(e.target.value)}
+              className="px-3 py-1.5 rounded-full border border-border/60 bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all cursor-pointer"
+              aria-label="Ordenar resultados"
+            >
+              <option value="recentes">Mais recentes</option>
+              <option value="antigos">Mais antigos</option>
+              <option value="preco_asc">Preço: mais baixo</option>
+              <option value="preco_desc">Preço: mais alto</option>
+              <option value="titulo">Título A–Z</option>
+            </select>
+          </label>
         </div>
 
         {loading && (
@@ -353,13 +377,17 @@ export default function HomePage() {
         {!loading && books.length === 0 && (
           <div className="text-center py-16">
             <BookOpen className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
-            <p className="text-muted-foreground mb-3">Nenhum livro encontrado nesta categoria.</p>
-            {categoriaAtiva && (
+            <p className="text-muted-foreground mb-3">
+              {searchQuery
+                ? `Nada encontrado para «${searchQuery}». Tente outro termo ou limpe os filtros.`
+                : 'Nenhum livro encontrado nesta categoria.'}
+            </p>
+            {(categoriaAtiva || searchQuery) && (
               <button
-                onClick={() => setCategoriaAtiva(null)}
+                onClick={() => { setCategoriaAtiva(null); setSearchQuery(''); setSearchInput(''); }}
                 className="text-sm text-amber-700 dark:text-amber-400 hover:underline font-medium"
               >
-                Limpar filtro
+                Limpar filtros
               </button>
             )}
           </div>

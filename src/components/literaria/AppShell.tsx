@@ -5,29 +5,37 @@ import { useAppStore, type ViewName } from '@/store/app';
 import { apiFetch } from '@/lib/api';
 import { toast } from 'sonner';
 import { recargasNaoVistas, marcarRecargasVistas, type RecargaParaNotificar } from '@/lib/notificacoes';
+import { haQuantoDe } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
+  Bell,
   BookOpen,
+  Coins,
+  FileText,
   Home,
   LogIn,
   LogOut,
+  MessageCircle,
   Moon,
+  Reply,
+  Rss,
   Sun,
   Menu,
   Wallet,
   Library,
   PenTool,
   Plus,
-  Coins,
   ShieldCheck,
+  UserPlus,
   UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { view: 'home' as ViewName, label: 'Início', icon: Home, auth: false, roles: undefined as string[] | undefined },
+  { view: 'feed' as ViewName, label: 'A Seguir', icon: Rss, auth: false, roles: undefined },
   { view: 'library' as ViewName, label: 'Minha Biblioteca', icon: Library, auth: true, roles: undefined },
   { view: 'wallet' as ViewName, label: 'Carteira', icon: Wallet, auth: true, roles: undefined },
   { view: 'author-dashboard' as ViewName, label: 'Painel do Autor', icon: PenTool, auth: true, roles: ['ESCRITOR', 'ADMIN'] },
@@ -80,11 +88,80 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, currentView, navigate, isDark, toggleDark, sidebarOpen, setSidebarOpen, clearAuth } = useAppStore();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
+  // ============ CENTRAL DE NOTIFICAÇÕES (item 24 — Fase 5) ============
+  interface Notificacao {
+    id: string;
+    tipo: string;
+    titulo: string;
+    corpo: string;
+    livroId: string | null;
+    capituloId: string | null;
+    autorId: string | null;
+    lida: boolean;
+    createdAt: string;
+  }
+  const [naoLidas, setNaoLidas] = useState(0);
+  const [painelNotif, setPainelNotif] = useState(false);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[] | null>(null);
+  const [aCarregarNotif, setACarregarNotif] = useState(false);
+
+  function abrirNotificacao(n: Notificacao) {
+    setPainelNotif(false);
+    switch (n.tipo) {
+      case 'OBRA_NOVA':
+        if (n.livroId) navigate('book-detail', { bookId: n.livroId });
+        break;
+      case 'CAPITULO_NOVO':
+      case 'COMENTARIO':
+      case 'RESPOSTA':
+        if (n.capituloId) navigate('reader', { chapterId: n.capituloId, bookId: n.livroId || undefined });
+        else if (n.livroId) navigate('book-detail', { bookId: n.livroId });
+        break;
+      case 'SEGUIDOR_NOVO':
+        if (n.autorId) navigate('autor', { autorId: n.autorId });
+        else navigate('perfil');
+        break;
+      case 'RECARGA':
+        navigate('wallet');
+        break;
+    }
+  }
+
+  const iconeNotif: Record<string, typeof Bell> = {
+    SEGUIDOR_NOVO: UserPlus,
+    OBRA_NOVA: BookOpen,
+    CAPITULO_NOVO: FileText,
+    COMENTARIO: MessageCircle,
+    RESPOSTA: Reply,
+    RECARGA: Coins,
+  };
+
+  // Abre o painel: carrega a lista completa e marca tudo como lido
+  async function abrirPainelNotif() {
+    setPainelNotif(true);
+    if (!user) return;
+    setACarregarNotif(true);
+    try {
+      const d = await apiFetch<{ notificacoes: Notificacao[]; naoLidas: number }>('/api/notificacoes', { semRedirecionar: true });
+      setNotificacoes(d.notificacoes || []);
+      setNaoLidas(0);
+      if ((d.naoLidas || 0) > 0) {
+        await apiFetch('/api/notificacoes', { method: 'PATCH', semRedirecionar: true }).catch(() => {});
+      }
+    } catch {
+      // silencioso — o painel mostra o estado vazio
+    } finally {
+      setACarregarNotif(false);
+    }
+  }
+
   function handleLogout() {
     clearAuth();
     navigate('home');
     setSidebarOpen(false);
     setShowLogoutDialog(false);
+    setNaoLidas(0);
+    setNotificacoes(null);
   }
 
   // NOTIFICAÇÃO DE RECARGA (item 19): quando o admin aprova/rejeita uma
@@ -123,6 +200,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     const t = setTimeout(verificarRecargas, 2500); // após o arranque da página
     const iv = setInterval(verificarRecargas, 30_000);
+    return () => { vivo = false; clearTimeout(t); clearInterval(iv); };
+  }, [userIdNotif]);
+
+  // POLL DE NOTIFICAÇÕES (item 24): contagem leve a cada 30s — o badge do
+  // sino cresce quando chegam novidades (novo seguidor, obra/capítulo de
+  // autores seguidos, comentários, recargas). silencioso: 401/falha não
+  // expulsa o leitor (semRedirecionar).
+  useEffect(() => {
+    if (!userIdNotif) return;
+    let vivo = true;
+    async function verificarContagem() {
+      if (!vivo || !userIdNotif) return;
+      try {
+        const d = await apiFetch<{ naoLidas: number }>('/api/notificacoes?contagem=1', { semRedirecionar: true });
+        if (vivo) setNaoLidas(d.naoLidas || 0);
+      } catch {
+        // tenta de novo no próximo ciclo
+      }
+    }
+    const t = setTimeout(verificarContagem, 4000);
+    const iv = setInterval(verificarContagem, 30_000);
     return () => { vivo = false; clearTimeout(t); clearInterval(iv); };
   }, [userIdNotif]);
 
@@ -239,6 +337,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Button>
             {user ? (
               <div className='flex items-center gap-2'>
+                {/* SINO DE NOTIFICAÇÕES (item 24) */}
+                <button
+                  onClick={abrirPainelNotif}
+                  className='relative inline-flex items-center justify-center rounded-md h-9 w-9 hover:bg-accent transition-colors'
+                  aria-label={`Notificações${naoLidas > 0 ? ` (${naoLidas} não lidas)` : ''}`}
+                >
+                  <Bell className='h-4 w-4' />
+                  {naoLidas > 0 && (
+                    <span
+                      className='absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-600 text-white text-[10px] font-bold flex items-center justify-center border-2 border-background'
+                      aria-hidden='true'
+                    >
+                      {naoLidas > 9 ? '9+' : naoLidas}
+                    </span>
+                  )}
+                </button>
                 <button
                   onClick={() => navigate('wallet')}
                   className='hidden sm:inline-flex items-center gap-1 text-sm font-medium text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors'
@@ -262,6 +376,77 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+
+      {/* CENTRAL DE NOTIFICAÇÕES (item 24) */}
+      <Sheet open={painelNotif} onOpenChange={setPainelNotif}>
+        <SheetContent side='right' className='w-full sm:w-96 p-0 flex flex-col'>
+          <SheetTitle className='flex items-center justify-between px-4 py-4 border-b'>
+            <span className='flex items-center gap-2 text-base font-bold'>
+              <Bell className='h-4 w-4 text-amber-600' /> Notificações
+            </span>
+          </SheetTitle>
+          <div className='flex-1 overflow-y-auto'>
+            {!user ? (
+              <div className='text-center py-14 px-6'>
+                <Bell className='h-9 w-9 mx-auto text-muted-foreground/40 mb-3' />
+                <p className='text-sm text-muted-foreground mb-4'>Entre na sua conta para ver as suas notificações.</p>
+                <Button size='sm' className='bg-amber-600 hover:bg-amber-700 text-white' onClick={() => { setPainelNotif(false); navigate('login'); }}>
+                  Entrar
+                </Button>
+              </div>
+            ) : aCarregarNotif ? (
+              <div className='space-y-3 p-4'>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className='flex gap-3'>
+                    <div className='h-9 w-9 rounded-full bg-muted animate-pulse shrink-0' />
+                    <div className='flex-1 space-y-2 pt-1'>
+                      <div className='h-3 w-3/4 bg-muted rounded animate-pulse' />
+                      <div className='h-3 w-1/2 bg-muted rounded animate-pulse' />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !notificacoes || notificacoes.length === 0 ? (
+              <div className='text-center py-14 px-6'>
+                <Bell className='h-9 w-9 mx-auto text-muted-foreground/40 mb-3' />
+                <p className='text-sm font-medium mb-1'>Ainda sem notificações</p>
+                <p className='text-xs text-muted-foreground'>
+                  Quando alguém seguir o seu trabalho, ou os autores que você segue publicarem novidades, aparecem aqui.
+                </p>
+              </div>
+            ) : (
+              <ul className='divide-y divide-border/60'>
+                {notificacoes.map((n) => {
+                  const Icone = iconeNotif[n.tipo] || Bell;
+                  return (
+                    <li key={n.id}>
+                      <button
+                        onClick={() => abrirNotificacao(n)}
+                        className={cn(
+                          'w-full text-left px-4 py-3.5 flex gap-3 hover:bg-accent/60 transition-colors',
+                          !n.lida && 'bg-amber-50/60 dark:bg-amber-950/15'
+                        )}
+                      >
+                        <span className='mt-0.5 shrink-0 w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center'>
+                          <Icone className='h-4 w-4 text-amber-700 dark:text-amber-400' />
+                        </span>
+                        <span className='flex-1 min-w-0'>
+                          <span className='block text-sm font-medium leading-snug'>{n.titulo}</span>
+                          {n.corpo && (
+                            <span className='block text-xs text-muted-foreground mt-0.5 line-clamp-2'>{n.corpo}</span>
+                          )}
+                          <span className='block text-[11px] text-muted-foreground/70 mt-1'>{haQuantoDe(n.createdAt)}</span>
+                        </span>
+                        {!n.lida && <span className='mt-1.5 shrink-0 h-2 w-2 rounded-full bg-amber-500' aria-hidden='true' />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Main Content */}
       <main className='flex-1'>

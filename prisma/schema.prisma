@@ -31,6 +31,7 @@ model User {
   recuperacoes PedidoRecuperacao[]
   seguidores   Seguidor[] @relation("autorSeguidores")
   seguindo     Seguidor[] @relation("leitorSegue")
+  notificacoes Notificacao[]
 
   @@map("profiles")
 }
@@ -180,6 +181,25 @@ model PedidoRecuperacao {
   @@index([estado, createdAt])
   @@index([userId])
   @@map("pedidos_recuperacao")
+}
+
+model Notificacao {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tipo       String   // SEGUIDOR_NOVO | OBRA_NOVA | CAPITULO_NOVO | COMENTARIO | RESPOSTA | RECARGA
+  titulo     String
+  corpo      String   @default("")
+  livroId    String?  @map("livro_id") @db.Uuid
+  capituloId String?  @map("capitulo_id") @db.Uuid
+  autorId    String?  @map("autor_id") @db.Uuid // quem originou ("ver perfil")
+  lida       Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, lida, createdAt])
+  @@index([userId, createdAt])
+  @@map("notificacoes")
 }
 
 model Seguidor {

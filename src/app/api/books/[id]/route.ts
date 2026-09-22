@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 import { validateTitulo, validateCategorias, validateFaixaEtaria, validateVolumeInfo, validarCampoLivroHtml, ehUuid } from '@/lib/validate';
 import { LIMITES, textoSimplesDeHtml } from '@/lib/constants';
+import { notificarSeguidores } from '@/lib/notificar';
 
 export async function GET(
   request: NextRequest,
@@ -108,7 +109,7 @@ export async function PATCH(
 
     const existingBook = await db.book.findUnique({
       where: { id },
-      select: { autorId: true },
+      select: { autorId: true, status: true },
     });
 
     if (!existingBook) {
@@ -233,6 +234,18 @@ export async function PATCH(
       ...updatedBook,
       categorias: JSON.parse(updatedBook.categorias || '[]'),
     };
+
+    // FASE 5 (item 24): obra sai do rascunho → seguidores recebem o aviso.
+    // Só na transição RASCUNHO→PUBLICADO: re-publicar (editar) não volta a
+    // bombardear os seguidores com a mesma notícia.
+    if (data.status === 'PUBLICADO' && existingBook.status !== 'PUBLICADO') {
+      await notificarSeguidores(existingBook.autorId, {
+        tipo: 'OBRA_NOVA',
+        titulo: `${updatedBook.autor.nome} publicou uma nova obra`,
+        corpo: updatedBook.titulo,
+        livroId: updatedBook.id,
+      });
+    }
 
     return NextResponse.json(result);
   } catch (error) {

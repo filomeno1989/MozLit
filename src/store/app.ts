@@ -12,6 +12,7 @@ export type ViewName =
   | 'library'
   | 'new-book'
   | 'perfil'
+  | 'feed'
   | 'admin';
 
 export interface User {

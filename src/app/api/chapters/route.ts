@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
 import { validateTitulo, validateConteudoCapitulo, ehUuid } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
+import { notificarSeguidores } from '@/lib/notificar';
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,7 +30,10 @@ export async function POST(request: NextRequest) {
     const tituloValidado = validateTitulo(titulo);
     const conteudoValidado = validateConteudoCapitulo(conteudo);
 
-    const book = await db.book.findUnique({ where: { id: livroId }, select: { autorId: true } });
+    const book = await db.book.findUnique({
+      where: { id: livroId },
+      select: { autorId: true, status: true, titulo: true },
+    });
     if (!book) {
       return NextResponse.json({ error: 'Livro não encontrado' }, { status: 404 });
     }
@@ -56,6 +60,22 @@ export async function POST(request: NextRequest) {
         ordem: typeof ordem === 'number' && Number.isFinite(ordem) && ordem >= 0 ? Math.floor(ordem) : (maxOrdem._max.ordem ?? -1) + 1,
       },
     });
+
+    // FASE 5 (item 24): capítulo acrescentado a obra JÁ PUBLICADA chega aos
+    // seguidores do autor. Em rascunho não notifica — a obra ainda é secreta.
+    if (book.status === 'PUBLICADO') {
+      const autor = await db.user.findUnique({
+        where: { id: book.autorId },
+        select: { nome: true },
+      });
+      await notificarSeguidores(book.autorId, {
+        tipo: 'CAPITULO_NOVO',
+        titulo: `${autor?.nome || 'Um autor que segues'} adicionou um capítulo`,
+        corpo: `${book.titulo} — ${tituloValidado}`,
+        livroId,
+        capituloId: chapter.id,
+      });
+    }
 
     return NextResponse.json(chapter, { status: 201 });
   } catch (error) {

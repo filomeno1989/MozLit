@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { notificar } from '@/lib/notificar';
 
 /** UUID v4 — devolve 404 em vez de deixar o Prisma lançar erro de cast (500) */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -53,6 +54,19 @@ export async function POST(
         data: { autorId: id, seguidorId: payload.userId },
       });
       seguindo = true;
+
+      // FASE 5 (item 24): o autor fica a saber que ganhou um seguidor —
+      // clique abre o perfil público de quem o seguiu.
+      const seguidor = await db.user.findUnique({
+        where: { id: payload.userId },
+        select: { nome: true },
+      });
+      await notificar(id, {
+        tipo: 'SEGUIDOR_NOVO',
+        titulo: `${seguidor?.nome || 'Alguém'} começou a seguir-te`,
+        corpo: 'As tuas novas obras e capítulos vão chegar-lhe ao feed.',
+        autorId: payload.userId,
+      });
     }
 
     const totalSeguidores = await db.seguidor.count({ where: { autorId: id } });

@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck, Minus, Plus, Share2, Copy } from 'lucide-react';
 import CommentsSection from '@/components/literaria/CommentsSection';
 import { toast } from 'sonner';
 import { type SectionKey, SECTION_LABELS, isHtmlConteudo, formatarMoedas } from '@/lib/constants';
@@ -450,6 +450,116 @@ export default function EReaderPage() {
     return () => { document.body.style.overflow = antes; };
   }, [zoomImagem]);
 
+  // ============ PARTILHA DE TRECHO (item 26 — Fase 5) ============
+  // O leitor tem DRM (sem cópia/selecção). O modo trecho é a excepção
+  // CONTROLADA: activa a selecção por um momento, captura o texto escolhido
+  // e sai — o trecho partilhado leva sempre atribuição (título, autor, link).
+  const [modoTrecho, setModoTrecho] = useState(false);
+  const [trechoSelecionado, setTrechoSelecionado] = useState('');
+  const [nomeAutorLivro, setNomeAutorLivro] = useState<string | null>(null);
+
+  // Trocar de capítulo/secção sai do modo (a selecção não sobrevive à leitura)
+  useEffect(() => {
+    setModoTrecho(false);
+    setTrechoSelecionado('');
+  }, [chapterId, section]);
+
+  function ativarModoTrecho() {
+    setModoTrecho(true);
+    setTrechoSelecionado('');
+    // O nome do autor não vem nos dados do leitor — 1 consulta leve, só uma vez
+    const idAutor = isSectionView ? sectionBook?.autorId : chapter?.livro.autorId;
+    if (idAutor && nomeAutorLivro === null) {
+      apiFetch<{ autor?: { nome?: string } }>(`/api/autor/${idAutor}`)
+        .then((d) => setNomeAutorLivro(d.autor?.nome || ''))
+        .catch(() => setNomeAutorLivro(''));
+    }
+  }
+
+  function sairModoTrecho() {
+    setModoTrecho(false);
+    setTrechoSelecionado('');
+    try { window.getSelection?.()?.removeAllRanges?.(); } catch { /* sem efeito */ }
+  }
+
+  /** Captura o texto seleccionado quando o utilizador solta o dedo/rato */
+  function capturarSelecao() {
+    if (!modoTrecho) return;
+    let texto = '';
+    try { texto = window.getSelection?.()?.toString() || ''; } catch { texto = ''; }
+    texto = texto.trim();
+    if (texto.length === 0) {
+      setTrechoSelecionado('');
+    } else if (texto.length < 10) {
+      // trechos tão curtos não valem um cartão de partilha
+      setTrechoSelecionado('');
+    } else if (texto.length > 600) {
+      setTrechoSelecionado(texto.slice(0, 597).trimEnd() + '…');
+    } else {
+      setTrechoSelecionado(texto);
+    }
+  }
+
+  function textoDoTrecho(): string {
+    const livroTitulo = isSectionView ? sectionBook?.titulo : chapter?.livro.titulo;
+    const autor = nomeAutorLivro || '';
+    const link = typeof window !== 'undefined' && (chapter?.livro.id || bookId)
+      ? `${window.location.origin}/?obra=${chapter?.livro.id || bookId}`
+      : '';
+    return `“${trechoSelecionado}”\n— ${livroTitulo || 'Obra MozLit'}${autor ? `, por ${autor}` : ''}\n${link}\n(via MozLit)`;
+  }
+
+  async function copiarTrecho() {
+    try {
+      await navigator.clipboard.writeText(textoDoTrecho());
+      toast.success('Trecho copiado com atribuição da obra.');
+      sairModoTrecho();
+    } catch {
+      toast.error('Não foi possível copiar. Tente novamente.');
+    }
+  }
+
+  async function partilharTrecho() {
+    const texto = textoDoTrecho();
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'Trecho — MozLit', text: texto });
+        sairModoTrecho();
+        return;
+      } catch {
+        // cancelado ou falhou → fica no modo para copiar manualmente
+      }
+    }
+    await copiarTrecho();
+  }
+
+  /** Barra de acção do modo trecho — fixa no fundo, nas duas vistas do leitor */
+  const barraTrecho = modoTrecho ? (
+    <div
+      className="fixed bottom-0 inset-x-0 z-[60] bg-card border-t border-border shadow-2xl p-3"
+      style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      role="toolbar"
+      aria-label="Partilhar trecho seleccionado"
+    >
+      {trechoSelecionado ? (
+        <>
+          <p className="text-xs text-muted-foreground italic line-clamp-2 mb-2.5 px-0.5">“{trechoSelecionado}”</p>
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-[11px] text-muted-foreground mr-auto">{trechoSelecionado.length}/600</span>
+            <Button variant="ghost" size="sm" onClick={sairModoTrecho}>Cancelar</Button>
+            <Button variant="outline" size="sm" onClick={copiarTrecho}><Copy className="h-3.5 w-3.5 mr-1.5" />Copiar</Button>
+            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={partilharTrecho}><Share2 className="h-3.5 w-3.5 mr-1.5" />Partilhar</Button>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">Toque e mantenha (ou arraste) para seleccionar o trecho a partilhar.</p>
+          <Button variant="ghost" size="sm" onClick={sairModoTrecho} className="shrink-0">Cancelar</Button>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   // For section reading, we need book data (com capítulos para o botão Seguinte)
   const [sectionBook, setSectionBook] = useState<SecaoLivro | null>(null);
   const [sectionLoading, setSectionLoading] = useState(false);
@@ -704,16 +814,31 @@ export default function EReaderPage() {
             <span className="text-xs text-[color:var(--leitor-suave)] truncate max-w-[40%] text-center">
               {sectionBook.titulo}
             </span>
-            <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
+            <div className="flex items-center gap-1">
+              {/* PARTILHA DE TRECHO (item 26) — excepção controlada ao DRM */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={ativarModoTrecho}
+                aria-label="Partilhar um trecho"
+                title="Partilhar um trecho"
+                className={modoTrecho ? 'bg-accent' : ''}
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+              <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
+            </div>
           </div>
         </div>
 
         {/* Section content */}
         <article
-          className="max-w-2xl mx-auto px-6 sm:px-8 py-10 select-none"
+          className={"max-w-2xl mx-auto px-6 sm:px-8 py-10 " + (modoTrecho ? "select-text" : "select-none")}
           onCopy={(e) => e.preventDefault()}
           onCut={(e) => e.preventDefault()}
           onDragStart={(e) => e.preventDefault()}
+          onMouseUp={capturarSelecao}
+          onTouchEnd={capturarSelecao}
         >
           <header className="mb-10 pb-8 border-b border-border/30">
             <h1 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">
@@ -726,7 +851,7 @@ export default function EReaderPage() {
 
           <div
             className={"max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[length:var(--leitor-fonte)]\n              [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[1.35em] [&_h2]:font-bold\n              [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[1.18em] [&_h3]:font-semibold\n              [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]\n              [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]\n              [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline" + (isItalic ? ' [&_p]:italic' : '')}
-            style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
+            style={{ userSelect: modoTrecho ? 'text' : 'none', WebkitUserSelect: modoTrecho ? 'text' : 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
           >
           {renderConteudo(sectionContent, setZoomImagem)}
           </div>
@@ -749,6 +874,9 @@ export default function EReaderPage() {
             )}
           </div>
         </div>
+
+        {/* BARRA DO MODO TRECHO (item 26) */}
+        {barraTrecho}
       </div>
     );
   }
@@ -830,6 +958,17 @@ export default function EReaderPage() {
             >
               <List className="h-4 w-4" />
             </Button>
+            {/* PARTILHA DE TRECHO (item 26) — excepção controlada ao DRM */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={ativarModoTrecho}
+              aria-label="Partilhar um trecho"
+              title="Partilhar um trecho"
+              className={modoTrecho ? 'bg-accent' : ''}
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
             <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
           </div>
         </div>
@@ -869,12 +1008,14 @@ export default function EReaderPage() {
         )}
       </div>
 
-      {/* Content - immersive reading with anti-copy */}
+      {/* Content - immersive reading with anti-copy (modo trecho activa a selecção controlada) */}
       <article
-        className="max-w-2xl mx-auto px-6 sm:px-8 py-10 select-none"
+        className={"max-w-2xl mx-auto px-6 sm:px-8 py-10 " + (modoTrecho ? "select-text" : "select-none")}
         onCopy={(e) => e.preventDefault()}
         onCut={(e) => e.preventDefault()}
         onDragStart={(e) => e.preventDefault()}
+        onMouseUp={capturarSelecao}
+        onTouchEnd={capturarSelecao}
       >
         {/* CHAPTER CONTENT - no pre/post sections here */}
         <header className="mb-10 pb-8 border-b border-[color:var(--leitor-borda)]">
@@ -893,7 +1034,7 @@ export default function EReaderPage() {
             [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]
             [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]
             [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline"
-          style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
+          style={{ userSelect: modoTrecho ? 'text' : 'none', WebkitUserSelect: modoTrecho ? 'text' : 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
         >
           {renderConteudo(chapter.conteudo, setZoomImagem)}
         </div>
@@ -975,7 +1116,7 @@ export default function EReaderPage() {
       {/* Comments Section */}
       <CommentsSection chapterId={chapter.id} bookAuthorId={chapter.livro.autorId} />
 
-      {/* Zoom de imagem (item 17) — tela cheia, fecha com clique ou Esc */}
+          {/* Zoom de imagem (item 17) — tela cheia, fecha com clique ou Esc */}
       {zoomImagem && (
         <div
           role="dialog"
@@ -1000,6 +1141,9 @@ export default function EReaderPage() {
           </button>
         </div>
       )}
+
+      {/* BARRA DO MODO TRECHO (item 26) */}
+      {barraTrecho}
     </div>
   );
 }

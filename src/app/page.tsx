@@ -32,6 +32,7 @@ const NewBookPage = dynamic(() => import('@/components/literaria/NewBookPage'), 
 const AdminPanel = dynamic(() => import('@/components/literaria/AdminPanel'), { ssr: false, loading: CarregandoVista });
 const PerfilPage = dynamic(() => import('@/components/literaria/PerfilPage'), { ssr: false, loading: CarregandoVista });
 const AuthorProfilePage = dynamic(() => import('@/components/literaria/AuthorProfilePage'), { ssr: false, loading: CarregandoVista });
+const FeedPage = dynamic(() => import('@/components/literaria/FeedPage'), { ssr: false, loading: CarregandoVista });
 
 /** Views that require authentication */
 const PROTECTED_VIEWS = new Set(['wallet', 'library', 'author-dashboard', 'new-book', 'perfil', 'admin']);
@@ -63,6 +64,8 @@ function ViewRouter() {
       return <BookDetailPage />;
     case 'autor':
       return <AuthorProfilePage />;
+    case 'feed':
+      return <FeedPage />;
     case 'reader':
       return <EReaderPage />;
     case 'author-dashboard':
@@ -95,6 +98,16 @@ export default function MozLitApp() {
   useEffect(() => {
     // Lê o estado actual do store (evita closure obsoleto entre montagens)
     const { token: tokenActual, setAuth, updateBalance, clearAuth, toggleDark } = useAppStore.getState();
+
+    // DEEP-LINK DE PARTILHA (item 26): /?obra=<id> abre a obra directamente —
+    // os links partilhados para o WhatsApp/SMS precisam de aterrar no sítio certo
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const obra = params.get('obra');
+      if (obra) useAppStore.getState().navigate('book-detail', { bookId: obra });
+    } catch {
+      // URL inválido — segue para a home
+    }
 
     // Restore dark mode preference
     const savedDark = localStorage.getItem('mozlit_dark');

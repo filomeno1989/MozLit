@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
 import { validateAcaoRecarga, validateTextoRecarga } from '@/lib/validate';
 import { MOEDAS_CONFIG } from '@/lib/constants';
+import { notificar } from '@/lib/notificar';
 
 const ESTADOS_VALIDOS = ['PENDENTE', 'APROVADA', 'REJEITADA', 'CANCELADA'];
 
@@ -123,6 +124,22 @@ export async function PATCH(request: NextRequest) {
       if (!recargaFinal) throw new Error('Recarga não encontrada.');
       return recargaFinal;
     });
+
+    // FASE 5 (item 24): o resultado da recarga entra na central de notificações
+    // (o toast local do leitor mantém-se — isto garante o histórico permanente)
+    if (resultado) {
+      await notificar(resultado.userId, {
+        tipo: 'RECARGA',
+        titulo:
+          acaoValidada === 'APROVADA'
+            ? `Recarga aprovada: +${resultado.moedas.toLocaleString('pt-MZ')} MC`
+            : `Recarga de ${resultado.moedas.toLocaleString('pt-MZ')} MC rejeitada`,
+        corpo:
+          acaoValidada === 'APROVADA'
+            ? 'As moedas já estão na tua conta. Boa leitura!'
+            : notaAdminValidada || 'Contacta o suporte para mais detalhes.',
+      });
+    }
 
     return NextResponse.json({
       recarga: resultado,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
 import { ehUuid } from '@/lib/validate';
+import { notificar } from '@/lib/notificar';
 
 export async function GET(request: NextRequest) {
   try {
@@ -108,6 +109,9 @@ export async function POST(request: NextRequest) {
     }
 
     let parentIdFinal: string | null = null;
+    // Dono do comentário respondido (capturado dentro do bloco — o nome
+    // "parent" no topo do escopo é window.parent, não o comentário)
+    let donoDoPai: string | null = null;
     if (parentId) {
       const parent = await db.comment.findUnique({ where: { id: parentId } });
       if (!parent) {
@@ -121,12 +125,19 @@ export async function POST(request: NextRequest) {
       // na BD mas INVISÍVEL para sempre. Liga a resposta ao comentário de topo;
       // a autoria real aparece no texto da UI ("A responder a X").
       parentIdFinal = parent.parentId || parent.id;
+      donoDoPai = parent.userId;
     }
 
-    // SELECT leve: só precisamos de is_free — o conteúdo do capítulo pode ter 500KB
+    // SELECT leve: só precisamos de is_free e do autor/título da obra —
+    // o conteúdo do capítulo pode ter 500KB
     const chapter = await db.chapter.findUnique({
       where: { id: chapterId },
-      select: { id: true, is_free: true, livroId: true },
+      select: {
+        id: true,
+        is_free: true,
+        livroId: true,
+        livro: { select: { autorId: true, titulo: true } },
+      },
     });
     if (!chapter) {
       return NextResponse.json({ error: 'Capítulo não encontrado' }, { status: 404 });
@@ -160,6 +171,30 @@ export async function POST(request: NextRequest) {
         user: { select: { id: true, nome: true, role: true } },
       },
     });
+
+    // FASE 5 (item 24): notifica o autor da obra (comentário no capítulo dele)
+    // e, se for resposta, o dono do comentário respondido. Nunca ao próprio
+    // autor da acção; autor da obra não recebe duplicado quando responde a si.
+    if (chapter.livro.autorId !== payload.userId) {
+      await notificar(chapter.livro.autorId, {
+        tipo: 'COMENTARIO',
+        titulo: `${comment.user.nome} comentou em «${chapter.livro.titulo}»`,
+        corpo: trimmed.slice(0, 140),
+        livroId: chapter.livroId,
+        capituloId: chapterId,
+        autorId: payload.userId,
+      });
+    }
+    if (donoDoPai && donoDoPai !== payload.userId && donoDoPai !== chapter.livro.autorId) {
+      await notificar(donoDoPai, {
+        tipo: 'RESPOSTA',
+        titulo: `${comment.user.nome} respondeu ao teu comentário`,
+        corpo: trimmed.slice(0, 140),
+        livroId: chapter.livroId,
+        capituloId: chapterId,
+        autorId: payload.userId,
+      });
+    }
 
     return NextResponse.json({
       ...comment,

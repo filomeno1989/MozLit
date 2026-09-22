@@ -177,6 +177,40 @@ const DDL_AUTO_REPARACAO: string[] = [
   END $$`,
   `CREATE INDEX IF NOT EXISTS "seguidores_autorId_idx" ON "seguidores" ("autor_id")`,
   `CREATE INDEX IF NOT EXISTS "seguidores_seguidorId_idx" ON "seguidores" ("seguidor_id")`,
+
+  // ===== Fase 5 2026-09-22: notificações in-app (item 24) =====
+  // Central de notificações: novo seguidor, nova obra/capítulo de autores
+  // seguidos, comentários, respostas e resultado de recargas. Sem FK para
+  // books/chapters de propósito: apagar uma obra não pode apagar o histórico
+  // de notificações — a UI trata o alvo inexistente com elegância.
+  `CREATE TABLE IF NOT EXISTS "notificacoes" (
+      "id"          UUID NOT NULL DEFAULT gen_random_uuid(),
+      "user_id"     UUID NOT NULL,
+      "tipo"        TEXT NOT NULL,
+      "titulo"      TEXT NOT NULL,
+      "corpo"       TEXT NOT NULL DEFAULT '',
+      "livro_id"    UUID,
+      "capitulo_id" UUID,
+      "autor_id"    UUID,
+      "lida"        BOOLEAN NOT NULL DEFAULT false,
+      "created_at"  TIMESTAMPTZ(6) NOT NULL DEFAULT now(),
+      CONSTRAINT "notificacoes_pkey" PRIMARY KEY ("id")
+  )`,
+  `DO $$
+  BEGIN
+      IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'notificacoes_user_id_fkey'
+      ) THEN
+          ALTER TABLE "notificacoes"
+              ADD CONSTRAINT "notificacoes_user_id_fkey"
+              FOREIGN KEY ("user_id") REFERENCES "profiles"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+      END IF;
+  END $$`,
+  `CREATE INDEX IF NOT EXISTS "notificacoes_userId_lida_createdAt_idx"
+      ON "notificacoes" ("user_id", "lida", "created_at")`,
+  `CREATE INDEX IF NOT EXISTS "notificacoes_userId_createdAt_idx"
+      ON "notificacoes" ("user_id", "created_at")`,
 ]
 
 /**
@@ -242,7 +276,7 @@ async function garantirAdmin(prisma: PrismaClient): Promise<void> {
  */
 async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
   try {
-    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number; comprovativo: number; seguidores: number }[]>`
+    const linhas = await prisma.$queryRaw<{ perfil: number; books: number; arquivado: number; recargas: number; recuperacoes: number; idx: number; tipo_check: number; trans: number; comprovativo: number; seguidores: number; notificacoes: number }[]>`
       SELECT
         (SELECT COUNT(*)::int FROM information_schema.columns
           WHERE table_name = 'profiles' AND column_name IN ('telefone', 'data_nascimento')) AS perfil,
@@ -260,6 +294,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
           WHERE table_name = 'transactions' AND column_name IN ('chapter_id', 'book_id')) AS trans,
         (SELECT COUNT(*)::int FROM information_schema.tables
           WHERE table_name = 'seguidores') AS seguidores,
+        (SELECT COUNT(*)::int FROM information_schema.tables
+          WHERE table_name = 'notificacoes') AS notificacoes,
         (SELECT COUNT(*)::int FROM pg_indexes
           WHERE indexname IN ('chapters_livroId_ordem_idx', 'transactions_userId_tipo_idx',
             'library_items_userId_bookId_idx', 'library_items_userId_tipo_idx',
@@ -272,7 +308,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
             'chapters_livroId_arquivado_idx',
             'pedidos_recuperacao_estado_created_at_idx', 'pedidos_recuperacao_user_id_idx',
             'seguidores_autorId_idx', 'seguidores_seguidorId_idx',
-            'seguidores_autor_id_seguidor_id_key')) AS idx,
+            'seguidores_autor_id_seguidor_id_key',
+            'notificacoes_userId_lida_createdAt_idx', 'notificacoes_userId_createdAt_idx')) AS idx,
         (SELECT COUNT(*)::int FROM pg_constraint
           WHERE conname = 'transactions_tipo_check') AS tipo_check`
     const r = linhas[0]
@@ -285,7 +322,8 @@ async function esquemaActualizado(prisma: PrismaClient): Promise<boolean> {
       Number(r?.comprovativo ?? 0) === 1 &&
       Number(r?.trans ?? 0) === 2 &&
       Number(r?.seguidores ?? 0) === 1 &&
-      Number(r?.idx ?? 0) === 22 &&
+      Number(r?.notificacoes ?? 0) === 1 &&
+      Number(r?.idx ?? 0) === 24 &&
       Number(r?.tipo_check ?? 0) === 0 // constraint antiga já removida
     )
   } catch {

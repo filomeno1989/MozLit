@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins, ChevronRight } from 'lucide-react';
+import { ArrowLeft, BookOpen, ShoppingBag, User, BookMarked, Package, FileText, Loader2, BookX, Wallet, Coins, ChevronRight, Share2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatarMoedas, isHtmlConteudo } from '@/lib/constants';
 import { lerProgresso, percentagemObra, type ItemProgresso } from '@/lib/progresso';
+import { BookCard, type LivroCartaz } from '@/components/literaria/HomePage';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -53,6 +54,9 @@ export default function BookDetailPage() {
   const [purchaseConfirm, setPurchaseConfirm] = useState<{ type: 'chapter' | 'full'; id?: string; price: number; name: string } | null>(null);
   // Progresso de leitura guardado no dispositivo (item 15)
   const [progresso, setProgresso] = useState<ItemProgresso | null>(null);
+  // Obras relacionadas (item 27 — Fase 5)
+  const [relacionadas, setRelacionadas] = useState<LivroCartaz[]>([]);
+  const [aCarregarRelacionadas, setACarregarRelacionadas] = useState(true);
 
   const userId = user?.id;
 
@@ -63,20 +67,63 @@ export default function BookDetailPage() {
   // navega rápido entre obras (o loadPurchased antigo marcava "possui livro
   // completo" do livro A enquanto se via o livro B)
   const pedidoActual = useRef(0);
+  const pedidoRelacionadas = useRef(0);
 
   useEffect(() => {
     if (bookId) {
       const meuPedido = ++pedidoActual.current;
       loadBook(meuPedido);
       if (userId) loadPurchased(meuPedido);
+      carregarRelacionadas();
     } else {
       // Sem bookId não há o que carregar — nunca deixar o skeleton infinito
       setLoading(false);
+      setRelacionadas([]);
     }
     // Depende apenas do bookId e do ID do utilizador (não do objecto user,
     // que muda de identidade a cada compra/sync — isso fazia a página
     // inteira piscar de volta ao skeleton após cada ação).
   }, [bookId, userId]);
+
+  /** Obras relacionadas (item 27): mesmo autor → mesmo género → recentes */
+  async function carregarRelacionadas() {
+    if (!bookId) return;
+    const meuPedido = ++pedidoRelacionadas.current;
+    setACarregarRelacionadas(true);
+    setRelacionadas([]);
+    try {
+      const d = await apiFetch<{ books: LivroCartaz[] }>(`/api/books/${bookId}/relacionadas`);
+      if (meuPedido !== pedidoRelacionadas.current) return;
+      setRelacionadas(d.books || []);
+    } catch {
+      if (meuPedido === pedidoRelacionadas.current) setRelacionadas([]);
+    } finally {
+      if (meuPedido === pedidoRelacionadas.current) setACarregarRelacionadas(false);
+    }
+  }
+
+  /** Partilhar obra (item 26): Web Share API com fallback de cópia do link */
+  async function partilharObra() {
+    if (!book) return;
+    const url = typeof window !== 'undefined'
+      ? `${window.location.origin}/?obra=${book.id}`
+      : '';
+    const texto = `«${book.titulo}», de ${book.autor?.nome || 'um autor moçambicano'} — descobre em MozLit`;
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: `${book.titulo} — MozLit`, text: texto, url });
+        return; // partilha concluída (ou cancelada pelo utilizador)
+      } catch {
+        // cancelado → sem toast de erro; falha → tenta copiar abaixo
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${texto}\n${url}`);
+      toast.success('Link da obra copiado — partilhe com quem quiser!');
+    } catch {
+      toast.error('Não foi possível partilhar agora. Tente novamente.');
+    }
+  }
 
   async function loadBook(meuPedido: number) {
     setLoading(true);
@@ -185,6 +232,15 @@ export default function BookDetailPage() {
   const hasPreSections = book && (book.ficha_tecnica || book.dedicatoria || book.epigrafe);
   const hasPostSections = book && book.epilogo;
   const hasAnySection = hasPreSections || hasPostSections;
+
+  // JUSTIÇA DE PREÇO (Fase 5): desconto estimado no pack pelos capítulos que
+  // o leitor já comprou individualmente — o servidor calcula o valor final
+  const descontoPack = book
+    ? book.chapters
+        .filter((c) => !c.is_free && purchasedIds.has(c.id))
+        .reduce((soma, c) => soma + Math.round(c.preco_capitulo), 0)
+    : 0;
+  const precoPackAPagar = Math.max(0, Math.round(book?.preco_total ?? 0) - descontoPack);
 
   if (loading) {
     return (
@@ -369,7 +425,7 @@ export default function BookDetailPage() {
           {/* Divider */}
           <div className="border-t border-border/40 my-5" />
 
-          {/* Stats as badges */}
+          {/* Stats as badges + partilhar (item 26) */}
           <div className="flex items-center gap-3 text-sm mb-2">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 text-muted-foreground">
               <BookOpen className="h-3.5 w-3.5" />
@@ -379,6 +435,14 @@ export default function BookDetailPage() {
               <BookMarked className="h-3.5 w-3.5" />
               <span className="text-xs font-medium">{book.chapters.filter((c) => c.is_free).length} gratuitos</span>
             </div>
+            <button
+              onClick={partilharObra}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/80 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              aria-label="Partilhar esta obra"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Partilhar</span>
+            </button>
           </div>
 
           {/* Full book purchase button — visível também a visitantes (convite a entrar) */}
@@ -588,6 +652,34 @@ export default function BookDetailPage() {
         </CardContent>
       </Card>
 
+      {/* OBRAS RELACIONADAS (item 27 — Fase 5): descoberta dentro da obra */}
+      <section className="mt-10">
+        <h2 className="text-lg font-bold mb-1 flex items-center gap-1.5">
+          <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Obras relacionadas
+        </h2>
+        <p className="text-xs text-muted-foreground mb-4">Do mesmo autor ou do mesmo género literário.</p>
+        {aCarregarRelacionadas ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <Skeleton className="aspect-[3/4] rounded-xl" />
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            ))}
+          </div>
+        ) : relacionadas.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {relacionadas.map((obra) => (
+              <BookCard
+                key={obra.id}
+                book={obra}
+                onClick={() => navigate('book-detail', { bookId: obra.id })}
+              />
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       {/* Purchase Confirmation Dialog */}
       <AlertDialog open={!!purchaseConfirm} onOpenChange={(open) => !open && setPurchaseConfirm(null)}>
         <AlertDialogContent>
@@ -597,8 +689,25 @@ export default function BookDetailPage() {
               {purchaseConfirm?.type === 'full' ? (
                 <>
                   <p>Deseja comprar o livro completo <strong>{purchaseConfirm.name}</strong>?</p>
-                  <p className="mt-2">Valor: <strong>{formatarMoedas(Math.round(purchaseConfirm.price))}</strong></p>
-                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - Math.round(purchaseConfirm.price)).toLocaleString('pt-MZ')} MC</p>}
+                  {descontoPack > 0 ? (
+                    <p className="mt-2">
+                      Valor: <strong>{formatarMoedas(precoPackAPagar)}</strong>{' '}
+                      {precoPackAPagar > 0 && (
+                        <span className="line-through text-muted-foreground">{formatarMoedas(Math.round(purchaseConfirm.price))}</span>
+                      )}
+                      <span className="block mt-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        Desconto de {formatarMoedas(descontoPack)} pelos capítulos que já possui.
+                      </span>
+                      {precoPackAPagar === 0 && (
+                        <span className="block mt-1 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                          O pack sai gratuito — já pagou o equivalente nos capítulos comprados.
+                        </span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="mt-2">Valor: <strong>{formatarMoedas(Math.round(purchaseConfirm.price))}</strong></p>
+                  )}
+                  {user && <p className="mt-1 text-xs text-muted-foreground">Moedas após compra: <Coins className="inline h-3 w-3 mr-0.5" />{Math.max(0, (user.moedas ?? 0) - precoPackAPagar).toLocaleString('pt-MZ')} MC</p>}
                 </>
               ) : (
                 <>
