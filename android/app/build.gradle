@@ -43,6 +43,18 @@ android {
     }
 }
 
+// O Capacitor copia a pasta web inteira (webDir = public) para os assets
+// nativos; sem isto, o APK da actualização (public/apk/MozLit.apk) ficaria
+// EMBUTIDO dentro do próprio APK, duplicando o tamanho do pacote (v1.2.0
+// chegou a 10 MB). Limpar a cópia antes do merge de assets em qualquer build.
+tasks.whenTaskAdded { t ->
+    if (t.name == 'mergeReleaseAssets' || t.name == 'mergeDebugAssets') {
+        t.doFirst {
+            delete fileTree(dir: "${projectDir}/src/main/assets/public/apk")
+        }
+    }
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
