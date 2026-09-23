@@ -219,3 +219,17 @@ Stage Summary:
 - Termos e Privacidade NO AR; consentimento legal no registo; app Android nativa pronta com FLAG_SECURE
 - PENDENTE DO UTILIZADOR: adicionar scope "workflow" ao PAT (ou colar o workflow via UI do GitHub) → desbloqueia o build automático do APK (MozLit-apk nos artefactos do Actions)
 - Para Google Play no futuro: conta de developer ($25) + release assinada (agora distribui-se o debug APK por download directo)
+
+---
+Task: Fase 7 seguimento — travessões zero, assinatura fixa do APK e primeiro build (23/09/2026)
+
+Work Log:
+- CORRECÇÃO: zero travessões "—" nas páginas legais (termos, privacidade) e nos ficheiros novos da Fase 7 (MainActivity, comentário do registo); frases reescritas em vez de só substituir o símbolo. NOTA: ainda existem "—" em COMENTÁRIOS de código antigo (invisíveis ao utilizador) de fases anteriores; varredura total disponível se o proprietário quiser.
+- Token actualizado pelo proprietário (repo + workflow): workflow apk.yml EMPURRADO (commit 901ddca).
+- Assinatura fixa configurada: keystore release gerado (2048 RSA, validade 10000 dias, alias mozlit), guardado nos segredos do GitHub (KEYSTORE_BASE64/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD via API, cifrado com a chave pública do repo); build.gradle assina o release quando a chave existe (nunca no repo); backup da chave + senha entregues ao proprietário (download/mozlit-chave-assinatura) — MANTER PARA SEMPRE, é a identidade da app.
+- Workflow actualizado: restaura a chave dos segredos, compila assembleRelease ASSINADO, publica artefacto MozLit-apk.
+- PRIMEIRO APK GERADO: run 35837582464, success, artefacto MozLit-apk 3.4 MB (app-release.apk); cópia local: download/mozlit-chave-assinatura/MozLit.apk. Verificado: certificado da nossa chave presente nos bytes do APK + bloco de assinatura v2/v3 presente. versionCode 1 / versionName 1.0.
+
+Stage Summary:
+- Fase 7 100% concluída: app Android assinada com chave permanente (actualizações futuras instalam por cima, sem desinstalar), construtor automático no Actions, termos/privacidade limpos no ar
+- Actualizações de conteúdo do SITE chegam à app instalada SEM novo APK (a app é janela para a produção); novo APK só quando houver mudanças nativas (bump versionCode)
