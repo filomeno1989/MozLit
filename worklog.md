@@ -233,3 +233,18 @@ Work Log:
 Stage Summary:
 - Fase 7 100% concluída: app Android assinada com chave permanente (actualizações futuras instalam por cima, sem desinstalar), construtor automático no Actions, termos/privacidade limpos no ar
 - Actualizações de conteúdo do SITE chegam à app instalada SEM novo APK (a app é janela para a produção); novo APK só quando houver mudanças nativas (bump versionCode)
+
+---
+Task: Fase 7 fechamento — Release público v1.0.0 do APK (23/09/2026)
+
+Work Log:
+- O proprietário não encontrava o APK para download: os artefactos do GitHub Actions ficam escondidos (Actions > run > Artifacts, exige login no GitHub) e expiram em 30 dias. Solução definitiva: RELEASE do GitHub.
+- APK descarregado do artefacto do run 35837582464 (app-release.apk, 3.76 MB) e verificado antes de publicar: bloco de assinatura v2/v3 PRESENTE; certificado CN=MozLit, O=MozLit, L=Maputo, C=MZ, válido até 2054; SHA-256 do certificado bate certo com a nossa chave.
+- Release v1.0.0 criado via API (id 394466566, tag v1.0.0, aponta main): "MozLit 1.0.0 | App Android (APK)" com instruções de instalação em português no corpo.
+- Asset MozLit.apk (3.9 MB) anexado ao release. Download DIRECTO sem login: https://github.com/filomeno1989/MozLit/releases/latest/download/MozLit.apk (verificado: 302 -> ficheiro, MIME application/vnd.android.package-archive).
+- Backup da chave reforçado: LEIA-ME.txt criado em download/mozlit-chave-assinatura/ (o que é cada ficheiro, porque guardar, alias mozlit, validade 2054, segredos do repo). Senha no ficheiro testada com keytool: abre o keystore e o certificado corresponde ao APK publicado.
+
+Stage Summary:
+- Distribuição oficial: github.com/filomeno1989/MozLit/releases (link directo /releases/latest/download/MozLit.apk, pronto para WhatsApp)
+- Futuras versões: bump versionCode em android + push -> Actions compila -> anexar novo APK a um release novo (v1.0.1, v1.1.0...)
+- Chave de assinatura: copia nos segredos do GitHub + backup físico com o proprietário (download/mozlit-chave-assinatura)
