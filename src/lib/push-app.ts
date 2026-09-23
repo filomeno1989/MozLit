@@ -197,6 +197,23 @@ export async function activarPush(): Promise<EstadoPush> {
       return 'negado';
     }
 
+    // Canal de notificação Android 8+ (a descrição aparece nas definições do
+    // sistema; sem canal o FCM cai no "Miscellaneous" sem controlo do utilizador)
+    try {
+      const { Importance } = await import('@capacitor-firebase/messaging');
+      await FirebaseMessaging.createChannel({
+        id: 'mozlit_novidades',
+        name: 'Novidades MozLit',
+        description: 'Obras novas e capítulos dos autores que segues',
+        importance: Importance.High,
+        lights: true,
+        lightColor: '#EE941E',
+        vibration: true,
+      });
+    } catch {
+      // sem canal, o FCM usa o predefinido do manifest
+    }
+
     await FirebaseMessaging.subscribeToTopic({ topic: 'novas-obras' });
     await sincronizarTopicosSeguidos();
     definirEstado('activo');

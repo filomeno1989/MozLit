@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "1.0.2",
-  "notas": "Actualizacao pela propria app (menu Aplicacao), avisos de obras novas para todos os leitores e correccoes da 1.0.1.",
+  "versionCode": 4,
+  "versionName": "1.1.0",
+  "notas": "Notificacoes push no telemovel: obras novas chegam a toda a comunidade e capitulos dos autores que segues. Toque na notificacao abre a obra dentro da app. Actualizacao pela propria app: menu Aplicacao > Verificar actualizacoes.",
   "urlApk": "https://github.com/filomeno1989/MozLit/releases/latest/download/MozLit.apk",
   "publicadaEm": "2026-09-23"
 }

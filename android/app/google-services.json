@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "92185545066",
+    "project_id": "mozlit",
+    "storage_bucket": "mozlit.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:92185545066:android:023d20c76e8d886f29bd13",
+        "android_client_info": {
+          "package_name": "mz.mozlit.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBcsw46yAbXBkmc-FHi7D-lw9-chOLvLWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
