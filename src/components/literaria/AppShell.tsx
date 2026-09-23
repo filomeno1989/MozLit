@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   UserPlus,
   UserRound,
+  BellRing,
   Download,
   Loader2,
   RefreshCw,
@@ -37,6 +38,15 @@ import {
 import { cn } from '@/lib/utils';
 import { versaoApp } from '@/lib/app-nativo';
 import { verificarActualizacao, abrirDownloadApk, type InfoActualizacao } from '@/lib/actualizacao-app';
+import { Switch } from '@/components/ui/switch';
+import {
+  estadoPushAgora,
+  subscreverEstadoPush,
+  activarPush,
+  desactivarPush,
+  sincronizarTopicosSeguidos,
+  type EstadoPush,
+} from '@/lib/push-app';
 
 const navItems = [
   { view: 'home' as ViewName, label: 'Início', icon: Home, auth: false, roles: undefined as string[] | undefined },
@@ -126,7 +136,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(t);
   }, [versao, verificarAgora]);
 
-  // ============ CENTRAL DE NOTIFICAÇÕES (item 24 — Fase 5) ============
+  // ============ PUSH FCM (v1.1.0) - estado + preferência no menu ============
+  const [estadoPush, setEstadoPush] = useState<EstadoPush>('inactivo');
+  useEffect(() => {
+    setEstadoPush(estadoPushAgora());
+    return subscreverEstadoPush(setEstadoPush);
+  }, []);
+
+  // Entrou na conta (ou trocou de conta) → subscrever os tópicos dos autores
+  // seguidos. Também cobre quem seguia autores antes desta versão existir.
+  useEffect(() => {
+    if (estadoPush === 'activo') {
+      sincronizarTopicosSeguidos();
+    }
+  }, [estadoPush, user?.id]);
+
+  // ============ CENTRAL DE NOTIFICAÇÕES (item 24 - Fase 5) ============
   interface Notificacao {
     id: string;
     tipo: string;
@@ -187,7 +212,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         await apiFetch('/api/notificacoes', { method: 'PATCH', semRedirecionar: true }).catch(() => {});
       }
     } catch {
-      // silencioso — o painel mostra o estado vazio
+      // silencioso - o painel mostra o estado vazio
     } finally {
       setACarregarNotif(false);
     }
@@ -203,7 +228,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   // NOTIFICAÇÃO DE RECARGA (item 19): quando o admin aprova/rejeita uma
-  // recarga, o leitor fica a saber — no arranque e a cada 30s com sessão
+  // recarga, o leitor fica a saber - no arranque e a cada 30s com sessão
   // activa. Moeda de troca: confiança ("as minhas MC chegaram!").
   const userIdNotif = user?.id;
   useEffect(() => {
@@ -230,9 +255,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {
-        // offline/falha/401: tenta de novo no próximo ciclo — nunca intrusivo.
+        // offline/falha/401: tenta de novo no próximo ciclo - nunca intrusivo.
         // Se a sessão expirou, o clearAuth já aconteceu e este efeito nem
-        // volta a correr (userIdNotif fica null) — o leitor termina o capítulo
+        // volta a correr (userIdNotif fica null) - o leitor termina o capítulo
         // em paz e só pede login na próxima interacção.
       }
     }
@@ -241,7 +266,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => { vivo = false; clearTimeout(t); clearInterval(iv); };
   }, [userIdNotif]);
 
-  // POLL DE NOTIFICAÇÕES (item 24): contagem leve a cada 30s — o badge do
+  // POLL DE NOTIFICAÇÕES (item 24): contagem leve a cada 30s - o badge do
   // sino cresce quando chegam novidades (novo seguidor, obra/capítulo de
   // autores seguidos, comentários, recargas). silencioso: 401/falha não
   // expulsa o leitor (semRedirecionar).
@@ -278,7 +303,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </DialogContent>
       </Dialog>
 
-      {/* Header (safe-area iOS: não fica por baixo do notch — item 23) */}
+      {/* Header (safe-area iOS: não fica por baixo do notch - item 23) */}
       <header className='sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pt-safe'>
         <div className='max-w-7xl mx-auto flex h-14 items-center px-4 gap-3'>
           {/* Mobile menu */}
@@ -326,6 +351,51 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </Button>
                 )}
               </div>
+
+              {/* NOTIFICAÇÕES PUSH (só na app nativa): interruptor + estado */}
+              {versao && (
+                <div className='pt-5 border-t mt-6 space-y-2'>
+                  <div className='flex items-center justify-between gap-3'>
+                    <p className='text-xs text-muted-foreground flex items-center gap-2'>
+                      <BellRing className='h-3.5 w-3.5' /> Notificações do telemóvel
+                    </p>
+                    <Switch
+                      checked={estadoPush === 'activo'}
+                      disabled={estadoPush === 'a_activar' || estadoPush === 'indisponivel'}
+                      onCheckedChange={(v) => {
+                        if (v) {
+                          activarPush().then((e) => {
+                            if (e === 'activo' || e === 'a_activar') {
+                              toast.success('Notificações activadas');
+                            } else if (e === 'negado') {
+                              toast.error('Permissão recusada', {
+                                description: 'Tente de novo aqui ou liberte nas definições do Android: Aplicações > MozLit > Notificações.',
+                              });
+                            } else if (e === 'indisponivel') {
+                              toast('Ainda não disponível nesta versão', {
+                                description: 'Actualize a app no menu Aplicação em baixo.',
+                              });
+                            }
+                          });
+                        } else {
+                          desactivarPush();
+                        }
+                      }}
+                    />
+                  </div>
+                  <p className='text-[11px] text-muted-foreground/80 leading-snug'>
+                    {estadoPush === 'activo' &&
+                      'Obras novas de toda a comunidade e capítulos dos autores que segues chegam ao telemóvel.'}
+                    {estadoPush === 'a_activar' && 'A pedir permissão ao Android...'}
+                    {estadoPush === 'negado' &&
+                      'Permissão recusada. Toque no interruptor para tentar de novo.'}
+                    {estadoPush === 'inactivo' &&
+                      'Desligado: o sino dentro da app continua a funcionar normalmente.'}
+                    {estadoPush === 'indisponivel' &&
+                      'Indisponível nesta versão da app - actualize no menu Aplicação em baixo.'}
+                  </p>
+                </div>
+              )}
 
               {/* APLICAÇÃO: versão + actualização por dentro (só na app nativa) */}
               {versao && (

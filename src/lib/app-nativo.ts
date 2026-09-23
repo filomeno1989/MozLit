@@ -6,7 +6,7 @@
  * No navegador tudo isto é ignorado (Capacitor.isNativePlatform() é falso).
  * Dentro da app APK:
  *  1. Botão back do Android navega dentro do histórico interno da SPA
- *     e só sai da app quando o utilizador está na raiz (home) — antes,
+ *     e só sai da app quando o utilizador está na raiz (home) - antes,
  *     o toque em back fechava a aplicação de imediato.
  *  2. O splash com o logótipo ML é escondido assim que a interface está
  *     pronta (o plugin tem auto-hide de segurança aos 4 s).
@@ -16,6 +16,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { useAppStore } from '@/store/app';
+import { arrancarPush } from '@/lib/push-app';
 
 let iniciado = false;
 
@@ -48,6 +49,10 @@ export function iniciarAppNativo(): void {
         App.exitApp();
       }
     });
+
+    // Push FCM (v1.1.0): permissão + registro + tópicos, 4 s depois de abrir
+    // (a interface assenta primeiro; o diálogo do Android 13+ chega calmo).
+    arrancarPush();
   })().catch(() => {
     // Falha de integração não pode quebrar a app web
   });

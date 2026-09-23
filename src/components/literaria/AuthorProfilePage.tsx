@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { BookCard, type LivroCartaz } from '@/components/literaria/HomePage';
 import { ArrowLeft, BookOpen, UserCheck, UserPlus, Loader2, BookX, BadgeCheck, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { seguirAutorTopicos } from '@/lib/push-app';
 
 interface PerfilAutor {
   autor: {
@@ -29,7 +30,7 @@ interface PerfilAutor {
 }
 
 /**
- * Perfil público de autor (item 18) — bio, obras publicadas e botão Seguir.
+ * Perfil público de autor (item 18) - bio, obras publicadas e botão Seguir.
  * Ponto de chegada do clique no nome do autor na página da obra.
  */
 export default function AuthorProfilePage() {
@@ -59,7 +60,7 @@ export default function AuthorProfilePage() {
     setErro(false);
     try {
       const d = await apiFetch<PerfilAutor>(`/api/autor/${autorId}`);
-      if (meuPedido !== pedidoPerfil.current) return; // resposta obsoleta — ignorar
+      if (meuPedido !== pedidoPerfil.current) return; // resposta obsoleta - ignorar
       setPerfil(d);
       setSeguindo(d.seguido);
       setSeguidores(d.estatisticas.totalSeguidores);
@@ -86,6 +87,8 @@ export default function AuthorProfilePage() {
       );
       setSeguindo(d.seguindo);
       setSeguidores(d.totalSeguidores);
+      // v1.1.0: sincroniza o tópico push deste autor no telemóvel
+      seguirAutorTopicos(autorId, d.seguindo);
       toast.success(d.seguindo ? `Agora segue ${perfil?.autor.nome}.` : `Deixou de seguir ${perfil?.autor.nome}.`);
     } catch (err) {
       toast.error((err as Error).message);

@@ -4,6 +4,7 @@ import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/aut
 import { validateTitulo, validateConteudoCapitulo, ehUuid } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
 import { notificarSeguidores } from '@/lib/notificar';
+import { enviarPushTopico } from '@/lib/push-firebase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Numeração contígua: usar max(ordem)+1 em vez de count(). Após eliminações,
-    // count() devolvia um número que já existia — dois capítulos ficavam com a
+    // count() devolvia um número que já existia - dois capítulos ficavam com a
     // mesma ordem e a navegação anterior/próximo saltava capítulos.
     const maxOrdem = await db.chapter.aggregate({
       where: { livroId },
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     });
 
     // FASE 5 (item 24): capítulo acrescentado a obra JÁ PUBLICADA chega aos
-    // seguidores do autor. Em rascunho não notifica — a obra ainda é secreta.
+    // seguidores do autor. Em rascunho não notifica - a obra ainda é secreta.
     if (book.status === 'PUBLICADO') {
       const autor = await db.user.findUnique({
         where: { id: book.autorId },
@@ -71,10 +72,18 @@ export async function POST(request: NextRequest) {
       await notificarSeguidores(book.autorId, {
         tipo: 'CAPITULO_NOVO',
         titulo: `${autor?.nome || 'Um autor que segues'} adicionou um capítulo`,
-        corpo: `${book.titulo} — ${tituloValidado}`,
+        corpo: `${book.titulo} - ${tituloValidado}`,
         livroId,
         capituloId: chapter.id,
       });
+      // v1.1.0: PUSH real - tópico por autor («autor-<id>»): só os telemóveis
+      // de quem segue este autor recebem, sem guardar tokens na base de dados.
+      await enviarPushTopico(
+        `autor-${book.autorId}`,
+        `${autor?.nome || 'Um autor que segues'} adicionou um capítulo`,
+        `${book.titulo} - ${tituloValidado}`,
+        { tipo: 'CAPITULO_NOVO', livroId, capituloId: chapter.id, autorId: book.autorId }
+      );
     }
 
     return NextResponse.json(chapter, { status: 201 });

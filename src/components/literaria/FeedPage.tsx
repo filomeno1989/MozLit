@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { BookOpen, Users, UserPlus, UserCheck, Loader2, Rss, ArrowRight, Sparkles, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { haQuantoDe } from '@/lib/constants';
+import { seguirAutorTopicos } from '@/lib/push-app';
 
 interface ItemFeed {
   tipo: 'OBRA_NOVA' | 'CAPITULO_NOVO';
@@ -96,11 +97,11 @@ function CartaoSugestao({ autor, aoSeguir }: { autor: SugestaoAutor; aoSeguir: (
 }
 
 /**
- * FEED "A SEGUIR" (item 25 — Fase 5: Social & Descoberta)
+ * FEED "A SEGUIR" (item 25 - Fase 5: Social & Descoberta)
  *
  * O coração social do MozLit: o que os autores que segues publicaram
  * recentemente (obras novas e capítulos novos), com sugestões de autores
- * para crescer a rede. Visitantes veem só as sugestões — descoberta
+ * para crescer a rede. Visitantes veem só as sugestões - descoberta
  * desde o primeiro segundo.
  */
 export default function FeedPage() {
@@ -143,6 +144,8 @@ export default function FeedPage() {
       await apiFetch(`/api/autor/${id}/seguir`, { method: 'POST' });
       setSugestoes((prev) => (prev || []).filter((s) => s.id !== id));
       setTotalSeguidos((t) => t + 1);
+      // v1.1.0: telemóvel passa a receber push dos capítulos deste autor
+      seguirAutorTopicos(id, true);
       // Novo autor seguido → o feed pode ter novidades; recarrega em silêncio
       const meuPedido = ++pedidoFeed.current;
       apiFetch<{ itens: ItemFeed[] }>('/api/feed', { semRedirecionar: true })
@@ -177,7 +180,7 @@ export default function FeedPage() {
           : 'As últimas obras dos autores que segues aparecem aqui.'}
       </p>
 
-      {/* Sugestões de autores — descoberta */}
+      {/* Sugestões de autores - descoberta */}
       {loading && !sugestoes ? (
         <div className="flex gap-3 overflow-x-auto pb-2 mb-10">
           {Array.from({ length: 3 }).map((_, i) => (

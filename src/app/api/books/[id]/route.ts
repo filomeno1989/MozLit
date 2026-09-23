@@ -4,6 +4,7 @@ import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/aut
 import { validateTitulo, validateCategorias, validateFaixaEtaria, validateVolumeInfo, validarCampoLivroHtml, ehUuid } from '@/lib/validate';
 import { LIMITES, textoSimplesDeHtml } from '@/lib/constants';
 import { notificarTodosLeitores } from '@/lib/notificar';
+import { enviarPushTopico } from '@/lib/push-firebase';
 
 export async function GET(
   request: NextRequest,
@@ -142,7 +143,7 @@ export async function PATCH(
       }
       data.capa_url = capa_url || '/placeholder-cover.svg';
     }
-    // SEGURANÇA: whitelist de estados — o body podia injetar "publicado", "xpto"
+    // SEGURANÇA: whitelist de estados - o body podia injetar "publicado", "xpto"
     // ou null (500 por violação NOT NULL) e corromper o fluxo de publicação
     if (status !== undefined) {
       if (status !== 'RASCUNHO' && status !== 'PUBLICADO') {
@@ -150,7 +151,7 @@ export async function PATCH(
       }
       data.status = status;
     }
-    // SEGURANÇA: preço entre 0 e PRECO_TOTAL_MAX — negativo "pagava" leitores
+    // SEGURANÇA: preço entre 0 e PRECO_TOTAL_MAX - negativo "pagava" leitores
     // para comprar (impressão de MC fora da economia), sem tecto permitia absurdos
     if (preco_total !== undefined) {
       if (typeof preco_total !== 'number' || !Number.isFinite(preco_total)) {
@@ -207,7 +208,7 @@ export async function PATCH(
           );
         }
       } else {
-        // Dev (SQLite): corte simples — capítulo visível com string não vazia
+        // Dev (SQLite): corte simples - capítulo visível com string não vazia
         const chapterCount = await db.chapter.count({
           where: { livroId: id, arquivado: false, conteudo: { not: '' } },
         });
@@ -247,6 +248,14 @@ export async function PATCH(
         corpo: updatedBook.titulo,
         livroId: updatedBook.id,
       });
+      // v1.1.0: PUSH real para o telemóvel - tópico comunitário «novas-obras»
+      // (todos os telemóveis com a app subscrevem-no ao arrancar).
+      await enviarPushTopico(
+        'novas-obras',
+        `${updatedBook.autor.nome} publicou uma nova obra`,
+        updatedBook.titulo,
+        { tipo: 'OBRA_NOVA', livroId: updatedBook.id, autorId: existingBook.autorId }
+      );
     }
 
     return NextResponse.json(result);
