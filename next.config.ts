@@ -34,6 +34,23 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // APK alojado no próprio site: descarga directa, sem redireccionamento
+        // do GitHub (que em algumas redes móveis trava aos 100% e não conclui).
+        // vercel.json repete estes cabeçalhos ao nível da plataforma Vercel.
+        source: "/apk/(.*)",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/vnd.android.package-archive",
+          },
+          {
+            key: "Content-Disposition",
+            value: "attachment; filename=MozLit.apk",
+          },
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
     ];
   },
 };
