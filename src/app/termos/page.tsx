@@ -58,7 +58,7 @@ export default function TermosPage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Termos de Utilização</h1>
         <p className="text-sm text-muted-foreground mb-8">
-          Última actualização: Setembro de 2026 · Estes Termos regulam o uso da plataforma MozLit
+          Última actualização: Setembro de 2026. Estes Termos regulam o uso da plataforma MozLit
           (mozlit.vercel.app e a aplicação MozLit para Android). Ao criar conta, entrar ou usar a
           plataforma, o utilizador declara ter lido, compreendido e aceitado estes Termos na
           íntegra.
@@ -70,7 +70,7 @@ export default function TermosPage() {
             O MozLit é uma plataforma literária moçambicana de leitura, publicação e monetização.
             Autores publicam obras por capítulos; leitores descobrem, compram e leem essas obras
             dentro da própria plataforma, usando moedas literárias (MC) adquiridas com dinheiro
-            real (Meticais — MZN). A missão do MozLit é dar aos escritores moçambicanos um espaço
+            real, em Meticais (MZN). A missão do MozLit é dar aos escritores moçambicanos um espaço
             seguro para publicar e ganhar com o seu talento, e aos leitores um catálogo nacional
             acessível a partir de qualquer lugar.
           </p>
@@ -116,8 +116,8 @@ export default function TermosPage() {
           </p>
           <p>
             <strong className="text-foreground">Plágio é proibido.</strong> Publicar, no todo ou em
-            parte, obra que não seja da própria autoria — incluindo textos de terceiros copiados de
-            livros, sites, redes sociais ou de outros autores da própria MozLit — constitui a
+            parte, obra que não seja da própria autoria, incluindo textos de terceiros copiados de
+            livros, sites, redes sociais ou de outros autores da própria MozLit, constitui a
             violação mais grave destes Termos, com consequências imediatas (secção 9). Denúncias de
             plágio são investigadas pela administração.
           </p>
@@ -203,7 +203,7 @@ export default function TermosPage() {
           <p>
             Na máxima medida permitida pela lei, o MozLit não responde por danos indirectos, lucros
             cessantes ou perda de dados resultantes do uso da plataforma. O MozLit não é editor das
-            obras publicadas pelos autores — é um serviço de intermediação técnica —, pelo que a
+            obras publicadas pelos autores: é um serviço de intermediação técnica, pelo que a
             responsabilidade sobre o conteúdo de cada obra pertence ao respectivo autor. Nada
             nestes Termos exclui responsabilidade que a lei não permita excluir.
           </p>
@@ -241,8 +241,8 @@ export default function TermosPage() {
       </main>
 
       <footer className="border-t py-6">
-        <div className="max-w-3xl mx-auto px-4 text-center text-xs text-muted-foreground">
-          MozLit — Plataforma Literária Moçambicana · Leitura, Publicação e Monetização
+        <div className='max-w-3xl mx-auto px-4 text-center text-xs text-muted-foreground'>
+          MozLit - Plataforma Literária Moçambicana. Leitura, Publicação e Monetização.
         </div>
       </footer>
     </div>

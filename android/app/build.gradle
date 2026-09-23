@@ -16,10 +16,29 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // No CI: segredos descodificados nestas variáveis de ambiente.
+            // Local (sem env): sem configuração, o build cai em APK não-assinado.
+            def ksFile = System.getenv("KEYSTORE_FILE")
+            if (ksFile != null) {
+                storeFile file(ksFile)
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS")
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Assinatura fixa (Fase 7): a MESMA chave em todos os builds permite
+            // actualizar a app por cima da anterior, sem desinstalar (dados mantidos).
+            // A chave vive nos segredos do GitHub (KEYSTORE_BASE64 + senhas) e nunca no repo.
+            if (System.getenv("KEYSTORE_FILE") != null) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

@@ -1,0 +1,71 @@
+name: Build APK (MozLit)
+
+# Compila a app Android nativa (Capacitor) a cada actualização do projecto
+# nativo ou manualmente. O APK fica disponível como artefacto desta execução:
+# github.com/filomeno1989/MozLit/actions > executar > Artifacts > MozLit-apk
+#
+# Assinatura: o APK release é assinado com a chave guardada nos segredos do
+# repo (KEYSTORE_BASE64 + KEYSTORE_PASSWORD + KEY_ALIAS + KEY_PASSWORD). Como a
+# chave é sempre a mesma, cada novo APK instala por cima do anterior (actualização
+# sem perder dados). A chave também existe como backup com o proprietário.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'capacitor.config.json'
+      - 'assets/**'
+      - '.github/workflows/apk.yml'
+
+jobs:
+  apk:
+    name: Compilar APK Android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descarregar código
+        uses: actions/checkout@v4
+
+      - name: Java 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Sincronizar Capacitor com o projecto Android
+        run: npx cap sync android
+
+      - name: Restaurar chave de assinatura (dos segredos)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/mozlit-release.keystore"
+          echo "KEYSTORE_FILE=$RUNNER_TEMP/mozlit-release.keystore" >> "$GITHUB_ENV"
+
+      - name: Compilar APK release assinado
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Publicar artefacto MozLit-apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: MozLit-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30

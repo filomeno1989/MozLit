@@ -58,7 +58,7 @@ export default function PrivacidadePage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold mb-2">Política de Privacidade</h1>
         <p className="text-sm text-muted-foreground mb-8">
-          Última actualização: Setembro de 2026 · Esta Política explica que dados o MozLit recolhe,
+          Última actualização: Setembro de 2026. Esta Política explica que dados o MozLit recolhe,
           porquê, com quem são partilhados e quais são os seus direitos. Aplica-se ao site
           mozlit.vercel.app e à aplicação MozLit para Android.
         </p>
@@ -66,8 +66,8 @@ export default function PrivacidadePage() {
         {/* 1 */}
         <Secao numero="1" titulo="Responsável pelo tratamento">
           <p>
-            O responsável pelo tratamento dos dados é a operação do MozLit — plataforma literária
-            moçambicana de leitura, publicação e monetização —, gerida pela sua administração.
+            O responsável pelo tratamento dos dados é a operação do MozLit, plataforma literária
+            moçambicana de leitura, publicação e monetização, gerida pela sua administração.
             Questões de privacidade podem ser enviadas através dos canais de suporte oficiais
             dentro da plataforma.
           </p>
@@ -80,7 +80,7 @@ export default function PrivacidadePage() {
             <li>Nome completo;</li>
             <li>Contacto: número de telefone (com indicativo do país) e/ou email;</li>
             <li>Data de nascimento (para verificar a idade mínima de 13 anos);</li>
-            <li>Senha, guardada exclusivamente em forma cifrada — nunca a vemos em texto claro;</li>
+            <li>Senha, guardada exclusivamente em forma cifrada (nunca a vemos em texto claro);</li>
             <li>Tipo de conta: Leitor ou Escritor.</li>
           </ul>
           <p><strong className="text-foreground">Durante o uso da plataforma:</strong></p>
@@ -101,7 +101,7 @@ export default function PrivacidadePage() {
             parcialmente mascarado (ex.: <span className="font-mono">84••••567</span>) e a data e
             hora. Este mecanismo é parte essencial da nossa missão de proteger autores contra
             cópia e redistribuição de obras: em caso de fuga de conteúdo, a marca identifica a
-            origem. Usamos os mesmos dados apenas para este fim de protecção e dissuasão — nunca
+            origem. Usamos os mesmos dados apenas para este fim de protecção e dissuasão, nunca
             para publicidade ou partilha com terceiros.
           </p>
         </Secao>
@@ -217,8 +217,8 @@ export default function PrivacidadePage() {
       </main>
 
       <footer className="border-t py-6">
-        <div className="max-w-3xl mx-auto px-4 text-center text-xs text-muted-foreground">
-          MozLit — Plataforma Literária Moçambicana · Leitura, Publicação e Monetização
+        <div className='max-w-3xl mx-auto px-4 text-center text-xs text-muted-foreground'>
+          MozLit - Plataforma Literária Moçambicana. Leitura, Publicação e Monetização.
         </div>
       </footer>
     </div>

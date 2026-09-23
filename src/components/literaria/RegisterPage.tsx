@@ -307,7 +307,7 @@ export default function RegisterPage() {
                 )}
               </div>
             </div>
-            {/* Aceitação dos Termos (item 32) — obrigatória para criar conta */}
+            {/* Aceitação dos Termos (item 32): obrigatória para criar conta */}
             <div className="flex items-start gap-2.5 p-3 rounded-lg border border-border/50 bg-muted/30">
               <Checkbox
                 id="aceitou-termos"
