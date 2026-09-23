@@ -295,3 +295,19 @@ Work Log:
 Stage Summary:
 - Do utilizador que recebe por WhatsApp em diante, todas as versões futuras chegam POR DENTRO da app: menu ☰ > Aplicação > Descarregar actualização
 - Obra nova = sino para toda a comunidade; capítulo = sino para seguidores
+
+---
+Task: Push FCM por tópicos — código completo, aguarda google-services.json (23/09/2026)
+
+Work Log:
+- Os dois ficheiros Firebase enviados pelo proprietário NÃO chegaram ao servidor (upload falhou; só imagens antigas no /upload). Decidido: o admin SDK key nem devia passar por aqui — vai directamente para as env vars da Vercel (FIREBASE_SERVICE_ACCOUNT_JSON), guiado ao proprietário. Só o google-services.json precisa de ser reenviado para integrar no APK.
+- PLUGIN: o @capacitor/push-notifications oficial NÃO expõe subscribeToTopic (só nativo). Trocado por @capacitor-firebase/messaging 8.5.2 (capawesome) que tem subscribeToTopic/unsubscribeFromTopic. Web.js do plugin importa firebase/messaging (SDK JS): stub local src/stubs/firebase-messaging-stub.ts + turbopack.resolveAlias no next.config.ts (implementação web é lazy e nunca corre: no APK usa ponte nativa, no site push-app.ts sai antes do import).
+- CLIENTE (src/lib/push-app.ts): estados inactivo/a_activar/activo/negado/indisponivel; activarPush() pede permissão (Android 13+), subscreve tópico «novas-obras» + sincroniza «autor-<id>» via GET /api/autor/seguidos (novo endpoint, take 100); seguirAutorTopicos() chamado em FeedPage e AuthorProfilePage (seguir/desseguir); tap na notificação navega (reader/book-detail/autor) espelhando o sino; notificationReceived vira toast com acção "Abrir"; arrancarPush() no iniciarAppNativo com atraso 4 s; preferência em localStorage (mozlit_push_pref), erro Firebase => estado 'indisponivel' com aviso para actualizar.
+- UI: menu (☰) ganhou bloco "Notificações do telemóvel" (só nativo): interruptor + descrição por estado; desligar não afeta o sino interno.
+- SERVIDOR (src/lib/push-firebase.ts): FCM HTTP v1 sem dependências novas (jsonwebtoken já existia): JWT RS256 da conta de serviço trocado por access token (cache até exp-2min), enviarPushTopico() nunca lança, título ≤120/corpo ≤240, TTL 24 h, lê FIREBASE_SERVICE_ACCOUNT_JSON (JSON puro ou base64, repara \n achatado). Ligado: books/[id] na transição RASCUNHO→PUBLICADO envia a «novas-obras»; chapters/route.ts em obra PUBLICADA envia a «autor-<autorId>».
+- SEM versionCode bump: fica 3/"1.0.2" até o google-services.json chegar; aí bump para 4/"1.1.0" + public/app-versao.json + release. CI desta commit valida a compilação do plugin novo.
+- Validação: tsc 0, eslint 0, next build OK (rota /api/autor/seguidos presente); travessões longos substituídos nos ficheiros tocados (regra tipográfica).
+
+Stage Summary:
+- Falta APENAS: google-services.json em android/app/ (reenvio) + FIREBASE_SERVICE_ACCOUNT_JSON na Vercel => bump v1.1.0 + build + release
+- Arquitetura por tópicos: zero alterações na base de dados, zero tokens guardados, funciona sem login (obra nova chega a toda a comunidade)
