@@ -280,3 +280,18 @@ Work Log:
 Stage Summary:
 - Distribuição: github.com/filomeno1989/MozLit/releases (latest = v1.0.1)
 - Utilizadores da v1.0.0: desinstalar antes de instalar a v1.0.1 (única vez)
+
+---
+Task: App v1.0.2 — actualização por dentro + notificações alargadas (23/09/2026)
+
+Work Log:
+- ACTUALIZAÇÃO POR DENTRO: ficheiro estático public/app-versao.json como fonte da versão mais recente (versionCode 3, versionName 1.0.2, notas, urlApk fixa do release "latest" do GitHub). Módulo src/lib/actualizacao-app.ts: verificarActualizacao() compara App.getInfo().build (versionCode) com o ficheiro; abrirDownloadApk() usa @capacitor/browser (Chrome Custom Tabs) porque WebView não instala APKs por segurança.
+- UI no menu (☰) do AppShell, bloco "Aplicação" (só na app nativa): mostra "Aplicação v{versão}", botão "Verificar actualizações", e quando há nova versão um cartão âmbar com notas e o botão "Descarregar actualização" + toast com instruções. Verificação silenciosa 5 s após abrir a app; toast só uma vez por sessão.
+- NOTIFICAÇÕES: obra nova (transição RASCUNHO→PUBLICADO) passa a notificar TODOS os utilizadores (notificarTodosLeitores em src/lib/notificar.ts); capítulos novos continuam só para seguidores (evitar spam). Os restantes 8 tipos (comentário, resposta, recarga, venda, compra, etc.) já existiam da Fase 5.
+- Push real do telefone (FCM): requer projecto Firebase criado pelo proprietário (gratuito) — instruções entregues; só depois do google-services.json é seguro instalar @capacitor/push-notifications (sem esse ficheiro a app crasha no arranque).
+- build.gradle: versionCode 3, versionName "1.0.2" (mesma chave Beira: instala por cima da 1.0.1 sem desinstalar).
+- Validação: tsc 0, eslint 0, next build OK. Commit 46f258f; build do APK run #3 (id 35848191297).
+
+Stage Summary:
+- Do utilizador que recebe por WhatsApp em diante, todas as versões futuras chegam POR DENTRO da app: menu ☰ > Aplicação > Descarregar actualização
+- Obra nova = sino para toda a comunidade; capítulo = sino para seguidores
