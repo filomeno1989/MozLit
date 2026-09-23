@@ -202,3 +202,20 @@ Stage Summary:
 - Leitor blindado: sem cópia, sem selecção, sem partilha de texto; quem capturar o ecrã expõe a própria conta (nome + contacto mascarado + data/hora) em toda a leitura
 - Nota honesta ao proprietário: nenhuma app web consegue impedir 100% uma captura ao nível do sistema operativo — a estratégia escolhida (marca d'água + ofuscação + bloqueio de teclas/impressão) é o máximo exequível no browser e identifica quem vazar
 - Follow-ups pós-lançamento: renomear middleware.ts→proxy.ts (Next 16, aviso de deprecação nos logs), revalidação de papel ESCRITOR nas rotas de escrita, rate limit multi-instância, região Vercel = Supabase (acções do utilizador)
+
+---
+Task: Fase 7 — App Real & Lançamento (itens 32-35)
+Data: 23/09/2026
+
+Work Log:
+- ITEM 32 — Termos de Utilização (/termos) e Política de Privacidade (/privacidade): rotas reais fora da SPA (cabeçalho próprio "Voltar ao MozLit", indexáveis, prontas para Google Play). Conteúdo adaptado ao contexto moçambicano: MC/MZN, comprovativos validados pela administração, direitos de autor do autor PRESERVADOS (licença não-exclusiva só para exibir na plataforma), plágio = violação mais grave, marca d'água forense transparente na privacidade (secção 3), idade mínima 13, terceiros (Vercel/Supabase), lei da República de Moçambique.
+- Consentimento: checkbox OBRIGATÓRIA no registo ("Li e aceito os Termos... e a Política de Privacidade") com validação no submit; nota de aceitação no login; links Termos|Privacidade no footer do AppShell.
+- ITEM 33 — App Android nativa via Capacitor 8.5.2: mz.mozlit.app / "MozLit", carrega a produção (server.url https://mozlit.vercel.app, httpsScheme), minSdk 24 (Android 7+), target 36, permissão INTERNET apenas. Ícone 1024 recriado fielmente (livro creme M|L sobre âmbar degradê) + splash 2732 com logótipo e tagline; capacitor-assets gerou 38 assets (adaptativos dia/noite, todas as densidades).
+- ITEM 34 — FLAG_SECURE no MainActivity: capturas de ecrã e gravação bloqueadas AO NÍVEL DO SISTEMA OPERATIVO (ecrã preto em qualquer tentativa; miniatura do multitarefa cega). A promessa de protecção levada ao limite — impossível no browser, nativo consegue.
+- ITEM 35 — Workflow .github/workflows/apk.yml criado LOCALMENTE mas NÃO EMPURRADO: PAT do utilizador só tem scope "repo", o GitHub recusa criar ficheiros de workflow sem scope "workflow" (push rejeitado com "refusing to allow a Personal Access Token to create or update workflow"). Ficheiro pronto em .github/workflows/apk.yml (untracked); assim que o token tiver workflow scope, commit+push e o APK compila a cada push do projecto nativo.
+- Commits: e638609 (fase 7 sem o workflow) pushed → deploy Vercel automático; /termos e /privacidade verificados em produção (200 + conteúdo).
+
+Stage Summary:
+- Termos e Privacidade NO AR; consentimento legal no registo; app Android nativa pronta com FLAG_SECURE
+- PENDENTE DO UTILIZADOR: adicionar scope "workflow" ao PAT (ou colar o workflow via UI do GitHub) → desbloqueia o build automático do APK (MozLit-apk nos artefactos do Actions)
+- Para Google Play no futuro: conta de developer ($25) + release assinada (agora distribui-se o debug APK por download directo)
