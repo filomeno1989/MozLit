@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAppStore, type ViewName } from '@/store/app';
 import { apiFetch } from '@/lib/api';
 import { toast } from 'sonner';
@@ -30,9 +30,13 @@ import {
   ShieldCheck,
   UserPlus,
   UserRound,
+  Download,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { versaoApp } from '@/lib/app-nativo';
+import { verificarActualizacao, abrirDownloadApk, type InfoActualizacao } from '@/lib/actualizacao-app';
 
 const navItems = [
   { view: 'home' as ViewName, label: 'Início', icon: Home, auth: false, roles: undefined as string[] | undefined },
@@ -90,10 +94,37 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   // Versão do APK (só preenchida dentro da app nativa; no site fica oculta)
   const [versao, setVersao] = useState<string | null>(null);
+  // Actualização da app por dentro: estado da verificação e resultado
+  const [apkActual, setApkActual] = useState<InfoActualizacao | null>(null);
+  const [aVerificar, setAVerificar] = useState(false);
+  const jaAvisouRef = useRef(false);
+
+  const verificarAgora = useCallback(async () => {
+    setAVerificar(true);
+    const r = await verificarActualizacao();
+    if (r) setApkActual(r);
+    setAVerificar(false);
+    if (r?.nova && !jaAvisouRef.current) {
+      jaAvisouRef.current = true;
+      toast(`Nova versão ${r.versaoRemota} disponível`, {
+        description: 'Descarrega no menu ☰ > Aplicação > Descarregar actualização.',
+      });
+    }
+  }, []);
 
   useEffect(() => {
     versaoApp().then(setVersao);
   }, []);
+
+  // Verificação silenciosa ao abrir a app (um pouco depois do arranque,
+  // para não competir com os pedidos iniciais)
+  useEffect(() => {
+    if (!versao) return;
+    const t = setTimeout(() => {
+      verificarAgora();
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [versao, verificarAgora]);
 
   // ============ CENTRAL DE NOTIFICAÇÕES (item 24 — Fase 5) ============
   interface Notificacao {
@@ -295,6 +326,54 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </Button>
                 )}
               </div>
+
+              {/* APLICAÇÃO: versão + actualização por dentro (só na app nativa) */}
+              {versao && (
+                <div className='pt-5 border-t mt-6 space-y-2.5'>
+                  <p className='text-xs text-muted-foreground flex items-center gap-2'>
+                    <Download className='h-3.5 w-3.5' /> Aplicação v{versao}
+                  </p>
+                  {apkActual?.nova ? (
+                    <div className='rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2'>
+                      <p className='text-xs font-semibold text-amber-900 dark:text-amber-200'>
+                        Nova versão {apkActual.versaoRemota} disponível
+                      </p>
+                      {apkActual.notas && (
+                        <p className='text-[11px] leading-snug text-amber-800/90 dark:text-amber-300/90 line-clamp-3'>
+                          {apkActual.notas}
+                        </p>
+                      )}
+                      <Button
+                        size='sm'
+                        className='w-full bg-amber-600 hover:bg-amber-700 text-white'
+                        onClick={() => {
+                          if (apkActual.urlApk) {
+                            abrirDownloadApk(apkActual.urlApk);
+                            toast.success('Download iniciado no navegador', {
+                              description: 'Quando terminar, abre o ficheiro descarregado para instalar a nova versão.',
+                            });
+                            setSidebarOpen(false);
+                          }
+                        }}
+                      >
+                        <Download className='h-4 w-4 mr-1.5' /> Descarregar actualização
+                      </Button>
+                    </div>
+                  ) : null}
+                  <button
+                    onClick={verificarAgora}
+                    disabled={aVerificar}
+                    className='text-[11px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 disabled:opacity-60'
+                  >
+                    {aVerificar ? (
+                      <Loader2 className='h-3 w-3 animate-spin' />
+                    ) : (
+                      <RefreshCw className='h-3 w-3' />
+                    )}
+                    {aVerificar ? 'A verificar...' : apkActual ? 'Verificar de novo' : 'Verificar actualizações'}
+                  </button>
+                </div>
+              )}
             </SheetContent>
           </Sheet>
 

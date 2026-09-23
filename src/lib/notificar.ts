@@ -79,3 +79,35 @@ export async function notificarSeguidores(
     console.error('[MozLit] Notificação a seguidores falhou (não bloqueia):', err instanceof Error ? err.message : err);
   }
 }
+
+/**
+ * Notifica TODOS os utilizadores registados (excepto o autor e quem originou).
+ * Usado na publicação de uma obra NOVA: numa plataforma em crescimento, os
+ * seguidores de cada autor são ainda poucos — a comunidade inteira merece
+ * saber que há literatura fresca. Capítulos novos continuam só para
+ * seguidores (senão o sino vira spam).
+ */
+export async function notificarTodosLeitores(
+  autorId: string,
+  dados: DadosNotificacao,
+  exceptoUserId?: string
+): Promise<void> {
+  try {
+    if (!autorId || !(dados.titulo || '').trim()) return;
+    const utilizadores = await db.user.findMany({
+      where: { id: { not: autorId } },
+      select: { id: true },
+    });
+    const alvos = utilizadores
+      .map((u) => u.id)
+      .filter((id) => id !== exceptoUserId);
+    if (alvos.length === 0) return;
+
+    const base = dadosLimpos(dados, autorId);
+    await db.notificacao.createMany({
+      data: alvos.map((userId) => ({ userId, ...base })),
+    });
+  } catch (err) {
+    console.error('[MozLit] Notificação a todos os leitores falhou (não bloqueia):', err instanceof Error ? err.message : err);
+  }
+}
