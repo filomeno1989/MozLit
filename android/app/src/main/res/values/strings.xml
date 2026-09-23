@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MozLit</string>
+    <string name="title_activity_main">MozLit</string>
+    <string name="package_name">mz.mozlit.app</string>
+    <string name="custom_url_scheme">mz.mozlit.app</string>
+</resources>

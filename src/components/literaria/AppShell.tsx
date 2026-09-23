@@ -477,6 +477,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <button onClick={() => navigate('admin')} className='hover:text-foreground transition-colors'>Admin</button>
                 </>
               )}
+              <span className='text-border'>|</span>
+              <a href='/termos' className='hover:text-foreground transition-colors'>Termos</a>
+              <span className='text-border'>|</span>
+              <a href='/privacidade' className='hover:text-foreground transition-colors'>Privacidade</a>
             </nav>
           </div>
         </div>

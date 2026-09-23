@@ -198,6 +198,12 @@ export default function LoginPage() {
                 Criar conta
               </button>
             </p>
+            <p className="text-center text-[11px] leading-relaxed text-muted-foreground/80">
+              Ao entrar, confirma que aceita os{' '}
+              <a href="/termos" target="_blank" rel="noopener noreferrer" className="hover:text-amber-700 dark:hover:text-amber-400 hover:underline">Termos de Utilização</a>
+              {' '}e a{' '}
+              <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="hover:text-amber-700 dark:hover:text-amber-400 hover:underline">Política de Privacidade</a>.
+            </p>
           </form>
         </CardContent>
       </Card>

@@ -1,0 +1,13 @@
+{
+  "appId": "mz.mozlit.app",
+  "appName": "MozLit",
+  "webDir": "public",
+  "server": {
+    "url": "https://mozlit.vercel.app",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

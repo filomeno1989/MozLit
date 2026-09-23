@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine, Calendar, Phone, Mail } from 'lucide-react';
+import { BookOpen, UserPlus, Loader2, AlertCircle, Eye, EyeOff, BookOpenCheck, PenLine, Calendar, Phone, Mail, FileCheck } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { IDADE_MINIMA_REGISTO } from '@/lib/constants';
 import CountryCodePicker from '@/components/literaria/CountryCodePicker';
 import { PAIS_PADRAO, type Pais } from '@/lib/paises';
@@ -42,6 +43,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [aceitouTermos, setAceitouTermos] = useState(false);
 
   const strength = getPasswordStrength(senha);
 
@@ -63,6 +65,13 @@ export default function RegisterPage() {
     }
     if (modoContacto === 'EMAIL' && !email.trim()) {
       setError('Indique o seu email.');
+      setLoading(false);
+      return;
+    }
+
+    // Consentimento legal (item 32): sem aceitação dos Termos não há conta.
+    if (!aceitouTermos) {
+      setError('Deve ler e aceitar os Termos de Utilização e a Política de Privacidade.');
       setLoading(false);
       return;
     }
@@ -297,6 +306,26 @@ export default function RegisterPage() {
                   <p className="text-xs text-destructive mt-1">As senhas não coincidem</p>
                 )}
               </div>
+            </div>
+            {/* Aceitação dos Termos (item 32) — obrigatória para criar conta */}
+            <div className="flex items-start gap-2.5 p-3 rounded-lg border border-border/50 bg-muted/30">
+              <Checkbox
+                id="aceitou-termos"
+                checked={aceitouTermos}
+                onCheckedChange={(v) => setAceitouTermos(v === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="aceitou-termos" className="text-xs leading-relaxed text-muted-foreground cursor-pointer">
+                Li e aceito os{' '}
+                <a href="/termos" target="_blank" rel="noopener noreferrer" className="text-amber-700 dark:text-amber-400 font-medium hover:underline">
+                  Termos de Utilização
+                </a>{' '}
+                e a{' '}
+                <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="text-amber-700 dark:text-amber-400 font-medium hover:underline">
+                  Política de Privacidade
+                </a>
+                , incluindo as regras de protecção de obras e da moeda MC.
+              </label>
             </div>
             <Button type="submit" className="w-full bg-amber-600 hover:bg-amber-700 text-white" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <UserPlus className="h-4 w-4 mr-1" />}
