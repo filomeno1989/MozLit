@@ -127,6 +127,15 @@ export interface DadosPush {
 }
 
 /**
+ * Estado da configuração, para diagnóstico (endpoint admin /api/push/estado).
+ * Nunca expõe a chave - só diz se existe e a que projecto pertence.
+ */
+export function estadoConfigPush(): { configurado: boolean; projectId: string | null } {
+  const cs = obterContaServico();
+  return { configurado: cs != null, projectId: cs?.project_id ?? null };
+}
+
+/**
  * Envia uma notificação push para um tópico FCM. Nunca lança.
  * Título ≤ 120 e corpo ≤ 240 - bandeja do Android trunca com reticências.
  */

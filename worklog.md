@@ -311,3 +311,18 @@ Work Log:
 Stage Summary:
 - Falta APENAS: google-services.json em android/app/ (reenvio) + FIREBASE_SERVICE_ACCOUNT_JSON na Vercel => bump v1.1.0 + build + release
 - Arquitetura por tópicos: zero alterações na base de dados, zero tokens guardados, funciona sem login (obra nova chega a toda a comunidade)
+
+---
+Task: Release v1.1.0 publicado - push FCM activo (23/09/2026)
+
+Work Log:
+- google-services.json chegou do proprietário colado como texto (upload do gateway falhou); recriado em android/app/ (project_id mozlit, package mz.mozlit.app, api key AIzaSy...LWY). Committable: é config pública por desenho (vai dentro do APK de qualquer forma).
+- AndroidManifest: meta-data default_notification_icon (@mipmap/ic_launcher) + default_notification_channel_id (mozlit_novidades). push-app.ts cria o canal com Importance.High, luz âmbar #EE941E e vibração.
+- Bump: versionCode 4 / versionName "1.1.0" + public/app-versao.json anuncia a 4/"1.1.0" (Vercel confirma a servir).
+- Verificações do APK (run #5, id 35860577135): google_app_id 1:92185545066:android:023d20c76e8d886f29bd13 presente no resources.arsc (google-services plugin fundiu a config), versionName 1.1.0 + canal + meta-data no manifest (UTF-16), APK Signing Block v2 com certificado Beira SHA-256 3E:48:...:8B:DD (match), 5304781 bytes.
+- Release v1.1.0 criado (id 394641245) com instruções; /releases/latest/download/MozLit.apk serve a v1.1.0 (HTTP 200, 5304781 bytes sem login). Backup: download/mozlit-chave-assinatura/MozLit-1.1.0.apk.
+- Novo diagnóstico admin: GET /api/push/estado (só ADMIN, aceita Authorization ou ?token=) devolve {configurado, projectId} e ?testar=TOPICO envia notificação de teste ao tópico.
+
+Stage Summary:
+- v1.1.0 = primeira versão com push FCM; updater da v1.0.2 passa a oferecer a 1.1.0 (primeiro teste real da actualização por dentro)
+- Falta do lado do proprietário: FIREBASE_SERVICE_ACCOUNT_JSON na Vercel + Redeploy; verificar em /api/push/estado
