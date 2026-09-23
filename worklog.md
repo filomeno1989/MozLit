@@ -182,3 +182,23 @@ Stage Summary:
 - Débito duplo eliminado: o dinheiro dos leitores volta a valer exactamente o preço
 - Auto-reparação criará "notificacoes" na Supabase na 1.ª consulta após o deploy
 - Pendentes mantidas: revalidação de papel ESCRITOR nas rotas de escrita, rate limit multi-instância, região Vercel = Supabase (acção do utilizador)
+
+---
+Task ID: 9
+Agent: main (chat novo, ambiente reiniciado)
+Task: Fase 6 — Blindagem da Obra (itens 29-31) + varredura de fecho profissional
+
+Work Log:
+- DECISÃO DO PROPRIETÁRIO: a partilha de trechos (item 26) foi REJEITADA por risco de plágio — a política passa a ser protecção máxima, com marca d'água como dissuasor.
+- ITEM 29 — Partilha de trechos REMOVIDA: modoTrecho/barraTrecho/capturarSelecao/copiarTrecho/partilharTrecho eliminados por completo do leitor; DRM estrito nas duas vistas (select-none permanente, sem onCopy/onCut/onDragStart com excepções). MANTIDA apenas a partilha de obra na BookDetail (Web Share do LINK público /?obra=ID + título/autor — não expõe texto nenhum).
+- ITEM 30 — Marca d'água forense reforçada: componente MarcaAgua nas duas vistas do leitor (capítulo E secções de abertura/epílogo, que antes só tinham riscas); padrão diagonal 24x4 com NOME do leitor + e-mail MASCARADO (le•••@dominio) + DATA/HORA; opacidade das marcas subida de 0.045-0.05 para 0.07-0.08 (visível na captura, confortável na leitura); recalculada por sessão do leitor.
+- ITEM 31 — Anti-captura best-effort: ofuscação automática blur(20px) + aviso "Conteúdo protegido" quando a janela perde foco/muda de aba (visibilitychange+blur/focus) — pré-visualizações do alternador de apps ficam cegas; PrintScreen esvazia a área de transferência ("Conteúdo protegido..."); Cmd+Shift+4/5 (macOS) e Cmd+U bloqueados; impressão já bloqueada globalmente (@media print) mantida; selo "Protegido" no topo do leitor com tooltip dissuasor (desktop).
+- VARREDURA DE FECHO: bug "MC MC" no paywall corrigido (formatarMoedas já inclui "MC" — 4 ocorrências no leitor); aviso de acessibilidade Radix DialogContent (aria-describedby) silenciado globalmente na base ui/dialog.tsx (chamadas com descrição real sobrepõem).
+- Validação: tsc 0, eslint 0; E2E API 15/15 (registo autor+leitor, obra com cap. grátis + pago 30 MC publicada, cap. grátis 200 com conteúdo, cap. pago 403 paywall SEM vazamento de texto + preço certo, feed, notificações, busca, relacionadas); E2E browser: leitor sem botão de partilha, marca d'água visível no screenshot (Leitor Browser · MozLit / le•••@test.mz · 23/09/2026), selo Protegido, user-select none, blur(20px)+aviso ao perder foco, paywall "30 MC" singular, consola sem erros.
+- Ambiente dev reconstruído (repo recolonizado do GitHub; schema.dev.prisma SQLite + db/custom.db mantidos).
+
+Stage Summary:
+- Commit pushed → deploy Vercel automático
+- Leitor blindado: sem cópia, sem selecção, sem partilha de texto; quem capturar o ecrã expõe a própria conta (nome + contacto mascarado + data/hora) em toda a leitura
+- Nota honesta ao proprietário: nenhuma app web consegue impedir 100% uma captura ao nível do sistema operativo — a estratégia escolhida (marca d'água + ofuscação + bloqueio de teclas/impressão) é o máximo exequível no browser e identifica quem vazar
+- Follow-ups pós-lançamento: renomear middleware.ts→proxy.ts (Next 16, aviso de deprecação nos logs), revalidação de papel ESCRITOR nas rotas de escrita, rate limit multi-instância, região Vercel = Supabase (acções do utilizador)

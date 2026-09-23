@@ -66,7 +66,7 @@ export const TEMAS_LEITOR: Record<TemaLeitor, {
     suave: '#71717a',
     borda: 'rgba(39,39,42,0.12)',
     acento: '#b45309', // amber-700 — legível sobre papel branco
-    marca: 'rgba(39,39,42,0.045)',
+    marca: 'rgba(39,39,42,0.075)',
     nome: 'Claro',
   },
   sepia: {
@@ -75,7 +75,7 @@ export const TEMAS_LEITOR: Record<TemaLeitor, {
     suave: '#8a7355',
     borda: 'rgba(74,59,40,0.18)',
     acento: '#92400e', // amber-800 — contraste suficiente sobre sépia
-    marca: 'rgba(74,59,40,0.05)',
+    marca: 'rgba(74,59,40,0.08)',
     nome: 'Sépia',
   },
   escuro: {
@@ -84,7 +84,7 @@ export const TEMAS_LEITOR: Record<TemaLeitor, {
     suave: '#a8a29e',
     borda: 'rgba(231,229,228,0.14)',
     acento: '#fbbf24', // amber-400 — brilha no escuro
-    marca: 'rgba(231,229,228,0.05)',
+    marca: 'rgba(231,229,228,0.07)',
     nome: 'Escuro',
   },
 };

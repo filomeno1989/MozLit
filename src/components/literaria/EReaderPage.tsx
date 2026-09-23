@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/app';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck, Minus, Plus, Share2, Copy } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, BookOpen, List, X, Lock, Coins, Loader2, Wallet, BadgeCheck, Minus, Plus, ShieldCheck } from 'lucide-react';
 import CommentsSection from '@/components/literaria/CommentsSection';
 import { toast } from 'sonner';
 import { type SectionKey, SECTION_LABELS, isHtmlConteudo, formatarMoedas } from '@/lib/constants';
@@ -162,14 +162,14 @@ function PaywallConteudo({
 
       <div className="mt-5 rounded-xl border border-amber-200/70 dark:border-amber-800/40 bg-amber-50/70 dark:bg-amber-950/25 p-4">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-1.5 text-white font-bold text-sm shadow-sm">
-          <Coins className="h-4 w-4" /> {formatarMoedas(paywall.preco)} MC
+          <Coins className="h-4 w-4" /> {formatarMoedas(paywall.preco)}
         </span>
         {user && (
           <p className="mt-2.5 text-xs text-muted-foreground">
             {saldoSuficiente ? (
-              <>Saldo: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatarMoedas(saldo)} MC</span> · após compra: {formatarMoedas(Math.max(0, saldo - paywall.preco))} MC</>
+              <>Saldo: <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatarMoedas(saldo)}</span> · após compra: {formatarMoedas(Math.max(0, saldo - paywall.preco))}</>
             ) : (
-              <>Saldo: <span className="font-semibold text-destructive">{formatarMoedas(saldo)} MC</span> · faltam {formatarMoedas(paywall.preco - saldo)} MC</>
+              <>Saldo: <span className="font-semibold text-destructive">{formatarMoedas(saldo)}</span> · faltam {formatarMoedas(paywall.preco - saldo)}</>
             )}
           </p>
         )}
@@ -183,7 +183,7 @@ function PaywallConteudo({
             disabled={aComprar}
           >
             {aComprar ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Lock className="h-4 w-4 mr-1.5" />}
-            {aComprar ? 'A desbloquear…' : `Desbloquear por ${formatarMoedas(paywall.preco)} MC`}
+            {aComprar ? 'A desbloquear…' : `Desbloquear por ${formatarMoedas(paywall.preco)}`}
           </Button>
         ) : (
           <Button
@@ -354,6 +354,37 @@ function renderProseText(text: string) {
 }
 
 /**
+ * Marca d'água forense (Fase 6 — item 30): padrão diagonal repetido com a
+ * identidade do leitor (nome, contacto mascarado, data/hora) sobre TODA a
+ * área de leitura, nas duas vistas. Quem capturar o ecrã expõe a própria
+ * conta — é a dissuasão que substitui a partilha de trechos removida.
+ */
+function MarcaAgua({ titulo, detalhe }: { titulo: string; detalhe: string }) {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
+      {Array.from({ length: 24 }).map((_, row) =>
+        Array.from({ length: 4 }).map((_, col) => (
+          <div
+            key={`m-${row}-${col}`}
+            className="absolute font-semibold whitespace-nowrap select-none text-center leading-tight text-[color:var(--leitor-marca)]"
+            style={{
+              top: `${row * 4.4}%`,
+              left: `${col * 27 - 8}%`,
+              transform: 'rotate(-32deg)',
+              fontSize: '0.95rem',
+              userSelect: 'none',
+            }}
+          >
+            {titulo}
+            <span className="block text-[10px] font-normal">{detalhe}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/**
  * Renderiza o conteúdo do capítulo:
  * - HTML (do editor rico) → injetado directamente (já foi sanitizado no servidor antes de gravar)
  * - Texto simples (capítulos antigos) → renderizador de prosa legado
@@ -391,15 +422,24 @@ export default function EReaderPage() {
     : undefined;
   const userId = user?.id;
 
-  // Block PrintScreen, Ctrl+Shift+I/J/S/C, Ctrl+P, and DevTools shortcuts
+  // BLINDAGEM DE TECLADO (item 31): DevTools, impressão e teclas de captura.
+  // O PrintScreen dispara no sistema operativo — não se pode bloquear, mas
+  // esvaziamos a área de transferência de imediato para inutilizar o colar.
   useEffect(() => {
     function blockKey(e: KeyboardEvent) {
+      if (e.key === 'PrintScreen') {
+        try {
+          void navigator.clipboard?.writeText('Conteúdo protegido por direitos de autor — MozLit.');
+        } catch { /* sem permissão — sem efeito */ }
+        e.preventDefault();
+        return;
+      }
       if (
-        e.key === 'PrintScreen' ||
         (e.ctrlKey && e.shiftKey && ['I','i','J','j','S','s','C','c','3'].includes(e.key)) ||
-        (e.metaKey && e.shiftKey && ['I','i','J','j','S','s','3'].includes(e.key)) ||
+        (e.metaKey && e.shiftKey && ['I','i','J','j','S','s','3','4','5'].includes(e.key)) ||
         (e.ctrlKey && e.key === 'p') ||
-        (e.metaKey && e.key === 'p')
+        (e.metaKey && e.key === 'p') ||
+        (e.metaKey && e.key === 'u')
       ) {
         e.preventDefault();
         return false;
@@ -450,115 +490,77 @@ export default function EReaderPage() {
     return () => { document.body.style.overflow = antes; };
   }, [zoomImagem]);
 
-  // ============ PARTILHA DE TRECHO (item 26 — Fase 5) ============
-  // O leitor tem DRM (sem cópia/selecção). O modo trecho é a excepção
-  // CONTROLADA: activa a selecção por um momento, captura o texto escolhido
-  // e sai — o trecho partilhado leva sempre atribuição (título, autor, link).
-  const [modoTrecho, setModoTrecho] = useState(false);
-  const [trechoSelecionado, setTrechoSelecionado] = useState('');
-  const [nomeAutorLivro, setNomeAutorLivro] = useState<string | null>(null);
+  // ============ BLINDAGEM DA OBRA (Fase 6 — itens 29-31) ============
+  // 29: A partilha de trechos foi REMOVIDA por decisão do proprietário
+  //     (risco de plágio). O leitor volta ao DRM estrito: zero selecção,
+  //     zero cópia, zero menu de contexto. Mantém-se apenas a partilha do
+  //     LINK público na página da obra — que não expõe texto nenhum.
+  // 30: Marca d'água forense (componente MarcaAgua) nas duas vistas.
+  // 31: Ofuscação automática ao perder foco + teclas de captura neutralizadas
+  //     + impressão já bloqueada globalmente no CSS (@media print).
 
-  // Trocar de capítulo/secção sai do modo (a selecção não sobrevive à leitura)
+  // Marca d'água — recalcula quando a sessão do leitor muda. Calculado no
+  // cliente (o leitor só renderiza conteúdo depois do loading, logo não há
+  // descompasso de hidratação).
+  const [marcaAgua, setMarcaAgua] = useState({ titulo: 'MozLit', detalhe: 'Obra protegida' });
   useEffect(() => {
-    setModoTrecho(false);
-    setTrechoSelecionado('');
-  }, [chapterId, section]);
+    const nome = user?.nome?.trim() || 'Leitor';
+    const contacto = user?.email?.trim() || '';
+    // e-mail mascarado: identifica a conta no vazamento sem a expor por inteiro
+    const arroba = contacto.indexOf('@');
+    const mascarado = arroba > 1
+      ? `${contacto.slice(0, 2)}•••${contacto.slice(arroba)}`
+      : contacto;
+    const agora = new Date();
+    const data = agora.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const hora = agora.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+    setMarcaAgua({
+      titulo: `${nome} · MozLit`,
+      detalhe: [mascarado, `${data} ${hora}`].filter(Boolean).join(' · '),
+    });
+  }, [user?.id, user?.nome, user?.email]);
 
-  function ativarModoTrecho() {
-    setModoTrecho(true);
-    setTrechoSelecionado('');
-    // O nome do autor não vem nos dados do leitor — 1 consulta leve, só uma vez
-    const idAutor = isSectionView ? sectionBook?.autorId : chapter?.livro.autorId;
-    if (idAutor && nomeAutorLivro === null) {
-      apiFetch<{ autor?: { nome?: string } }>(`/api/autor/${idAutor}`)
-        .then((d) => setNomeAutorLivro(d.autor?.nome || ''))
-        .catch(() => setNomeAutorLivro(''));
-    }
-  }
+  // Ofuscação anti-captura (item 31): quando a janela perde o foco ou o
+  // utilizador muda de app/aba, o conteúdo borra — a miniatura do
+  // alternador de tarefas e capturas acidentais ficam sem texto legível.
+  const [ofuscado, setOfuscado] = useState(false);
+  useEffect(() => {
+    const aoPerder = () => setOfuscado(true);
+    const aoVoltar = () => setOfuscado(false);
+    const aoVisibilidade = () => setOfuscado(document.hidden);
+    window.addEventListener('blur', aoPerder);
+    window.addEventListener('focus', aoVoltar);
+    document.addEventListener('visibilitychange', aoVisibilidade);
+    return () => {
+      window.removeEventListener('blur', aoPerder);
+      window.removeEventListener('focus', aoVoltar);
+      document.removeEventListener('visibilitychange', aoVisibilidade);
+    };
+  }, []);
 
-  function sairModoTrecho() {
-    setModoTrecho(false);
-    setTrechoSelecionado('');
-    try { window.getSelection?.()?.removeAllRanges?.(); } catch { /* sem efeito */ }
-  }
-
-  /** Captura o texto seleccionado quando o utilizador solta o dedo/rato */
-  function capturarSelecao() {
-    if (!modoTrecho) return;
-    let texto = '';
-    try { texto = window.getSelection?.()?.toString() || ''; } catch { texto = ''; }
-    texto = texto.trim();
-    if (texto.length === 0) {
-      setTrechoSelecionado('');
-    } else if (texto.length < 10) {
-      // trechos tão curtos não valem um cartão de partilha
-      setTrechoSelecionado('');
-    } else if (texto.length > 600) {
-      setTrechoSelecionado(texto.slice(0, 597).trimEnd() + '…');
-    } else {
-      setTrechoSelecionado(texto);
-    }
-  }
-
-  function textoDoTrecho(): string {
-    const livroTitulo = isSectionView ? sectionBook?.titulo : chapter?.livro.titulo;
-    const autor = nomeAutorLivro || '';
-    const link = typeof window !== 'undefined' && (chapter?.livro.id || bookId)
-      ? `${window.location.origin}/?obra=${chapter?.livro.id || bookId}`
-      : '';
-    return `“${trechoSelecionado}”\n— ${livroTitulo || 'Obra MozLit'}${autor ? `, por ${autor}` : ''}\n${link}\n(via MozLit)`;
-  }
-
-  async function copiarTrecho() {
-    try {
-      await navigator.clipboard.writeText(textoDoTrecho());
-      toast.success('Trecho copiado com atribuição da obra.');
-      sairModoTrecho();
-    } catch {
-      toast.error('Não foi possível copiar. Tente novamente.');
-    }
-  }
-
-  async function partilharTrecho() {
-    const texto = textoDoTrecho();
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: 'Trecho — MozLit', text: texto });
-        sairModoTrecho();
-        return;
-      } catch {
-        // cancelado ou falhou → fica no modo para copiar manualmente
-      }
-    }
-    await copiarTrecho();
-  }
-
-  /** Barra de acção do modo trecho — fixa no fundo, nas duas vistas do leitor */
-  const barraTrecho = modoTrecho ? (
+  /** Aviso fixo mostrado enquanto o conteúdo está ofuscado (fora da raiz, para não borrar) */
+  const avisoOfuscado = ofuscado ? (
     <div
-      className="fixed bottom-0 inset-x-0 z-[60] bg-card border-t border-border shadow-2xl p-3"
-      style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-      role="toolbar"
-      aria-label="Partilhar trecho seleccionado"
+      className="fixed inset-0 z-[70] flex items-center justify-center pointer-events-none"
+      aria-hidden="true"
     >
-      {trechoSelecionado ? (
-        <>
-          <p className="text-xs text-muted-foreground italic line-clamp-2 mb-2.5 px-0.5">“{trechoSelecionado}”</p>
-          <div className="flex items-center gap-2 justify-end">
-            <span className="text-[11px] text-muted-foreground mr-auto">{trechoSelecionado.length}/600</span>
-            <Button variant="ghost" size="sm" onClick={sairModoTrecho}>Cancelar</Button>
-            <Button variant="outline" size="sm" onClick={copiarTrecho}><Copy className="h-3.5 w-3.5 mr-1.5" />Copiar</Button>
-            <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={partilharTrecho}><Share2 className="h-3.5 w-3.5 mr-1.5" />Partilhar</Button>
-          </div>
-        </>
-      ) : (
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">Toque e mantenha (ou arraste) para seleccionar o trecho a partilhar.</p>
-          <Button variant="ghost" size="sm" onClick={sairModoTrecho} className="shrink-0">Cancelar</Button>
-        </div>
-      )}
+      <span className="rounded-full bg-black/70 text-white text-xs sm:text-sm px-4 py-2 flex items-center gap-2 shadow-xl">
+        <ShieldCheck className="h-4 w-4 shrink-0" />
+        Conteúdo protegido — volte ao app para continuar a ler
+      </span>
     </div>
   ) : null;
+
+  /** Selo dissuasor no topo do leitor (desktop) */
+  const seloProtegido = (
+    <span
+      className="hidden sm:flex items-center gap-1 text-[11px] text-[color:var(--leitor-suave)] select-none"
+      title="Obra protegida por direitos de autor. Cópias e capturas identificam a sua conta."
+    >
+      <ShieldCheck className="h-3.5 w-3.5" />
+      Protegido
+    </span>
+  );
 
   // For section reading, we need book data (com capítulos para o botão Seguinte)
   const [sectionBook, setSectionBook] = useState<SecaoLivro | null>(null);
@@ -788,21 +790,14 @@ export default function EReaderPage() {
     }
 
     return (
+      <>
       <div
         className="relative min-h-[calc(100vh-7rem)] bg-[var(--leitor-bg)] text-[color:var(--leitor-fg)] transition-colors"
-        style={varsLeitor}
+        style={{ ...varsLeitor, filter: ofuscado ? 'blur(20px)' : undefined }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <div
-          className="pointer-events-none fixed inset-0 z-40 overflow-hidden"
-          aria-hidden="true"
-          style={{
-            backgroundImage: `repeating-linear-gradient(-35deg, transparent, transparent 120px, currentColor 120px, currentColor 121px)`,
-            backgroundSize: '400px 280px',
-            backgroundPosition: '0 0, 200px 140px',
-            opacity: 0.02,
-          }}
-        ></div>
+        {/* Marca d'água forense (item 30) */}
+        <MarcaAgua titulo={marcaAgua.titulo} detalhe={marcaAgua.detalhe} />
 
         <div
           className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-30 bg-[var(--leitor-bg)] border-b border-[color:var(--leitor-borda)]"
@@ -815,17 +810,7 @@ export default function EReaderPage() {
               {sectionBook.titulo}
             </span>
             <div className="flex items-center gap-1">
-              {/* PARTILHA DE TRECHO (item 26) — excepção controlada ao DRM */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={ativarModoTrecho}
-                aria-label="Partilhar um trecho"
-                title="Partilhar um trecho"
-                className={modoTrecho ? 'bg-accent' : ''}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
+              {seloProtegido}
               <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
             </div>
           </div>
@@ -833,12 +818,10 @@ export default function EReaderPage() {
 
         {/* Section content */}
         <article
-          className={"max-w-2xl mx-auto px-6 sm:px-8 py-10 " + (modoTrecho ? "select-text" : "select-none")}
+          className="max-w-2xl mx-auto px-6 sm:px-8 py-10 select-none"
           onCopy={(e) => e.preventDefault()}
           onCut={(e) => e.preventDefault()}
           onDragStart={(e) => e.preventDefault()}
-          onMouseUp={capturarSelecao}
-          onTouchEnd={capturarSelecao}
         >
           <header className="mb-10 pb-8 border-b border-border/30">
             <h1 className="text-2xl sm:text-3xl font-bold leading-tight mb-2">
@@ -851,7 +834,7 @@ export default function EReaderPage() {
 
           <div
             className={"max-w-none [&_p]:mb-5 [&_p]:leading-[1.85] [&_p]:text-[length:var(--leitor-fonte)]\n              [&_h2]:mt-10 [&_h2]:mb-4 [&_h2]:text-[1.35em] [&_h2]:font-bold\n              [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-[1.18em] [&_h3]:font-semibold\n              [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]\n              [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]\n              [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline" + (isItalic ? ' [&_p]:italic' : '')}
-            style={{ userSelect: modoTrecho ? 'text' : 'none', WebkitUserSelect: modoTrecho ? 'text' : 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
+            style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
           >
           {renderConteudo(sectionContent, setZoomImagem)}
           </div>
@@ -875,9 +858,9 @@ export default function EReaderPage() {
           </div>
         </div>
 
-        {/* BARRA DO MODO TRECHO (item 26) */}
-        {barraTrecho}
       </div>
+      {avisoOfuscado}
+      </>
     );
   }
 
@@ -908,31 +891,14 @@ export default function EReaderPage() {
     : 0;
 
   return (
+    <>
     <div
       className="relative min-h-[calc(100vh-7rem)] bg-[var(--leitor-bg)] text-[color:var(--leitor-fg)] transition-colors"
-      style={varsLeitor}
+      style={{ ...varsLeitor, filter: ofuscado ? 'blur(20px)' : undefined }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Watermark overlay - denser for screenshot protection */}
-      <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden" aria-hidden="true">
-        {Array.from({ length: 16 }).map((_, row) =>
-          Array.from({ length: 5 }).map((_, col) => (
-            <div
-              key={`c-${row}-${col}`}
-              className="absolute font-semibold whitespace-nowrap select-none text-[color:var(--leitor-marca)]"
-              style={{
-                top: `${row * 7}%`,
-                left: `${col * 25 - 5}%`,
-                transform: 'rotate(-35deg)',
-                fontSize: '1rem',
-                userSelect: 'none',
-              }}
-            >
-              {user?.nome || 'Leitor'} - MozLit
-            </div>
-          ))
-        )}
-      </div>
+      {/* Marca d'água forense (item 30) — cobre toda a leitura */}
+      <MarcaAgua titulo={marcaAgua.titulo} detalhe={marcaAgua.detalhe} />
 
       {/* Top bar */}
       <div
@@ -946,6 +912,7 @@ export default function EReaderPage() {
             {chapter.titulo}
           </span>
           <div className="flex items-center gap-1">
+            {seloProtegido}
             {/* Chapter menu button */}
             <Button
               variant="ghost"
@@ -957,17 +924,6 @@ export default function EReaderPage() {
               className={chapterMenuOpen ? 'bg-accent' : ''}
             >
               <List className="h-4 w-4" />
-            </Button>
-            {/* PARTILHA DE TRECHO (item 26) — excepção controlada ao DRM */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={ativarModoTrecho}
-              aria-label="Partilhar um trecho"
-              title="Partilhar um trecho"
-              className={modoTrecho ? 'bg-accent' : ''}
-            >
-              <Share2 className="h-4 w-4" />
             </Button>
             <ControlosLeitura prefs={prefs} onChange={atualizarPrefs} />
           </div>
@@ -1008,14 +964,12 @@ export default function EReaderPage() {
         )}
       </div>
 
-      {/* Content - immersive reading with anti-copy (modo trecho activa a selecção controlada) */}
+      {/* Conteúdo imersivo com DRM estrito (item 29) — zero selecção, zero cópia */}
       <article
-        className={"max-w-2xl mx-auto px-6 sm:px-8 py-10 " + (modoTrecho ? "select-text" : "select-none")}
+        className="max-w-2xl mx-auto px-6 sm:px-8 py-10 select-none"
         onCopy={(e) => e.preventDefault()}
         onCut={(e) => e.preventDefault()}
         onDragStart={(e) => e.preventDefault()}
-        onMouseUp={capturarSelecao}
-        onTouchEnd={capturarSelecao}
       >
         {/* CHAPTER CONTENT - no pre/post sections here */}
         <header className="mb-10 pb-8 border-b border-[color:var(--leitor-borda)]">
@@ -1034,7 +988,7 @@ export default function EReaderPage() {
             [&_blockquote]:border-l-2 [&_blockquote]:border-[color:var(--leitor-acento)] [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-[color:var(--leitor-suave)]
             [&_em]:text-[color:var(--leitor-acento)] [&_i]:text-[color:var(--leitor-acento)]
             [&_strong]:text-[color:var(--leitor-fg)] [&_a]:text-[color:var(--leitor-acento)] [&_a]:underline"
-          style={{ userSelect: modoTrecho ? 'text' : 'none', WebkitUserSelect: modoTrecho ? 'text' : 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
+          style={{ userSelect: 'none', WebkitUserSelect: 'none', fontFamily: 'var(--leitor-familia)', color: 'var(--leitor-fg)' }}
         >
           {renderConteudo(chapter.conteudo, setZoomImagem)}
         </div>
@@ -1142,8 +1096,8 @@ export default function EReaderPage() {
         </div>
       )}
 
-      {/* BARRA DO MODO TRECHO (item 26) */}
-      {barraTrecho}
     </div>
+    {avisoOfuscado}
+    </>
   );
 }
