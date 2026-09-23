@@ -7,6 +7,7 @@ import AppShell from '@/components/literaria/AppShell';
 import HomePage from '@/components/literaria/HomePage';
 import BookDetailPage from '@/components/literaria/BookDetailPage';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { iniciarAppNativo } from '@/lib/app-nativo';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -96,6 +97,8 @@ export default function MozLitApp() {
 
   // Initialize app: validate token, sync saldo, restore dark mode
   useEffect(() => {
+    // App nativa (APK): back button do Android, splash com logótipo, versão
+    iniciarAppNativo();
     // Lê o estado actual do store (evita closure obsoleto entre montagens)
     const { token: tokenActual, setAuth, updateBalance, clearAuth, toggleDark } = useAppStore.getState();
 

@@ -32,6 +32,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { versaoApp } from '@/lib/app-nativo';
 
 const navItems = [
   { view: 'home' as ViewName, label: 'Início', icon: Home, auth: false, roles: undefined as string[] | undefined },
@@ -87,6 +88,12 @@ function NavLinks({
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, currentView, navigate, isDark, toggleDark, sidebarOpen, setSidebarOpen, clearAuth } = useAppStore();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  // Versão do APK (só preenchida dentro da app nativa; no site fica oculta)
+  const [versao, setVersao] = useState<string | null>(null);
+
+  useEffect(() => {
+    versaoApp().then(setVersao);
+  }, []);
 
   // ============ CENTRAL DE NOTIFICAÇÕES (item 24 — Fase 5) ============
   interface Notificacao {
@@ -460,6 +467,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className='text-center sm:text-left'>
               <p className='text-sm font-medium'>MozLit - Plataforma Literária Moçambicana</p>
               <p className='text-xs text-muted-foreground mt-0.5'>Leitura, Publicação e Monetização</p>
+              {versao && <p className='text-xs text-muted-foreground mt-0.5'>Aplicação v{versao}</p>}
             </div>
             <nav className='flex items-center gap-4 text-xs text-muted-foreground'>
               <button onClick={() => navigate('home')} className='hover:text-foreground transition-colors'>Início</button>
@@ -483,6 +491,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <a href='/privacidade' className='hover:text-foreground transition-colors'>Privacidade</a>
             </nav>
           </div>
+          <p className='text-[11px] italic text-muted-foreground/70 text-center mt-5'>F. M. J. A.</p>
         </div>
       </footer>
     </div>
