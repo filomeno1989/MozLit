@@ -267,3 +267,16 @@ Work Log:
 Stage Summary:
 - ATENÇÃO: a v1.0.1 usa CHAVE NOVA (Beira): quem instalou a v1.0.0 (Maputo) precisa DESINSTALAR antes de instalar a v1.0.1; daqui para a frente as actualizações voltam a ser por cima, sem desinstalar.
 - App v1.0.1: logo ML certo, splash com marca, back dentro da app, versão visível, assinatura do autor no rodapé.
+
+---
+Task: Release v1.0.1 publicado (23/09/2026)
+
+Work Log:
+- Build run #2 (id 35844882826) sucesso; APK descarregado do artefacto (3.75 MB).
+- Verificações: ícones foreground ML presentes por comparação de pixels em todas as densidades; backgrounds âmbar presentes por hash; bytes do certificado Beira dentro do bloco de assinatura v2; certificado antigo Maputo ausente (correcto).
+- Release v1.0.1 criado (id 394514746) com instruções de reinstalação obrigatória (chave mudou). Link /releases/latest/download/MozLit.apk passa a servir a v1.0.1 (content-length 3935589 confirmado, HTTP 200 sem login).
+- Backup actualizado: download/mozlit-chave-assinatura/MozLit-1.0.1.apk.
+
+Stage Summary:
+- Distribuição: github.com/filomeno1989/MozLit/releases (latest = v1.0.1)
+- Utilizadores da v1.0.0: desinstalar antes de instalar a v1.0.1 (única vez)
