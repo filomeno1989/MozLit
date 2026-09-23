@@ -248,3 +248,22 @@ Stage Summary:
 - Distribuição oficial: github.com/filomeno1989/MozLit/releases (link directo /releases/latest/download/MozLit.apk, pronto para WhatsApp)
 - Futuras versões: bump versionCode em android + push -> Actions compila -> anexar novo APK a um release novo (v1.0.1, v1.1.0...)
 - Chave de assinatura: copia nos segredos do GitHub + backup físico com o proprietário (download/mozlit-chave-assinatura)
+
+---
+Task: App Android v1.0.1 — 8 pontos do proprietário (23/09/2026)
+
+Work Log:
+- PONTO 1 (back saía da app): plugins @capacitor/app 8.1.1 + @capacitor/splash-screen 8.0.2 instalados. Módulo src/lib/app-nativo.ts: listener 'backButton' decide com o histórico interno da SPA (_history no store): navega para trás e SÓ sai (App.exitApp) quando está na raiz. Chamado no mount de page.tsx. Antes o Capacitor decidia sozinho e fechava quando o histórico do WebView esgotava.
+- PONTO 2 (sem logo ML): CAUSA RAIZ encontrada: mipmap-anydpi-v26/ic_launcher.xml apontava o foreground ao PNG PADRÃO do Capacitor (boneco azul) e o background a branco; todos os Android 8+ mostravam isso. Correcção: scripts/corrigir_icone_adaptativo.py gerou ic_launcher_foreground.png (livro M|L creme, fundo transparente, zona segura 66dp) e ic_launcher_background.png (degradê âmbar) para mdpi..xxxhdpi; XMLs adaptativos actualizados para @mipmap/ic_launcher_background; cor de fallback #EE941E. Preview verificado visualmente.
+- Splash: AppTheme.NoActionBarLaunch já apontava a @drawable/splash mas sem plugin nada mostrava. Com @capacitor/splash-screen (launchAutoHide 4s, CENTER_CROP, fundo âmbar) o splash com logo ML fica até a interface estar pronta (hide() chamado no mount, com fade).
+- PONTO 4 + 7 (Beira + F. M. J. A.): NOVO keystore gerado: CN=MozLit, OU=MozLit, O=MozLit, L=Beira, ST=Sofala, C=MZ, RSA 2048, válido até 2054, alias mozlit. Segredos do GitHub actualizados via API (KEYSTORE_BASE64/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD, PUT 204). Backup: download/mozlit-chave-assinatura (keystore + senha + cert + LEIA-ME actualizado; chave antiga Maputo arquivada em antiga-maputo/). Nova SHA-256: 3E:48:B3:3E:AD:EC:83:C6:0F:EB:CF:F1:9B:B7:BE:45:AD:F7:8C:B4:A5:E9:B4:3C:4A:10:86:DB:B0:50:8B:DD.
+- PONTO 7 (assinatura visível): rodapé do AppShell ganhou linha "F. M. J. A." em itálico 11px discreto (visível no site e na app).
+- PONTO 6 (versão visível): AppShell mostra "Aplicação v{versão}" no rodapé só dentro da app nativa (App.getInfo do plugin); no site fica oculto. build.gradle: versionCode 2, versionName "1.0.1".
+- PONTO 3 (malicioso): explicado ao proprietário (aviso típico do Play Protect para APK fora da Play Store; mitigações: APK release assinado, zero permissões extra, distribuição crescente; solução definitiva = Play Store no futuro).
+- PONTO 5 (updates por dentro): desenho entregue ao proprietário (endpoint /api/app/versao + secção nas definições + download via browser do sistema; implementação numa próxima fase).
+- PONTO 8 (iOS): expectativa explicada (Apple Developer 99 USD/ano, Mac/Xcode ou CI, App Store/TestFlight, sem sideload; mesma base Capacitor).
+- Validação: tsc 0 erros, eslint 0, next build OK. Commit 938cb6d empurrado; build do APK disparado (run #2, id 35844882826).
+
+Stage Summary:
+- ATENÇÃO: a v1.0.1 usa CHAVE NOVA (Beira): quem instalou a v1.0.0 (Maputo) precisa DESINSTALAR antes de instalar a v1.0.1; daqui para a frente as actualizações voltam a ser por cima, sem desinstalar.
+- App v1.0.1: logo ML certo, splash com marca, back dentro da app, versão visível, assinatura do autor no rodapé.
