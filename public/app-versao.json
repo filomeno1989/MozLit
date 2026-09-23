@@ -1,7 +1,7 @@
 {
-  "versionCode": 4,
-  "versionName": "1.1.0",
-  "notas": "Notificacoes push no telemovel: obras novas chegam a toda a comunidade e capitulos dos autores que segues. Toque na notificacao abre a obra dentro da app. Descarga da actualizacao agora feita directamente no site, mais fiavel em redes moveis.",
+  "versionCode": 5,
+  "versionName": "1.2.0",
+  "notas": "Actualizacao agora descarrega e instala por dentro da app, com barra de progresso e sem navegador: fim das descargas presas aos 100%. Novo dialogo centralizado com Actualizar agora ou Actualizar depois e resumo do que ha de novo apos cada actualizacao. Notificacoes push de obras e capitulos mantidas.",
   "urlApk": "https://mozlit.vercel.app/apk/MozLit.apk",
   "urlApkAlternativa": "https://github.com/filomeno1989/MozLit/releases/latest/download/MozLit.apk",
   "publicadaEm": "2026-09-23"
