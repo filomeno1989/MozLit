@@ -34,10 +34,19 @@ import {
   Download,
   Loader2,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { versaoApp } from '@/lib/app-nativo';
-import { verificarActualizacao, abrirDownloadApk, type InfoActualizacao } from '@/lib/actualizacao-app';
+import {
+  verificarActualizacao,
+  descarregarEInstalar,
+  instalarApkDescarregado,
+  marcarNovidadesVistas,
+  abrirDownloadApk,
+  type InfoActualizacao,
+} from '@/lib/actualizacao-app';
+import { InstaladorApk } from '@/plugins/instalador-apk';
 import { Switch } from '@/components/ui/switch';
 import {
   estadoPushAgora,
@@ -99,28 +108,101 @@ function NavLinks({
   );
 }
 
+/** Formata bytes em MB com vírgula decimal (pt). */
+function mb(bytes: number): string {
+  return (bytes / 1048576).toFixed(1).replace('.', ',') + ' MB';
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, currentView, navigate, isDark, toggleDark, sidebarOpen, setSidebarOpen, clearAuth } = useAppStore();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   // Versão do APK (só preenchida dentro da app nativa; no site fica oculta)
   const [versao, setVersao] = useState<string | null>(null);
-  // Actualização da app por dentro: estado da verificação e resultado
+  // Actualização da app por dentro (v1.2.0): verificação + diálogo central
   const [apkActual, setApkActual] = useState<InfoActualizacao | null>(null);
   const [aVerificar, setAVerificar] = useState(false);
-  const jaAvisouRef = useRef(false);
+  const [dialogActualizar, setDialogActualizar] = useState(false);
+  const [dialogNovidades, setDialogNovidades] = useState<string | null>(null);
+  type FaseActualizacao =
+    | 'parado'
+    | 'a_descarregar'
+    | 'a_instalar'
+    | 'instalador_aberto'
+    | 'permissao'
+    | 'erro';
+  const [faseActualizacao, setFaseActualizacao] = useState<FaseActualizacao>('parado');
+  const [recebidoDescarga, setRecebidoDescarga] = useState(0);
+  const [totalDescarga, setTotalDescarga] = useState(0);
+  const [erroActualizacao, setErroActualizacao] = useState<string | null>(null);
+  const caminhoApkRef = useRef<string | null>(null);
 
   const verificarAgora = useCallback(async () => {
     setAVerificar(true);
     const r = await verificarActualizacao();
-    if (r) setApkActual(r);
     setAVerificar(false);
-    if (r?.nova && !jaAvisouRef.current) {
-      jaAvisouRef.current = true;
-      toast(`Nova versão ${r.versaoRemota} disponível`, {
-        description: 'Descarrega no menu ☰ > Aplicação > Descarregar actualização.',
-      });
+    if (!r) return;
+    setApkActual(r);
+    if (r.nova) {
+      setDialogActualizar(true);
+    } else if (r.novidades) {
+      setDialogNovidades(r.novidades);
     }
   }, []);
+
+  const actualizarAgora = useCallback(async () => {
+    if (!apkActual?.urlApk) return;
+    setErroActualizacao(null);
+    setRecebidoDescarga(0);
+    setTotalDescarga(0);
+    setFaseActualizacao('a_descarregar');
+    try {
+      const r = await descarregarEInstalar(apkActual.urlApk, (recebido, total) => {
+        setRecebidoDescarga(recebido);
+        setTotalDescarga(total);
+      });
+      caminhoApkRef.current = r.caminho;
+      setFaseActualizacao(r.estado === 'permissao_necessaria' ? 'permissao' : 'instalador_aberto');
+    } catch (e) {
+      setErroActualizacao(e instanceof Error ? e.message : 'Não foi possível descarregar a actualização.');
+      setFaseActualizacao('erro');
+    }
+  }, [apkActual]);
+
+  // Permissão de instalação concedida? Ao voltar à app, concluir sozinho.
+  useEffect(() => {
+    if (faseActualizacao !== 'permissao') return;
+    let cancelado = false;
+    const sub = import('@capacitor/app').then(({ App }) =>
+      App.addListener('appStateChange', async (s) => {
+        if (!s.isActive || cancelado) return;
+        try {
+          const { pode } = await InstaladorApk.podeInstalar();
+          if (!pode || cancelado) return;
+          setFaseActualizacao('a_instalar');
+          const r = await instalarApkDescarregado(caminhoApkRef.current as string);
+          setFaseActualizacao(r === 'permissao_necessaria' ? 'permissao' : 'instalador_aberto');
+        } catch {
+          setErroActualizacao('Não foi possível abrir o instalador.');
+          setFaseActualizacao('erro');
+        }
+      }),
+    );
+    return () => {
+      cancelado = true;
+      sub.then((h) => h.remove());
+    };
+  }, [faseActualizacao]);
+
+  const fecharDialogActualizar = useCallback(() => {
+    if (faseActualizacao === 'a_descarregar' || faseActualizacao === 'a_instalar') return;
+    setDialogActualizar(false);
+    if (faseActualizacao !== 'parado') setFaseActualizacao('parado');
+  }, [faseActualizacao]);
+
+  const fecharNovidades = useCallback(() => {
+    setDialogNovidades(null);
+    if (apkActual?.codigoLocal) marcarNovidadesVistas(apkActual.codigoLocal);
+  }, [apkActual]);
 
   useEffect(() => {
     versaoApp().then(setVersao);
@@ -404,31 +486,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <Download className='h-3.5 w-3.5' /> Aplicação v{versao}
                   </p>
                   {apkActual?.nova ? (
-                    <div className='rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 space-y-2'>
-                      <p className='text-xs font-semibold text-amber-900 dark:text-amber-200'>
-                        Nova versão {apkActual.versaoRemota} disponível
+                    <button
+                      onClick={() => setDialogActualizar(true)}
+                      className='w-full rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-left transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/60'
+                    >
+                      <p className='text-xs font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-1.5'>
+                        <Download className='h-3.5 w-3.5' /> Actualizar para a v{apkActual.versaoRemota}
                       </p>
-                      {apkActual.notas && (
-                        <p className='text-[11px] leading-snug text-amber-800/90 dark:text-amber-300/90 line-clamp-3'>
-                          {apkActual.notas}
-                        </p>
-                      )}
-                      <Button
-                        size='sm'
-                        className='w-full bg-amber-600 hover:bg-amber-700 text-white'
-                        onClick={() => {
-                          if (apkActual.urlApk) {
-                            abrirDownloadApk(apkActual.urlApk);
-                            toast.success('Download iniciado no navegador', {
-                              description: 'Quando terminar, abre o ficheiro descarregado para instalar a nova versão.',
-                            });
-                            setSidebarOpen(false);
-                          }
-                        }}
-                      >
-                        <Download className='h-4 w-4 mr-1.5' /> Descarregar actualização
-                      </Button>
-                    </div>
+                      <p className='text-[11px] text-amber-800/90 dark:text-amber-300/90 mt-0.5'>
+                        Descarrega e instala por dentro da app, sem navegador.
+                      </p>
+                    </button>
                   ) : null}
                   <button
                     onClick={verificarAgora}
@@ -603,6 +671,116 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* DIÁLOGO DE ACTUALIZAÇÃO (v1.2.0): centralizado; descarrega e instala por dentro */}
+      <Dialog
+        open={dialogActualizar}
+        onOpenChange={(o) => {
+          if (!o) fecharDialogActualizar();
+        }}
+      >
+        <DialogContent className='max-w-[340px] rounded-2xl'>
+          <DialogHeader>
+            <DialogTitle className='text-left'>
+              {faseActualizacao === 'parado' && `Nova versão ${apkActual?.versaoRemota ?? ''}`}
+              {faseActualizacao === 'a_descarregar' && 'A descarregar...'}
+              {faseActualizacao === 'a_instalar' && 'A preparar a instalação...'}
+              {faseActualizacao === 'instalador_aberto' && 'Descarga concluída'}
+              {faseActualizacao === 'permissao' && 'Falta uma permissão'}
+              {faseActualizacao === 'erro' && 'Algo falhou'}
+            </DialogTitle>
+            <DialogDescription className='text-left'>
+              {faseActualizacao === 'parado' &&
+                (apkActual?.notas || 'Uma versão melhorada do MozLit está disponível.')}
+              {faseActualizacao === 'a_descarregar' &&
+                'Mantenha a app aberta; quando terminar, a instalação abre sozinha.'}
+              {faseActualizacao === 'a_instalar' && 'Um instante...'}
+              {faseActualizacao === 'instalador_aberto' &&
+                'O instalador do Android abriu. Confirme a instalação da nova versão.'}
+              {faseActualizacao === 'permissao' &&
+                'Para instalar, permita Instalar apps desconhecidas para o MozLit. Ao voltar à app, a instalação continua sozinha.'}
+              {faseActualizacao === 'erro' &&
+                (erroActualizacao || 'Não foi possível descarregar a actualização.')}
+            </DialogDescription>
+          </DialogHeader>
+
+          {faseActualizacao === 'a_descarregar' && (
+            <div className='space-y-2'>
+              <div className='h-2 w-full overflow-hidden rounded-full bg-muted'>
+                <div
+                  className='h-full rounded-full bg-amber-500 transition-[width] duration-300'
+                  style={{
+                    width: `${
+                      totalDescarga > 0
+                        ? Math.min(100, Math.round((recebidoDescarga / totalDescarga) * 100))
+                        : 8
+                    }%`,
+                  }}
+                />
+              </div>
+              <p className='text-[11px] text-muted-foreground text-center'>
+                {mb(recebidoDescarga)}
+                {totalDescarga > 0 ? ` de ${mb(totalDescarga)}` : ''}
+              </p>
+            </div>
+          )}
+
+          {faseActualizacao === 'parado' && (
+            <div className='flex gap-2'>
+              <Button variant='outline' className='flex-1' onClick={() => setDialogActualizar(false)}>
+                Atualizar depois
+              </Button>
+              <Button className='flex-1 bg-amber-600 hover:bg-amber-700 text-white' onClick={actualizarAgora}>
+                Atualizar agora
+              </Button>
+            </div>
+          )}
+
+          {(faseActualizacao === 'instalador_aberto' || faseActualizacao === 'permissao') && (
+            <Button className='w-full bg-amber-600 hover:bg-amber-700 text-white' onClick={fecharDialogActualizar}>
+              Percebi
+            </Button>
+          )}
+
+          {faseActualizacao === 'erro' && (
+            <div className='flex flex-col gap-2'>
+              <Button className='w-full bg-amber-600 hover:bg-amber-700 text-white' onClick={actualizarAgora}>
+                Tentar de novo
+              </Button>
+              {apkActual?.urlApk && (
+                <Button
+                  variant='ghost'
+                  className='w-full'
+                  onClick={() => apkActual.urlApk && abrirDownloadApk(apkActual.urlApk)}
+                >
+                  Tentar no navegador
+                </Button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* O QUE HÁ DE NOVO (v1.2.0): mostrado uma vez após cada actualização instalada */}
+      <Dialog
+        open={!!dialogNovidades}
+        onOpenChange={(o) => {
+          if (!o) fecharNovidades();
+        }}
+      >
+        <DialogContent className='max-w-[340px] rounded-2xl'>
+          <DialogHeader>
+            <DialogTitle className='flex items-center gap-2 text-left'>
+              <Sparkles className='h-4 w-4 text-amber-600' /> O que há de novo
+            </DialogTitle>
+            <DialogDescription className='text-left'>MozLit v{versao}</DialogDescription>
+          </DialogHeader>
+          <p className='text-sm leading-relaxed text-muted-foreground whitespace-pre-line'>{dialogNovidades}</p>
+          <Button className='w-full bg-amber-600 hover:bg-amber-700 text-white' onClick={fecharNovidades}>
+            Perfeito
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       {/* Main Content */}
       <main className='flex-1'>

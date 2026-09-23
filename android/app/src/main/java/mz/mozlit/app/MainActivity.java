@@ -18,6 +18,8 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Plugin local: instala o APK da actualização descarregado por dentro
+        registerPlugin(InstaladorApkPlugin.class);
         super.onCreate(savedInstanceState);
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
