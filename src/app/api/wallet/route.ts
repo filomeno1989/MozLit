@@ -94,7 +94,12 @@ export async function POST(request: NextRequest) {
     }
 
     // === DEPÓSITO MZN ===
-    const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+    // SEGURANÇA (auditoria 2026-10 M5): o modo demonstração passa a variável
+    // SÓ DO SERVIDOR (DEMO_MODE) e fail-closed — a antiga NEXT_PUBLIC_DEMO_MODE
+    // era embutida no bundle do cliente e a sua presença activava depósito MZN
+    // gratuito para qualquer conta. Sem DEMO_MODE (produção normal), depósito
+    // directo continua restrito a admins.
+    const isDemo = process.env.DEMO_MODE === 'true';
     if (!isDemo && payload.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Depósitos apenas disponíveis através de integração de pagamento.' }, { status: 403 });
     }

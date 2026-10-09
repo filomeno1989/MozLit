@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
-import { validateNome, validateBiografia } from '@/lib/validate';
+import { validateNome, validateBiografia, validarUrlImagemSegura } from '@/lib/validate';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,7 +39,12 @@ export async function PATCH(request: NextRequest) {
     const data: Record<string, unknown> = {};
     if (nome !== undefined) data.nome = validateNome(nome);
     if (biografia !== undefined) data.biografia = validateBiografia(biografia);
-    if (avatar_url !== undefined && typeof avatar_url === 'string') data.avatar_url = avatar_url;
+    if (avatar_url !== undefined) {
+      // Auditoria 2026-10: antes aceitava qualquer string (http://, javascript:...).
+      // Agora só https válido; vazio/inválido = sem avatar (a UI trata o nulo).
+      const avatarValidado = validarUrlImagemSegura(avatar_url, 'URL do avatar');
+      if (avatarValidado) data.avatar_url = avatarValidado;
+    }
 
     const updated = await db.user.update({
       where: { id: payload.userId },

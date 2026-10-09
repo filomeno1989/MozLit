@@ -7,6 +7,7 @@ import {
   validateFaixaEtaria,
   validateVolumeInfo,
   validarCampoLivroHtml,
+  validarUrlImagemSegura,
 } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
 import { ehUuid } from '@/lib/validate';
@@ -160,7 +161,10 @@ export async function POST(request: NextRequest) {
         titulo: tituloValidado,
         sinopse: sinopseValidada,
         categorias: JSON.stringify(catsValidadas),
-        capa_url: (typeof capa_url === 'string' && capa_url.startsWith('http')) ? capa_url : '/placeholder-cover.svg',
+        // Auditoria 2026-10: antes aceitava qualquer string «http*» (http://,
+        // protocol-relative...). Agora só https válido — caso contrário, 400
+        // (mesma regra do PATCH); placeholder apenas quando o campo vem vazio.
+        capa_url: validarUrlImagemSegura(capa_url, 'URL da capa') ?? '/placeholder-cover.svg',
         preco_total: typeof preco_total === 'number' && preco_total >= 0 ? preco_total : 0,
         ficha_tecnica: validarCampoLivroHtml(ficha_tecnica, 'Ficha técnica', LIMITES.SINOPSE_MAX),
         dedicatoria: validarCampoLivroHtml(dedicatoria, 'Dedicatória', LIMITES.SINOPSE_MAX),
