@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, canCreateContent } from '@/lib/auth';
+import { ehUuid } from '@/lib/validate';
 
 /**
  * Reordenar capítulos (mover para cima/baixo) — Fase 2, item 14.
@@ -25,6 +26,10 @@ export async function PATCH(request: NextRequest) {
     const direcao = body?.direcao;
     if (typeof livroId !== 'string' || typeof capituloId !== 'string' || (direcao !== 'cima' && direcao !== 'baixo')) {
       return NextResponse.json({ error: 'Dados inválidos para reordenar.' }, { status: 400 });
+    }
+    // Auditoria 2026-10: ids não-UUID dariam 500 no Prisma — 404 limpo
+    if (!ehUuid(livroId) || !ehUuid(capituloId)) {
+      return NextResponse.json({ error: 'Obra ou capítulo não encontrado.' }, { status: 404 });
     }
 
     // Só o autor da obra (ou admin) pode reordenar

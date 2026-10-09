@@ -224,6 +224,10 @@ export async function DELETE(request: NextRequest) {
     if (!commentId) {
       return NextResponse.json({ error: 'id do comentário é obrigatório' }, { status: 400 });
     }
+    // Auditoria 2026-10: id não-UUID daria 500 no Prisma — 404 limpo
+    if (!ehUuid(commentId)) {
+      return NextResponse.json({ error: 'Comentário não encontrado' }, { status: 404 });
+    }
 
     const comment = await db.comment.findUnique({ where: { id: commentId } });
 

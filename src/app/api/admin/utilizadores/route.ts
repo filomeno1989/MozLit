@@ -127,17 +127,36 @@ export async function PATCH(request: NextRequest) {
         where: { id: alvo.id },
         data: { role: papel },
       });
+      // AUDITORIA (auditoria 2026-10): mudança de papel fica nos logs do
+      // servidor — quem alterou, quem foi alterado, de→para.
+      console.log('[AUDIT] admin/utilizadores PAPEL', JSON.stringify({
+        actor: payload.userId, alvo: alvo.id, de: alvo.role, para: actualizado.role,
+        quando: new Date().toISOString(),
+      }));
       return NextResponse.json({ ok: true, user: { id: actualizado.id, role: actualizado.role } });
     }
 
     // ===== Redefinir senha =====
     if (acao === 'SENHA') {
+      // SEGURANÇA (auditoria 2026-10 A4): a senha de uma conta ADMIN só muda
+      // pela própria conta (/api/conta, que exige a senha actual) — impede um
+      // admin comprometido de sequestrar silenciosamente outros administradores.
+      if (alvo.role === 'ADMIN') {
+        return NextResponse.json(
+          { error: 'A senha de um administrador só pode ser alterada pela própria conta, em Conta.' },
+          { status: 403 }
+        );
+      }
       const senhaValidada = validateSenha(novaSenha);
       const senha_hash = await hashPassword(senhaValidada);
       await db.user.update({
         where: { id: alvo.id },
         data: { senha_hash },
       });
+      // AUDITORIA: quem redefiniu a senha de quem (sem dados sensíveis no log)
+      console.log('[AUDIT] admin/utilizadores SENHA', JSON.stringify({
+        actor: payload.userId, alvo: alvo.id, quando: new Date().toISOString(),
+      }));
       return NextResponse.json({ ok: true });
     }
 

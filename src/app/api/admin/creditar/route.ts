@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
-import { validateCreditoAdmin, validateTextoRecarga, ehUuid } from '@/lib/validate';
+import { validateCreditoAdmin, validateTextoRecarga, ehUuid, ValidationError } from '@/lib/validate';
 
 /**
  * POST /api/admin/creditar — crédito directo de MC a um usuário (útil para beta testers e testes)
@@ -49,20 +49,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 });
     }
 
-    // Débito nunca deixa saldo negativo
-    if (moedasValidadas < 0 && user.moedas + moedasValidadas < 0) {
-      return NextResponse.json(
-        { error: `O usuário só tem ${user.moedas} MC. Débito máximo: ${user.moedas} MC.` },
-        { status: 400 }
-      );
-    }
-
+    // Débito nunca deixa saldo negativo — a verificação passa a ser ATÓMICA
+    // dentro da transacção (auditoria 2026-10 M3): a leitura fora era
+    // check-then-act; uma compra concorrente podia deixar o saldo negativo.
     const resultado = await db.$transaction(async (tx) => {
-      const atualizado = await tx.user.update({
-        where: { id: user.id },
-        data: { moedas: { increment: moedasValidadas } },
-        select: { id: true, nome: true, email: true, telefone: true, moedas: true },
-      });
+      let actualizado;
+      if (moedasValidadas > 0) {
+        actualizado = await tx.user.update({
+          where: { id: user.id },
+          data: { moedas: { increment: moedasValidadas } },
+          select: { id: true, nome: true, email: true, telefone: true, moedas: true },
+        });
+      } else {
+        // Débito condicional (mesmo padrão das compras em /api/library):
+        // só decrementa se o saldo actual ainda cobrir o débito.
+        const debito = await tx.user.updateMany({
+          where: { id: user.id, moedas: { gte: Math.abs(moedasValidadas) } },
+          data: { moedas: { decrement: Math.abs(moedasValidadas) } },
+        });
+        if (debito.count === 0) {
+          throw new ValidationError(
+            `O saldo do usuário mudou entretanto e já não cobre o débito de ${Math.abs(moedasValidadas)} MC.`
+          );
+        }
+        actualizado = await tx.user.findUnique({
+          where: { id: user.id },
+          select: { id: true, nome: true, email: true, telefone: true, moedas: true },
+        });
+      }
 
       await tx.transaction.create({
         data: {
@@ -76,8 +90,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      return atualizado;
+      return actualizado;
     });
+
+    // AUDITORIA (auditoria 2026-10 M2): o actor admin fica nos logs do
+    // servidor (a descrição da transacção, visível ao utilizador, mantém-se
+    // limpa). Migração futura (P1): coluna processadoPor na Transaction.
+    console.log('[AUDIT] admin/creditar', JSON.stringify({
+      actor: payload.userId, alvo: user.id, moedas: moedasValidadas,
+      quando: new Date().toISOString(),
+    }));
 
     return NextResponse.json({ user: resultado });
   } catch (error) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
-import { validateAcaoRecarga, validateTextoRecarga } from '@/lib/validate';
+import { validateAcaoRecarga, validateTextoRecarga, ehUuid } from '@/lib/validate';
 import { MOEDAS_CONFIG } from '@/lib/constants';
 import { notificar } from '@/lib/notificar';
 
@@ -59,6 +59,10 @@ export async function PATCH(request: NextRequest) {
 
     if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: 'ID da recarga é obrigatório.' }, { status: 400 });
+    }
+    // Auditoria 2026-10: id não-UUID daria 500 no Prisma — 404 limpo
+    if (!ehUuid(id)) {
+      return NextResponse.json({ error: 'Recarga não encontrada.' }, { status: 404 });
     }
     const acaoValidada = validateAcaoRecarga(acao);
     const notaAdminValidada = validateTextoRecarga(notaAdmin, 'Nota do admin', 300);
