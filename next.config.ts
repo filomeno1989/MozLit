@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  // AUDITORIA 2026-10 (fase 2): ignoreBuildErrors REMOVIDO — o projecto passa
+  // em «tsc --noEmit» com 0 erros (verificado) e o «next build» volta a
+  // apanhar erros de tipo, como deve ser.
   reactStrictMode: false,
   // Não divulgar a versão do framework nas respostas
   poweredByHeader: false,
