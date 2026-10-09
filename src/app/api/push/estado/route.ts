@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { extractTokenFromHeader, verifyToken, verificarAdminActivo } from '@/lib/auth';
 import { estadoConfigPush, enviarPushTopico } from '@/lib/push-firebase';
 
 /**
@@ -16,14 +16,15 @@ import { estadoConfigPush, enviarPushTopico } from '@/lib/push-firebase';
  */
 export async function GET(request: NextRequest) {
   try {
-    // Aceita o header Authorization OU ?token= no URL (para abrir no navegador
-    // com a sessão copiada do site). Em qualquer caso: só ADMIN passa.
+    // SEGURANÇA (auditoria 2026-10 M2): token só no header Authorization —
+    // aceitar «?token=» no URL expunha o JWT a logs de acesso, histórico do
+    // navegador e headers Referer. O papel revalida-se na BASE DE DADOS
+    // (verificarAdminActivo): um admin despromovido perde o acesso de imediato,
+    // não à expiração do token de 7 dias.
     const url = new URL(request.url);
-    const token =
-      extractTokenFromHeader(request.headers.get('Authorization')) ||
-      url.searchParams.get('token');
+    const token = extractTokenFromHeader(request.headers.get('Authorization'));
     const payload = token ? verifyToken(token) : null;
-    if (!payload || payload.role !== 'ADMIN') {
+    if (!payload || !(await verificarAdminActivo(payload))) {
       return NextResponse.json({ error: 'Sem permissão' }, { status: 403 });
     }
 

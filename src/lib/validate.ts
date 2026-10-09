@@ -5,6 +5,7 @@ import {
   EMAIL_REGEX,
   FAIXAS_ETARIAS,
   type FaixaEtaria,
+  IDADE_MINIMA_REGISTO,
   RECARGA_CONFIG,
   isHtmlConteudo,
 } from './constants';
@@ -226,6 +227,61 @@ export function validateBiografia(bio: unknown): string {
     throw new ValidationError(`Biografia não pode exceder ${LIMITES.BIOGRAFIA_MAX} caracteres.`);
   }
   return bio;
+}
+
+// ===================== REGISTO: IDADE =====================
+
+/**
+ * Data de nascimento: OBRIGATÓRIA na API de registo.
+ * Antes a verificação de idade vivia só na UI — um pedido sem o campo
+ * saltava o controlo dos 13 anos (auditoria 2026-10: M1). Devolve a data
+ * validada ou lança ValidationError.
+ */
+export function validateDataNascimento(valor: unknown): Date {
+  if (typeof valor !== 'string' || !valor.trim()) {
+    throw new ValidationError('Data de nascimento é obrigatória.');
+  }
+  const data = new Date(valor);
+  if (isNaN(data.getTime())) {
+    throw new ValidationError('Data de nascimento inválida.');
+  }
+  if (data.getTime() > Date.now()) {
+    throw new ValidationError('Data de nascimento não pode ser no futuro.');
+  }
+  const hoje = new Date();
+  let idade = hoje.getFullYear() - data.getFullYear();
+  const m = hoje.getMonth() - data.getMonth();
+  if (m < 0 || (m === 0 && hoje.getDate() < data.getDate())) idade--;
+  if (idade < IDADE_MINIMA_REGISTO) {
+    throw new ValidationError(
+      `Deve ter pelo menos ${IDADE_MINIMA_REGISTO} anos para se registar.`
+    );
+  }
+  if (idade > 120) {
+    throw new ValidationError('Data de nascimento inválida.');
+  }
+  return data;
+}
+
+// ===================== URLS DE IMAGEM =====================
+
+/**
+ * URL de imagem aceite em campos geridos pela plataforma (capa de obra,
+ * avatar do autor): https absoluto apenas — bloqueia http (downgrade),
+ * URLs protocol-relative (//) e esquemas perigosos (javascript:, data:).
+ * String vazia/ausente devolve null (sem imagem → placeholder local).
+ */
+export function validarUrlImagemSegura(valor: unknown, campo: string): string | null {
+  if (valor === null || valor === undefined || valor === '') return null;
+  if (typeof valor !== 'string') throw new ValidationError(`${campo} inválido.`);
+  const trimmed = valor.trim();
+  if (trimmed.length > LIMITES.URL_IMAGEM_MAX) {
+    throw new ValidationError(`${campo} excede o limite de ${LIMITES.URL_IMAGEM_MAX} caracteres.`);
+  }
+  if (!/^https:\/\/[^\s]+$/i.test(trimmed)) {
+    throw new ValidationError(`${campo} deve ser um endereço https válido.`);
+  }
+  return trimmed;
 }
 
 /** Validate an uploaded file's mimetype and size */

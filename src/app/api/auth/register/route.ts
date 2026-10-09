@@ -7,8 +7,8 @@ import {
   validateTelefone,
   validateSenha,
   validateRegistroRole,
+  validateDataNascimento,
 } from '@/lib/validate';
-import { IDADE_MINIMA_REGISTO } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,26 +30,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verificação de idade
-    if (dataNascimento) {
-      const birthDate = new Date(dataNascimento);
-      if (isNaN(birthDate.getTime())) {
-        return NextResponse.json(
-          { error: 'Data de nascimento inválida.' },
-          { status: 400 }
-        );
-      }
-      const today = new Date();
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-      if (age < IDADE_MINIMA_REGISTO) {
-        return NextResponse.json(
-          { error: `Deve ter pelo menos ${IDADE_MINIMA_REGISTO} anos para se registar.` },
-          { status: 400 }
-        );
-      }
-    }
+    // SEGURANÇA (auditoria 2026-10 M1): data de nascimento OBRIGATÓRIA e idade
+    // mínima verificadas SEMPRE no servidor — antes, um pedido sem o campo
+    // saltava o controlo dos 13 anos (a verificação vivia só na UI).
+    const nascimentoValidado = validateDataNascimento(dataNascimento);
 
     const userRole: Role = roleValido;
 
@@ -82,7 +66,7 @@ export async function POST(request: NextRequest) {
         ...(telefoneValidado ? { telefone: telefoneValidado } : {}),
         senha_hash,
         role: userRole,
-        ...(dataNascimento ? { data_nascimento: new Date(dataNascimento) } : {}),
+        data_nascimento: nascimentoValidado,
       },
     });
 

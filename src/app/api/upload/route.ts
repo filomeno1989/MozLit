@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
-import { extractTokenFromHeader, verifyToken } from '@/lib/auth';
+import { canCreateContent, extractTokenFromHeader, verifyToken } from '@/lib/auth';
 import { validateImageFile } from '@/lib/validate';
 import { LIMITES } from '@/lib/constants';
 
@@ -58,6 +58,17 @@ export async function POST(request: NextRequest) {
 
     if (tipo !== 'capa' && tipo !== 'avatar' && tipo !== 'comprovativo' && tipo !== 'capitulo') {
       return NextResponse.json({ error: 'Tipo inválido. Use "capa", "avatar", "comprovativo" ou "capitulo".' }, { status: 400 });
+    }
+
+    // SEGURANÇA (auditoria 2026-10 M3): capas e imagens de capítulos são
+    // conteúdo editorial — só ESCRITOR/ADMIN as carregam. Comprovativo e
+    // avatar continuam abertos a qualquer conta autenticada (leitores
+    // precisam do comprovativo para pedir recargas).
+    if ((tipo === 'capa' || tipo === 'capitulo') && !canCreateContent(payload.role)) {
+      return NextResponse.json(
+        { error: 'Sem permissão. Capas e imagens de capítulos são para autores.' },
+        { status: 403 }
+      );
     }
 
     const maxSize = tipo === 'capa'
